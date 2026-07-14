@@ -1,15 +1,17 @@
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Size = "md" | "lg";
 
 const base =
   "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none select-none";
 
-const sizes = {
+const sizes: Record<Size, string> = {
   md: "h-11 px-5 text-sm",
   lg: "h-14 px-6 text-base",
-} as const;
+};
 
 const variants: Record<Variant, string> = {
   primary: "bg-accent text-accent-fg hover:bg-accent-hover",
@@ -18,6 +20,10 @@ const variants: Record<Variant, string> = {
   ghost: "text-foreground hover:bg-surface-2",
   danger: "bg-surface-2 text-danger border border-border-strong hover:border-danger",
 };
+
+function classesFor(variant: Variant, size: Size, fullWidth: boolean, extra: string) {
+  return `${base} ${sizes[size]} ${variants[variant]} ${fullWidth ? "w-full" : ""} ${extra}`;
+}
 
 export function Button({
   variant = "primary",
@@ -29,7 +35,7 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
-  size?: keyof typeof sizes;
+  size?: Size;
   loading?: boolean;
   fullWidth?: boolean;
 }) {
@@ -37,13 +43,30 @@ export function Button({
     <button
       {...props}
       disabled={props.disabled || loading}
-      className={`${base} ${sizes[size]} ${variants[variant]} ${
-        fullWidth ? "w-full" : ""
-      } ${className}`}
+      className={classesFor(variant, size, fullWidth, className)}
     >
       {loading && <Loader2 className="size-4 animate-spin" />}
       {children}
     </button>
+  );
+}
+
+export function ButtonLink({
+  variant = "primary",
+  size = "md",
+  fullWidth = false,
+  children,
+  className = "",
+  ...props
+}: ComponentProps<typeof Link> & {
+  variant?: Variant;
+  size?: Size;
+  fullWidth?: boolean;
+}) {
+  return (
+    <Link {...props} className={classesFor(variant, size, fullWidth, className)}>
+      {children}
+    </Link>
   );
 }
 

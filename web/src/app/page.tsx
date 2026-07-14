@@ -1,12 +1,11 @@
 "use client";
 
-import { Wallet, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Wallet, ShieldCheck, Send, Droplets } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { SendPayment } from "@/components/SendPayment";
-import { Button, Card } from "@/components/ui";
+import { Button, ButtonLink, Card } from "@/components/ui";
 
 export default function Home() {
-  const { status, connect, wrongNetwork, error } = useWallet();
+  const { status, connect, error } = useWallet();
 
   return (
     <div className="flex flex-col gap-8">
@@ -42,23 +41,23 @@ export default function Home() {
           {error && <p className="text-sm text-danger">{error}</p>}
         </Card>
       ) : (
-        <>
-          {wrongNetwork && (
-            <div className="flex items-start gap-3 rounded-xl border border-danger/40 bg-surface-2 p-4">
-              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Wrong network
-                </p>
-                <p className="mt-1 text-sm text-muted">
-                  Switch your Freighter wallet to <strong>Testnet</strong> to use
-                  Showup.
-                </p>
-              </div>
-            </div>
-          )}
-          <SendPayment />
-        </>
+        <Card className="flex flex-col gap-5">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight">You&apos;re connected</h2>
+            <p className="mt-1 text-sm text-muted">
+              Send a deposit to any Testnet address. Your balance and test faucet
+              live in the wallet menu, top right.
+            </p>
+          </div>
+          <ButtonLink href="/send" size="lg" fullWidth>
+            <Send className="size-4" />
+            Send XLM
+          </ButtonLink>
+          <p className="inline-flex items-center gap-1.5 text-xs text-muted-2">
+            <Droplets className="size-3.5" />
+            Need test XLM? Open the wallet menu and use the faucet.
+          </p>
+        </Card>
       )}
     </div>
   );
