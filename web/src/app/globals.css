@@ -15,12 +15,12 @@
   --muted: #8a8a8a;
   --muted-2: #6a6a6a;
 
-  /* Single accent: teal/mint */
-  --accent: #2dd4a7;
-  --accent-hover: #26bd95;
-  --accent-fg: #04140f;
+  /* Single accent: warm amber */
+  --accent: #e0a44a;
+  --accent-hover: #cf9440;
+  --accent-fg: #1a1206;
 
-  --danger: #f0603a;
+  --danger: #f2493f;
   --grid-line: rgba(255, 255, 255, 0.04);
 }
 
@@ -45,13 +45,34 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
-  /* Faint grid — subtle, tinted, never pure black/white */
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+  Faint grid as a fixed overlay, masked so it fully fades out in the center and
+  is only barely felt toward the edges/corners — reads as texture, not a grid.
+*/
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -20;
+  pointer-events: none;
   background-image:
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 64px 64px;
-  background-position: center top;
-  -webkit-font-smoothing: antialiased;
+  background-size: 72px 72px;
+  background-position: center center;
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 80% at 50% 42%,
+    transparent 45%,
+    #000 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 90% 80% at 50% 42%,
+    transparent 45%,
+    #000 100%
+  );
 }
 
 /* Liquid-glass topbar — the ONLY allowed glassmorphism */
