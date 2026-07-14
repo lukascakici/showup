@@ -22,6 +22,8 @@ contracts/target/
 target/
 .soroban/
 .stellar/
+# Regenerated on every `cargo test` run — noise, not source.
+contracts/*/test_snapshots/
 
 # Claude Code local settings
 .claude/settings.local.json
