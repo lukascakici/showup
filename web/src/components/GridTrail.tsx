@@ -4,18 +4,38 @@ import { useEffect, useRef } from "react";
 
 // Must match the CSS background grid cell size in globals.css.
 const CELL = 72;
-const LIFE = 2200; // ms a segment stays before fully fading
-const MAX_STEPS = 48; // cap path length on fast mouse jumps
-const TRAIL_RGB = "224, 164, 74"; // warm amber
-const MAX_ALPHA = 0.5;
 
-type Segment = { x1: number; y1: number; x2: number; y2: number; born: number };
-type Node = { x: number; y: number };
+const DRAW_MS = 150; // time a single segment takes to draw itself
+const HOLD_MS = 1500; // fully drawn before it starts fading
+const FADE_MS = 1700; // fade to nothing
+const LIFE = DRAW_MS + HOLD_MS + FADE_MS;
+
+const SPAWN_MIN = 400; // gap between new paths
+const SPAWN_MAX = 1500;
+const MIN_STEPS = 2; // shortest path
+const MAX_STEPS = 9; // longest path
+const MAX_SEGMENTS = 140; // density cap
+
+const TRAIL_RGB = "224, 164, 74"; // warm amber
+
+type Segment = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  born: number;
+  alpha: number;
+  width: number;
+  last: boolean;
+};
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
+const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
 
 /**
- * A pointer-driven canvas: as the cursor moves it traces the accent color along
- * the grid lines (Manhattan path between snapped intersections), leaving a trail
- * that fades out. Flat, thin lines — no glow/neon. Disabled for reduced motion.
+ * An ambient canvas: paths draw themselves along the grid lines at random
+ * positions, lengths and weights, then fade out. Flat, thin amber lines — no
+ * glow/neon. Disabled for reduced motion.
  */
 export function GridTrail() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -54,83 +74,102 @@ export function GridTrail() {
       center + Math.round((c - center) / CELL) * CELL;
 
     let segments: Segment[] = [];
-    let last: Node | null = null;
 
-    const addSegment = (x1: number, y1: number, x2: number, y2: number, born: number) => {
-      segments.push({ x1, y1, x2, y2, born });
+    /** Lay down one path: random origin, length, weight — drawn step by step. */
+    const spawnPath = (now: number) => {
+      if (segments.length > MAX_SEGMENTS) return;
+
+      let x = snap(rand(0, width), cx);
+      let y = snap(rand(0, height), cy);
+      const steps = randInt(MIN_STEPS, MAX_STEPS);
+      const alpha = rand(0.22, 0.5);
+      const lineWidth = rand(1, 1.6);
+
+      // Start along one axis, then turn at random — never doubling back.
+      let horizontal = Math.random() < 0.5;
+      let dir = Math.random() < 0.5 ? CELL : -CELL;
+
+      for (let i = 0; i < steps; i++) {
+        const x2 = horizontal ? x + dir : x;
+        const y2 = horizontal ? y : y + dir;
+
+        segments.push({
+          x1: x,
+          y1: y,
+          x2,
+          y2,
+          born: now + i * DRAW_MS,
+          alpha,
+          width: lineWidth,
+          last: i === steps - 1,
+        });
+
+        x = x2;
+        y = y2;
+
+        // Turn roughly a third of the time, otherwise keep going straight.
+        if (Math.random() < 0.35) {
+          horizontal = !horizontal;
+          dir = Math.random() < 0.5 ? CELL : -CELL;
+        }
+      }
     };
 
-    const onMove = (e: PointerEvent) => {
-      const nx = snap(e.clientX, cx);
-      const ny = snap(e.clientY, cy);
-      const now = performance.now();
-
-      if (!last) {
-        last = { x: nx, y: ny };
-        return;
-      }
-      if (nx === last.x && ny === last.y) return;
-
-      // Walk an L-path along grid lines: horizontal first, then vertical.
-      const stepsX = Math.abs(nx - last.x) / CELL;
-      const stepsY = Math.abs(ny - last.y) / CELL;
-      if (stepsX + stepsY > MAX_STEPS) {
-        // Too far (fast jump / re-entry) — restart trail without drawing a giant line.
-        last = { x: nx, y: ny };
-        return;
-      }
-
-      const dirX = Math.sign(nx - last.x) * CELL;
-      let x = last.x;
-      const y0 = last.y;
-      while (x !== nx) {
-        addSegment(x, y0, x + dirX, y0, now);
-        x += dirX;
-      }
-      const dirY = Math.sign(ny - last.y) * CELL;
-      let y = last.y;
-      while (y !== ny) {
-        addSegment(nx, y, nx, y + dirY, now);
-        y += dirY;
-      }
-      last = { x: nx, y: ny };
-    };
+    let nextSpawn = performance.now();
 
     let raf = 0;
     const render = () => {
       const now = performance.now();
+
+      if (now >= nextSpawn) {
+        spawnPath(now);
+        nextSpawn = now + rand(SPAWN_MIN, SPAWN_MAX);
+      }
+
       ctx.clearRect(0, 0, width, height);
       const next: Segment[] = [];
+
       for (const s of segments) {
         const age = now - s.born;
-        if (age >= LIFE) continue;
+        if (age >= LIFE) continue; // expired
         next.push(s);
-        const t = 1 - age / LIFE;
+        if (age < 0) continue; // queued, not drawn yet
+
+        // Grow from the start point, hold, then fade out.
+        const grow = Math.min(age / DRAW_MS, 1);
+        const fadeAge = age - DRAW_MS - HOLD_MS;
+        const t = fadeAge <= 0 ? 1 : 1 - fadeAge / FADE_MS;
         // Smoothstep: lingers near full, then fades out gently.
-        const alpha = t * t * (3 - 2 * t) * MAX_ALPHA;
+        const alpha = t * t * (3 - 2 * t) * s.alpha;
+
+        const ex = s.x1 + (s.x2 - s.x1) * grow;
+        const ey = s.y1 + (s.y2 - s.y1) * grow;
+
         ctx.strokeStyle = `rgba(${TRAIL_RGB}, ${alpha})`;
-        ctx.lineWidth = 1.25;
+        ctx.lineWidth = s.width;
         ctx.beginPath();
         ctx.moveTo(s.x1, s.y1);
-        ctx.lineTo(s.x2, s.y2);
+        ctx.lineTo(ex, ey);
         ctx.stroke();
+
         // A small node at the leading end for a subtle "drawing" feel.
-        ctx.fillStyle = `rgba(${TRAIL_RGB}, ${alpha * 0.9})`;
-        ctx.beginPath();
-        ctx.arc(s.x2, s.y2, 1.6, 0, Math.PI * 2);
-        ctx.fill();
+        if (s.last || grow < 1) {
+          ctx.fillStyle = `rgba(${TRAIL_RGB}, ${alpha * 0.9})`;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
+
       segments = next;
       raf = requestAnimationFrame(render);
     };
     raf = requestAnimationFrame(render);
 
-    window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("resize", resize);
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("pointermove", onMove);
       window.removeEventListener("resize", resize);
     };
   }, []);
