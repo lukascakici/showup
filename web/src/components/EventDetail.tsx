@@ -5,10 +5,12 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  DoorOpen,
   ExternalLink,
   Flag,
   Link2,
   Lock,
+  Undo2,
   Users,
 } from "lucide-react";
 import {
@@ -21,7 +23,14 @@ import { EXPLORER_TX } from "@/lib/stellar";
 import { useSigner } from "@/lib/signer";
 import { useWallet } from "@/lib/wallet";
 import { recallSecret, rememberSecret } from "@/lib/secrets";
-import { attendanceOf, forfeitPool, spotsLeft, useActivity, useEvent } from "@/lib/events";
+import {
+  attendanceOf,
+  forfeitPool,
+  spotsLeft,
+  useActivity,
+  useEvent,
+  type EventState,
+} from "@/lib/events";
 import { shortAddr } from "@/lib/format";
 import { Button, Card, Field, Input } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
@@ -74,6 +83,9 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const mine = attendanceOf(event, address);
   const left = spotsLeft(event);
   const refund = event.deposit + event.feeAllowance;
+  const reserving = event.phase === "Reserving";
+  const checkingIn = event.phase === "CheckingIn";
+  const finalized = event.phase === "Finalized";
 
   const rsvp = () =>
     run(async () => {
@@ -97,18 +109,32 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
       await tx.signAndSend();
     });
 
+  const openCheckin = () =>
+    run(async () => {
+      const tx = await eventClient(id, signer).open_checkin();
+      await tx.signAndSend();
+    });
+
+  const reopenRsvp = () =>
+    run(async () => {
+      const tx = await eventClient(id, signer).reopen_rsvp();
+      await tx.signAndSend();
+    });
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold tracking-tight">
-              {event.finalized ? "Event closed" : "Event open"}
+              {finalized ? "Event closed" : checkingIn ? "Check-in is open" : "Taking reservations"}
             </h2>
             <p className="mt-1 text-sm text-muted">
-              {event.finalized
+              {finalized
                 ? "Deposits have been settled."
-                : `${left} of ${event.capacity} spots left.`}
+                : checkingIn
+                  ? "Reservations are closed — everyone here can check in now."
+                  : `${left} of ${event.capacity} spots left.`}
             </p>
           </div>
           <div className="text-right">
@@ -151,7 +177,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         </Card>
       )}
 
-      {address && !event.finalized && mine === "none" && (
+      {address && reserving && mine === "none" && (
         <Card>
           <h3 className="text-base font-bold tracking-tight">Reserve your spot</h3>
           <p className="mt-1 text-sm text-muted">
@@ -174,7 +200,29 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         </Card>
       )}
 
-      {address && !event.finalized && mine === "reserved" && (
+      {address && reserving && mine === "reserved" && (
+        <Card>
+          <h3 className="text-base font-bold tracking-tight">You&apos;re on the list</h3>
+          <p className="mt-1 text-sm text-muted">
+            {fromStroops(event.deposit)} XLM is locked. Check-in opens when the
+            organizer starts it at the event — you&apos;ll take {fromStroops(refund)} XLM
+            back then.
+          </p>
+        </Card>
+      )}
+
+      {address && checkingIn && mine === "none" && (
+        <Card>
+          <h3 className="text-base font-bold tracking-tight">Reservations are closed</h3>
+          <p className="mt-1 text-sm text-muted">
+            The organizer has started check-in, so no new spots can be taken. This is
+            what stops someone who was sent the link from joining on the spot and
+            taking a cut of the no-shows&apos; deposits.
+          </p>
+        </Card>
+      )}
+
+      {address && checkingIn && mine === "reserved" && (
         <Card>
           <h3 className="text-base font-bold tracking-tight">You&apos;re on the list</h3>
           <p className="mt-1 text-sm text-muted">
@@ -213,22 +261,26 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
           </div>
           <p className="mt-2 text-sm text-muted">
             {fromStroops(refund)} XLM is back in your wallet
-            {event.policy.tag === "SplitAmongAttendees" && !event.finalized
+            {event.policy.tag === "SplitAmongAttendees" && !finalized
               ? ". If anyone flakes, your share of their deposit arrives when the organizer finalizes."
               : "."}
           </p>
         </Card>
       )}
 
-      {isOrganizer && <OrganizerPanel
-        id={id}
-        finalized={event.finalized}
-        checkedIn={event.checkedIn.length}
-        noShows={event.reserved.length - event.checkedIn.length}
-        pool={forfeitPool(event)}
-        busy={action.kind === "busy"}
-        onFinalize={finalize}
-      />}
+      {isOrganizer && (
+        <OrganizerPanel
+          id={id}
+          phase={event.phase}
+          checkedIn={event.checkedIn.length}
+          noShows={event.reserved.length - event.checkedIn.length}
+          pool={forfeitPool(event)}
+          busy={action.kind === "busy"}
+          onFinalize={finalize}
+          onOpenCheckin={openCheckin}
+          onReopenRsvp={reopenRsvp}
+        />
+      )}
 
       {action.kind === "error" && (
         <p className="rounded-xl border border-danger/40 bg-surface-2 p-3 text-sm text-danger">
@@ -243,21 +295,27 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
 
 function OrganizerPanel({
   id,
-  finalized,
+  phase,
   checkedIn,
   noShows,
   pool,
   busy,
   onFinalize,
+  onOpenCheckin,
+  onReopenRsvp,
 }: {
   id: string;
-  finalized: boolean;
+  phase: EventState["phase"];
   checkedIn: number;
   noShows: number;
   pool: bigint;
   busy: boolean;
   onFinalize: () => void;
+  onOpenCheckin: () => void;
+  onReopenRsvp: () => void;
 }) {
+  const finalized = phase === "Finalized";
+  const checkingIn = phase === "CheckingIn";
   const [secret, setSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -281,7 +339,28 @@ function OrganizerPanel({
     <Card>
       <h3 className="text-base font-bold tracking-tight">You&apos;re the organizer</h3>
 
-      {!finalized && (
+      {!finalized && !checkingIn && (
+        <div className="mt-4 border-b border-border pb-5">
+          <p className="text-sm text-muted">
+            When everyone&apos;s there, start check-in. That closes reservations for
+            good measure — nobody who was forwarded your link can grab a spot on the
+            spot and take a cut of the no-shows&apos; deposits.
+          </p>
+          <Button
+            onClick={onOpenCheckin}
+            size="lg"
+            fullWidth
+            className="mt-4"
+            disabled={busy}
+            loading={busy}
+          >
+            <DoorOpen className="size-4" />
+            Start check-in
+          </Button>
+        </div>
+      )}
+
+      {checkingIn && (
         <>
           <p className="mt-1 text-sm text-muted">
             Share this link at the event. Anyone who opens it can check in with the
@@ -312,6 +391,20 @@ function OrganizerPanel({
               that created the event, or in a check-in link you already shared.
             </p>
           )}
+
+          <Button
+            onClick={onReopenRsvp}
+            variant="ghost"
+            fullWidth
+            className="mt-3"
+            disabled={busy}
+          >
+            <Undo2 className="size-4" />
+            Reopen reservations
+          </Button>
+          <p className="mt-2 text-xs text-muted-2">
+            Lets a latecomer reserve. Anyone who already checked in keeps their refund.
+          </p>
         </>
       )}
 

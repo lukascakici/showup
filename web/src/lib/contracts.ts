@@ -110,6 +110,9 @@ export function friendlyContractError(err: unknown): string {
     9: "You've already checked in.",
     10: "That check-in code isn't right for this event.",
     11: "This event has already been finalized.",
+    12: "Reservations closed when the organizer started check-in.",
+    13: "Check-in hasn't started yet — the organizer opens it at the event.",
+    14: "That's not possible from where this event currently stands.",
   };
 
   const match = message.match(/Error\(Contract,\s*#(\d+)\)/);

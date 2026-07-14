@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { rpc, scValToNative } from "@stellar/stellar-sdk";
 import { factory, event as eventClient, SOROBAN_RPC_URL, type ForfeitPolicy } from "./contracts";
+import type { Phase } from "event-client";
+
+export type { Phase };
 
 export type EventState = {
   id: string;
@@ -13,7 +16,7 @@ export type EventState = {
   policy: ForfeitPolicy;
   reserved: string[];
   checkedIn: string[];
-  finalized: boolean;
+  phase: Phase["tag"];
 };
 
 export const server = new rpc.Server(SOROBAN_RPC_URL);
@@ -25,11 +28,11 @@ export async function listEventIds(): Promise<string[]> {
 
 export async function loadEvent(id: string): Promise<EventState> {
   const client = eventClient(id);
-  const [config, reserved, checkedIn, finalized] = await Promise.all([
+  const [config, reserved, checkedIn, phase] = await Promise.all([
     client.get_config(),
     client.get_reserved(),
     client.get_checked_in(),
-    client.is_finalized(),
+    client.get_phase(),
   ]);
   const c = config.result.unwrap();
   return {
@@ -41,7 +44,7 @@ export async function loadEvent(id: string): Promise<EventState> {
     policy: c.policy,
     reserved: reserved.result,
     checkedIn: checkedIn.result,
-    finalized: finalized.result,
+    phase: phase.result.tag,
   };
 }
 
@@ -69,6 +72,7 @@ export function forfeitPool(e: EventState): bigint {
 }
 
 export type Activity =
+  | { kind: "phase_changed"; phase: Phase["tag"]; ledger: number; txHash: string }
   | { kind: "reserved"; guest: string; spotsLeft: number; ledger: number; txHash: string }
   | { kind: "checked_in"; guest: string; refunded: bigint; ledger: number; txHash: string }
   | {
@@ -138,7 +142,13 @@ export async function fetchActivity(
     const ledger = e.ledger;
     const txHash = e.txHash;
 
-    if (name === "reserved") {
+    if (name === "phase_changed") {
+      // A unit enum variant comes back as a single-element array, e.g.
+      // { phase: ["CheckingIn"] } — not a bare string and not { tag }.
+      const raw = data.phase;
+      const tag = Array.isArray(raw) ? String(raw[0]) : String(raw);
+      out.push({ kind: "phase_changed", phase: tag as Phase["tag"], ledger, txHash });
+    } else if (name === "reserved") {
       out.push({
         kind: "reserved",
         guest: String(data.guest),

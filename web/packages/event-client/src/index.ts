@@ -44,8 +44,22 @@ export const Errors = {
   8: {message:"NotReserved"},
   9: {message:"AlreadyCheckedIn"},
   10: {message:"WrongCode"},
-  11: {message:"AlreadyFinalized"}
+  11: {message:"AlreadyFinalized"},
+  /**
+   * `rsvp` after the organizer opened check-in.
+   */
+  12: {message:"ReservationsClosed"},
+  /**
+   * `check_in` before the organizer opened it.
+   */
+  13: {message:"CheckInNotOpen"},
+  /**
+   * `open_checkin` / `reopen_rsvp` from a phase that doesn't allow it.
+   */
+  14: {message:"WrongPhase"}
 }
+
+export type Phase = {tag: "Reserving", values: void} | {tag: "CheckingIn", values: void} | {tag: "Finalized", values: void};
 
 
 export interface Config {
@@ -69,12 +83,13 @@ fee_allowance: i128;
   token: string;
 }
 
-export type DataKey = {tag: "Config", values: void} | {tag: "Finalized", values: void} | {tag: "Reserved", values: void} | {tag: "CheckedIn", values: void} | {tag: "Attendance", values: readonly [string]};
+export type DataKey = {tag: "Config", values: void} | {tag: "Phase", values: void} | {tag: "Reserved", values: void} | {tag: "CheckedIn", values: void} | {tag: "Attendance", values: readonly [string]};
 
 
 
 
 export type Attendance = {tag: "Reserved", values: void} | {tag: "CheckedIn", values: void};
+
 
 /**
  * Where the deposits of no-shows go when an event is finalized.
@@ -84,7 +99,7 @@ export type ForfeitPolicy = {tag: "ToOrganizer", values: void} | {tag: "SplitAmo
 export interface Client {
   /**
    * Construct and simulate a rsvp transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Lock the deposit and reserve a spot.
+   * Lock the deposit and reserve a spot. Only while the event is `Reserving`.
    */
   rsvp: ({guest}: {guest: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
@@ -105,6 +120,11 @@ export interface Client {
   finalize: (options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
+   * Construct and simulate a get_phase transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_phase: (options?: MethodOptions) => Promise<AssembledTransaction<Phase>>
+
+  /**
    * Construct and simulate a get_config transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_config: (options?: MethodOptions) => Promise<AssembledTransaction<Result<Config>>>
@@ -121,6 +141,15 @@ export interface Client {
   initialize: ({organizer, token, deposit, fee_allowance, capacity, code_hash, policy}: {organizer: string, token: string, deposit: i128, fee_allowance: i128, capacity: u32, code_hash: Buffer, policy: ForfeitPolicy}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
+   * Construct and simulate a reopen_rsvp transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Go back to taking reservations, e.g. to let a latecomer in. Organizer only.
+   * 
+   * Guests who already checked in keep their refund and stay on the list; this
+   * only reopens the door.
+   */
+  reopen_rsvp: (options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
    * Construct and simulate a get_reserved transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_reserved: (options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
@@ -129,6 +158,12 @@ export interface Client {
    * Construct and simulate a is_finalized transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   is_finalized: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a open_checkin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Start check-in, closing reservations. Organizer only.
+   */
+  open_checkin: (options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
    * Construct and simulate a get_attendance transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -158,20 +193,25 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAACwAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAAAAAAAOSW52YWxpZERlcG9zaXQAAAAAAAMAAAAAAAAAD0ludmFsaWRDYXBhY2l0eQAAAAAEAAAAAAAAABNJbnZhbGlkRmVlQWxsb3dhbmNlAAAAAAUAAAAAAAAAD0FscmVhZHlSZXNlcnZlZAAAAAAGAAAAAAAAAAlFdmVudEZ1bGwAAAAAAAAHAAAAAAAAAAtOb3RSZXNlcnZlZAAAAAAIAAAAAAAAABBBbHJlYWR5Q2hlY2tlZEluAAAACQAAAAAAAAAJV3JvbmdDb2RlAAAAAAAACgAAAAAAAAAQQWxyZWFkeUZpbmFsaXplZAAAAAs=",
+      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAADgAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAAAAAAAOSW52YWxpZERlcG9zaXQAAAAAAAMAAAAAAAAAD0ludmFsaWRDYXBhY2l0eQAAAAAEAAAAAAAAABNJbnZhbGlkRmVlQWxsb3dhbmNlAAAAAAUAAAAAAAAAD0FscmVhZHlSZXNlcnZlZAAAAAAGAAAAAAAAAAlFdmVudEZ1bGwAAAAAAAAHAAAAAAAAAAtOb3RSZXNlcnZlZAAAAAAIAAAAAAAAABBBbHJlYWR5Q2hlY2tlZEluAAAACQAAAAAAAAAJV3JvbmdDb2RlAAAAAAAACgAAAAAAAAAQQWxyZWFkeUZpbmFsaXplZAAAAAsAAAArYHJzdnBgIGFmdGVyIHRoZSBvcmdhbml6ZXIgb3BlbmVkIGNoZWNrLWluLgAAAAASUmVzZXJ2YXRpb25zQ2xvc2VkAAAAAAAMAAAAKmBjaGVja19pbmAgYmVmb3JlIHRoZSBvcmdhbml6ZXIgb3BlbmVkIGl0LgAAAAAADkNoZWNrSW5Ob3RPcGVuAAAAAAANAAAAQmBvcGVuX2NoZWNraW5gIC8gYHJlb3Blbl9yc3ZwYCBmcm9tIGEgcGhhc2UgdGhhdCBkb2Vzbid0IGFsbG93IGl0LgAAAAAACldyb25nUGhhc2UAAAAAAA4=",
+        "AAAAAgAAAAAAAAAAAAAABVBoYXNlAAAAAAAAAwAAAAAAAAAsR3Vlc3RzIGNhbiByZXNlcnZlOyBub2JvZHkgY2FuIGNoZWNrIGluIHlldC4AAAAJUmVzZXJ2aW5nAAAAAAAAAAAAAD9UaGUgb3JnYW5pemVyIGhhcyBzdGFydGVkIGNoZWNrLWluLCBzbyByZXNlcnZhdGlvbnMgYXJlIGNsb3NlZC4AAAAACkNoZWNraW5nSW4AAAAAAAAAAAA4U2V0dGxlZC4gVGVybWluYWwg4oCUIHRoZXJlIGlzIGRlbGliZXJhdGVseSBubyB3YXkgYmFjay4AAAAJRmluYWxpemVkAAAA",
         "AAAAAQAAAAAAAAAAAAAABkNvbmZpZwAAAAAABwAAAAAAAAAIY2FwYWNpdHkAAAAEAAAAcXNoYTI1NiBvZiB0aGUgY2hlY2staW4gc2VjcmV0LiBUaGUgc2VjcmV0IGl0c2VsZiBuZXZlciB0b3VjaGVzIHRoZSBjaGFpbgp1bnRpbCBhIGd1ZXN0IHJldmVhbHMgaXQgYnkgY2hlY2tpbmcgaW4uAAAAAAAACWNvZGVfaGFzaAAAAAAAA+4AAAAgAAAAJ0xvY2tlZCBieSBlYWNoIGd1ZXN0IHRvIHJlc2VydmUgYSBzcG90LgAAAAAHZGVwb3NpdAAAAAALAAAAkVBhaWQgYmFjayB0byBlYWNoIGd1ZXN0IG9uIGNoZWNrLWluLCBvbiB0b3Agb2YgdGhlIGRlcG9zaXQsIHRvIGNvdmVyIHRoZQpmZWVzIHRoZXkgc3BlbnQgb24gYHJzdnBgICsgYGNoZWNrX2luYC4gRnVuZGVkIGJ5IHRoZSBvcmdhbml6ZXIgdXBmcm9udC4AAAAAAAANZmVlX2FsbG93YW5jZQAAAAAAAAsAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAABnBvbGljeQAAAAAH0AAAAA1Gb3JmZWl0UG9saWN5AAAAAAAAAAAAAAV0b2tlbgAAAAAAABM=",
-        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAAAAAAAAAAABkNvbmZpZwAAAAAAAAAAAAAAAAAJRmluYWxpemVkAAAAAAAAAAAAAAAAAAAIUmVzZXJ2ZWQAAAAAAAAAAAAAAAlDaGVja2VkSW4AAAAAAAABAAAAAAAAAApBdHRlbmRhbmNlAAAAAAABAAAAEw==",
+        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAAAAAAAAAAABkNvbmZpZwAAAAAAAAAAAAAAAAAFUGhhc2UAAAAAAAAAAAAAAAAAAAhSZXNlcnZlZAAAAAAAAAAAAAAACUNoZWNrZWRJbgAAAAAAAAEAAAAAAAAACkF0dGVuZGFuY2UAAAAAAAEAAAAT",
         "AAAABQAAAAAAAAAAAAAACFJlc2VydmVkAAAAAQAAAAhyZXNlcnZlZAAAAAMAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAAAAAAAAAAAB2RlcG9zaXQAAAAACwAAAAAAAAAAAAAACnNwb3RzX2xlZnQAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAAAAAAAAAAAAACUNoZWNrZWRJbgAAAAAAAAEAAAAKY2hlY2tlZF9pbgAAAAAAAgAAAAAAAAAFZ3Vlc3QAAAAAAAATAAAAAAAAADRkZXBvc2l0ICsgZmVlX2FsbG93YW5jZSwgcmV0dXJuZWQgaW4gdGhpcyBzYW1lIGNhbGwuAAAACHJlZnVuZGVkAAAACwAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAACUZpbmFsaXplZAAAAAAAAAEAAAAJZmluYWxpemVkAAAAAAAAAwAAAAAAAAAGc2hvd2VkAAAAAAAEAAAAAAAAAAAAAAAIbm9fc2hvd3MAAAAEAAAAAAAAACVUb3RhbCBkZXBvc2l0cyBmb3JmZWl0ZWQgYnkgbm8tc2hvd3MuAAAAAAAACWZvcmZlaXRlZAAAAAAAAAsAAAAAAAAAAg==",
         "AAAAAgAAAAAAAAAAAAAACkF0dGVuZGFuY2UAAAAAAAIAAAAAAAAAAAAAAAhSZXNlcnZlZAAAAAAAAAAAAAAACUNoZWNrZWRJbgAAAA==",
-        "AAAAAAAAACRMb2NrIHRoZSBkZXBvc2l0IGFuZCByZXNlcnZlIGEgc3BvdC4AAAAEcnN2cAAAAAEAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAEAAAPpAAAAAgAAAAM=",
+        "AAAAAAAAAElMb2NrIHRoZSBkZXBvc2l0IGFuZCByZXNlcnZlIGEgc3BvdC4gT25seSB3aGlsZSB0aGUgZXZlbnQgaXMgYFJlc2VydmluZ2AuAAAAAAAABHJzdnAAAAABAAAAAAAAAAVndWVzdAAAAAAAABMAAAABAAAD6QAAAAIAAAAD",
+        "AAAABQAAAAAAAAAAAAAADFBoYXNlQ2hhbmdlZAAAAAEAAAANcGhhc2VfY2hhbmdlZAAAAAAAAAEAAAAAAAAABXBoYXNlAAAAAAAH0AAAAAVQaGFzZQAAAAAAAAAAAAAC",
         "AAAAAAAAAPZQcm92ZSBhdHRlbmRhbmNlIHdpdGggdGhlIG9yZ2FuaXplcidzIHNlY3JldCBhbmQgdGFrZSB0aGUgZGVwb3NpdCBiYWNrLgoKVGhpcyBpcyB0aGUgb25seSBwbGFjZSBhIGd1ZXN0IGdldHMgcGFpZCBvbiB0aGUgaGFwcHkgcGF0aCDigJQgdGhlIGRlcG9zaXQKYW5kIHRoZSBmZWUgcmVpbWJ1cnNlbWVudCBsYW5kIGluIHRoZSBzYW1lIGNhbGwsIHNvIHRoZXJlIGlzIG5vdGhpbmcgdG8KY29tZSBiYWNrIGFuZCBjbGFpbSBsYXRlci4AAAAAAAhjaGVja19pbgAAAAIAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAAAAAAGc2VjcmV0AAAAAAAOAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAADJDbG9zZSB0aGUgZXZlbnQgYW5kIHNldHRsZSB0aGUgbm8tc2hvd3MnIGRlcG9zaXRzLgAAAAAACGZpbmFsaXplAAAAAAAAAAEAAAPpAAAAAgAAAAM=",
+        "AAAAAAAAAAAAAAAJZ2V0X3BoYXNlAAAAAAAAAAAAAAEAAAfQAAAABVBoYXNlAAAA",
         "AAAAAAAAAAAAAAAKZ2V0X2NvbmZpZwAAAAAAAAAAAAEAAAPpAAAH0AAAAAZDb25maWcAAAAAAAM=",
         "AAAAAAAAARdDcmVhdGUgdGhlIGV2ZW50IGFuZCBmdW5kIHRoZSBmZWUtcmVpbWJ1cnNlbWVudCBwb29sLgoKVGhlIG9yZ2FuaXplciB0cmFuc2ZlcnMgYGZlZV9hbGxvd2FuY2UgKiBjYXBhY2l0eWAgaW4sIHNvIGV2ZXJ5IGd1ZXN0IHdobwpzaG93cyB1cCBjYW4gYmUgbWFkZSB3aG9sZSBmb3IgdGhlIGZlZXMgdGhleSBzcGVuZC4gV2hhdGV2ZXIgaXMgbGVmdCBvdmVyCih0aGUgbm8tc2hvd3MgbmV2ZXIgY29zdCBhbnl0aGluZykgZ29lcyBiYWNrIHRvIHRoZSBvcmdhbml6ZXIgb24KYGZpbmFsaXplYC4AAAAACmluaXRpYWxpemUAAAAAAAcAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAABXRva2VuAAAAAAAAEwAAAAAAAAAHZGVwb3NpdAAAAAALAAAAAAAAAA1mZWVfYWxsb3dhbmNlAAAAAAAACwAAAAAAAAAIY2FwYWNpdHkAAAAEAAAAAAAAAAljb2RlX2hhc2gAAAAAAAPuAAAAIAAAAAAAAAAGcG9saWN5AAAAAAfQAAAADUZvcmZlaXRQb2xpY3kAAAAAAAABAAAD6QAAAAIAAAAD",
+        "AAAAAAAAAK5HbyBiYWNrIHRvIHRha2luZyByZXNlcnZhdGlvbnMsIGUuZy4gdG8gbGV0IGEgbGF0ZWNvbWVyIGluLiBPcmdhbml6ZXIgb25seS4KCkd1ZXN0cyB3aG8gYWxyZWFkeSBjaGVja2VkIGluIGtlZXAgdGhlaXIgcmVmdW5kIGFuZCBzdGF5IG9uIHRoZSBsaXN0OyB0aGlzCm9ubHkgcmVvcGVucyB0aGUgZG9vci4AAAAAAAtyZW9wZW5fcnN2cAAAAAAAAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAAAAAAAAMZ2V0X3Jlc2VydmVkAAAAAAAAAAEAAAPqAAAAEw==",
         "AAAAAAAAAAAAAAAMaXNfZmluYWxpemVkAAAAAAAAAAEAAAAB",
+        "AAAAAAAAADVTdGFydCBjaGVjay1pbiwgY2xvc2luZyByZXNlcnZhdGlvbnMuIE9yZ2FuaXplciBvbmx5LgAAAAAAAAxvcGVuX2NoZWNraW4AAAAAAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAAAAAAAAOZ2V0X2F0dGVuZGFuY2UAAAAAAAEAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAEAAAPoAAAH0AAAAApBdHRlbmRhbmNlAAA=",
         "AAAAAAAAAAAAAAAOZ2V0X2NoZWNrZWRfaW4AAAAAAAAAAAABAAAD6gAAABM=",
         "AAAAAgAAAD1XaGVyZSB0aGUgZGVwb3NpdHMgb2Ygbm8tc2hvd3MgZ28gd2hlbiBhbiBldmVudCBpcyBmaW5hbGl6ZWQuAAAAAAAAAAAAAA1Gb3JmZWl0UG9saWN5AAAAAAAAAgAAAAAAAAAaU3RyYWlnaHQgdG8gdGhlIG9yZ2FuaXplci4AAAAAAAtUb09yZ2FuaXplcgAAAAAAAAAAK1NwbGl0IGV2ZW5seSBhbW9uZyBldmVyeW9uZSB3aG8gY2hlY2tlZCBpbi4AAAAAE1NwbGl0QW1vbmdBdHRlbmRlZXMA" ]),
@@ -182,10 +222,13 @@ export class Client extends ContractClient {
     rsvp: this.txFromJSON<Result<void>>,
         check_in: this.txFromJSON<Result<void>>,
         finalize: this.txFromJSON<Result<void>>,
+        get_phase: this.txFromJSON<Phase>,
         get_config: this.txFromJSON<Result<Config>>,
         initialize: this.txFromJSON<Result<void>>,
+        reopen_rsvp: this.txFromJSON<Result<void>>,
         get_reserved: this.txFromJSON<Array<string>>,
         is_finalized: this.txFromJSON<boolean>,
+        open_checkin: this.txFromJSON<Result<void>>,
         get_attendance: this.txFromJSON<Option<Attendance>>,
         get_checked_in: this.txFromJSON<Array<string>>
   }

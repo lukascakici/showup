@@ -126,6 +126,7 @@ fn a_factory_made_event_runs_the_whole_flow() {
     client.rsvp(&guest);
     assert_eq!(f.balance(&guest), 0);
 
+    client.open_checkin();
     client.check_in(&guest, &f.secret);
 
     // Deposit back plus the fee reimbursement, straight from a deployed event.

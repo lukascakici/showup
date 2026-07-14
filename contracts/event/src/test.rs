@@ -114,6 +114,7 @@ fn check_in_returns_the_deposit_and_the_fee_allowance() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
+    f.client.open_checkin();
 
     f.client.check_in(&guest, &f.secret);
 
@@ -129,6 +130,8 @@ fn check_in_with_the_wrong_secret_is_rejected() {
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
 
+    f.client.open_checkin();
+
     let wrong = Bytes::from_slice(&f.env, b"guess");
     assert_eq!(
         f.client.try_check_in(&guest, &wrong),
@@ -141,6 +144,7 @@ fn check_in_with_the_wrong_secret_is_rejected() {
 fn check_in_without_an_rsvp_is_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let stranger = f.guest(0);
+    f.client.open_checkin();
 
     assert_eq!(
         f.client.try_check_in(&stranger, &f.secret),
@@ -153,6 +157,7 @@ fn check_in_twice_is_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
+    f.client.open_checkin();
     f.client.check_in(&guest, &f.secret);
 
     assert_eq!(
@@ -173,6 +178,7 @@ fn finalize_sends_forfeits_and_the_unspent_pool_to_the_organizer() {
     let no_show = f.guest(DEPOSIT);
     f.client.rsvp(&shower);
     f.client.rsvp(&no_show);
+    f.client.open_checkin();
     f.client.check_in(&shower, &f.secret);
 
     f.client.finalize();
@@ -196,6 +202,7 @@ fn finalize_splits_forfeits_among_the_people_who_showed() {
     f.client.rsvp(&a);
     f.client.rsvp(&b);
     f.client.rsvp(&ghost);
+    f.client.open_checkin();
     f.client.check_in(&a, &f.secret);
     f.client.check_in(&b, &f.secret);
 
@@ -237,6 +244,18 @@ fn actions_after_finalize_are_rejected() {
         Err(Ok(Error::AlreadyFinalized))
     );
     assert_eq!(f.client.try_finalize(), Err(Ok(Error::AlreadyFinalized)));
+
+    // Finalized is terminal: no phase call may resurrect a settled event.
+    let latecomer = f.guest(DEPOSIT);
+    assert_eq!(
+        f.client.try_rsvp(&latecomer),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+    assert_eq!(
+        f.client.try_open_checkin(),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+    assert_eq!(f.client.try_reopen_rsvp(), Err(Ok(Error::AlreadyFinalized)));
 }
 
 #[test]
@@ -295,4 +314,96 @@ fn initialize_rejects_nonsense_parameters() {
         ),
         Err(Ok(Error::InvalidCapacity))
     );
+}
+
+#[test]
+fn check_in_before_the_organizer_opens_it_is_rejected() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    // The secret is right, but check-in hasn't started.
+    assert_eq!(
+        f.client.try_check_in(&guest, &f.secret),
+        Err(Ok(Error::CheckInNotOpen))
+    );
+    assert_eq!(f.balance(&guest), 0);
+}
+
+#[test]
+fn reserving_after_check_in_opens_is_rejected() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    f.client.open_checkin();
+
+    // This is the hole the phases exist to close: someone forwarded the link
+    // can no longer reserve on the spot and immediately check in, pocketing the
+    // fee allowance and diluting the real attendees' share of the forfeits.
+    let freeloader = f.guest(DEPOSIT);
+    assert_eq!(
+        f.client.try_rsvp(&freeloader),
+        Err(Ok(Error::ReservationsClosed))
+    );
+    assert_eq!(f.balance(&freeloader), DEPOSIT);
+    assert_eq!(f.client.get_checked_in().len(), 0);
+}
+
+#[test]
+fn the_organizer_can_reopen_reservations_for_a_latecomer() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let early = f.guest(DEPOSIT);
+    f.client.rsvp(&early);
+    f.client.open_checkin();
+    f.client.check_in(&early, &f.secret);
+
+    f.client.reopen_rsvp();
+    assert_eq!(f.client.get_phase(), Phase::Reserving);
+
+    let latecomer = f.guest(DEPOSIT);
+    f.client.rsvp(&latecomer);
+
+    // Reopening must not undo anyone who already checked in.
+    assert_eq!(f.balance(&early), DEPOSIT + FEE_ALLOWANCE);
+    assert_eq!(f.client.get_checked_in().len(), 1);
+
+    f.client.open_checkin();
+    f.client.check_in(&latecomer, &f.secret);
+    assert_eq!(f.balance(&latecomer), DEPOSIT + FEE_ALLOWANCE);
+}
+
+#[test]
+fn phase_moves_are_rejected_from_the_wrong_phase() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+
+    // Already Reserving.
+    assert_eq!(f.client.try_reopen_rsvp(), Err(Ok(Error::WrongPhase)));
+    f.client.open_checkin();
+    // Already CheckingIn.
+    assert_eq!(f.client.try_open_checkin(), Err(Ok(Error::WrongPhase)));
+}
+
+#[test]
+fn phase_changes_need_the_organizer() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let stranger = Address::generate(&f.env);
+
+    // mock_all_auths() is on, so pin auth to someone who isn't the organizer.
+    f.env.set_auths(&[]);
+    f.env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &stranger,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &f.client.address,
+            fn_name: "open_checkin",
+            args: soroban_sdk::vec![&f.env],
+            sub_invokes: &[],
+        },
+    }]);
+    assert!(f.client.try_open_checkin().is_err());
+    assert_eq!(f.client.get_phase(), Phase::Reserving);
+}
+
+#[test]
+fn a_fresh_event_starts_in_reserving() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    assert_eq!(f.client.get_phase(), Phase::Reserving);
+    assert!(!f.client.is_finalized());
 }

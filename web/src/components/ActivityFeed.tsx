@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Flag, Lock } from "lucide-react";
+import { CheckCircle2, DoorOpen, ExternalLink, Flag, Lock } from "lucide-react";
 import type { Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
@@ -45,10 +45,16 @@ function Icon({ kind }: { kind: Activity["kind"] }) {
   const className = "mt-0.5 size-4 shrink-0";
   if (kind === "reserved") return <Lock className={`${className} text-muted`} />;
   if (kind === "checked_in") return <CheckCircle2 className={`${className} text-accent`} />;
+  if (kind === "phase_changed") return <DoorOpen className={`${className} text-muted`} />;
   return <Flag className={`${className} text-muted`} />;
 }
 
 function describe(a: Activity): string {
+  if (a.kind === "phase_changed") {
+    return a.phase === "CheckingIn"
+      ? "Check-in opened — reservations are closed"
+      : "Reservations reopened";
+  }
   if (a.kind === "reserved") {
     return `${shortAddr(a.guest)} reserved a spot — ${a.spotsLeft} left`;
   }

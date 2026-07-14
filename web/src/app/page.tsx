@@ -97,7 +97,13 @@ function EventRow({ event, you }: { event: EventState; you: string | null }) {
         </span>
         <span>{event.checkedIn.length} showed</span>
         <span className="ml-auto font-medium text-foreground">
-          {event.finalized ? "Closed" : left > 0 ? `${left} spots left` : "Full"}
+          {event.phase === "Finalized"
+            ? "Closed"
+            : event.phase === "CheckingIn"
+              ? "Checking in"
+              : left > 0
+                ? `${left} spots left`
+                : "Full"}
         </span>
       </div>
     </Link>

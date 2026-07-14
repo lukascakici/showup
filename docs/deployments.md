@@ -8,8 +8,8 @@ funds are involved.
 
 | What | Value |
 | :-- | :-- |
-| Event factory | [`CAC7FV5HAUS6HZ62AGA5GV3Q23FY2DLVBNUEHHX5KVIYKT3ALY6FV2FC`](https://stellar.expert/explorer/testnet/contract/CAC7FV5HAUS6HZ62AGA5GV3Q23FY2DLVBNUEHHX5KVIYKT3ALY6FV2FC) |
-| Event wasm hash | `1c68e7f8b6422f3fdc52de79bf8772168e555b1d5522f0bf685558209bbcf7ae` |
+| Event factory | [`CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW`](https://stellar.expert/explorer/testnet/contract/CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW) |
+| Event wasm hash | `aef70ac35e540a1e5b48277c7c740277f91334f6defbf7dca47ca07f6fd8171d` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / factory admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
@@ -21,21 +21,28 @@ organizer, so there is exactly one address the frontend has to know.
 One event run start to finish on Testnet: 10 XLM deposit, capacity 5, a 0.1 XLM
 fee allowance per guest, forfeits set to split among attendees.
 
-| Step | Transaction |
+Event contract: [`CB4HHNLD…KXLN66ZIW`](https://stellar.expert/explorer/testnet/contract/CB4HHNLDAR5FCX7CRSFGJTNGPALB4ZZQXXDYCCQMR4EFKBKEXLN66ZIW)
+
+| Step | Result |
 | :-- | :-- |
-| `initialize` the factory | [`7a3863c0…f3c99a9e`](https://stellar.expert/explorer/testnet/tx/7a3863c0c0da0dc49c925b7e40f41959987433e0c9e938a215d09d77f3c99a9e) |
-| `create_event` → [`CDA2TG3C…UILZFF3T`](https://stellar.expert/explorer/testnet/contract/CDA2TG3CSZ4KQIPOYKQVJBRZKYJ275YHJAIG25ZBCXQ2W7UTUILZFF3T) | [`9ffb742d…0816fb10`](https://stellar.expert/explorer/testnet/tx/9ffb742d0ebc4f7ebd231694f3930345b5ecebc31716ac1f610fed0b0816fb10) |
-| `rsvp` — 10 XLM locked | [`214d202b…636d0b1b`](https://stellar.expert/explorer/testnet/tx/214d202bccedbddcc7b620383703fb30a4874a94514ce18714a57ab8636d0b1b) |
-| `check_in` — 10.1 XLM returned | [`4d13f997…1f36aa9b`](https://stellar.expert/explorer/testnet/tx/4d13f997f5688c70ef2331b6f37c665a60085472fbc5f0b2d54dfb751f36aa9b) |
-| `finalize` — 0.4 XLM unspent pool returned | [`5b681146…13e3867f`](https://stellar.expert/explorer/testnet/tx/5b681146549f2d67f748c229ddd0eb71cf68780963c01acb4142eb9713e3867f) |
+| `create_event` | event deployed and its fee pool funded in one transaction |
+| `rsvp` | 10 XLM locked |
+| `check_in` **before** check-in opened | rejected, `Error(Contract, #13)` — `CheckInNotOpen` |
+| `open_checkin` | `PhaseChanged { phase: CheckingIn }` |
+| `rsvp` **after** check-in opened | rejected, `Error(Contract, #12)` — `ReservationsClosed` |
+| `check_in` with the wrong secret | rejected, `Error(Contract, #10)` — `WrongCode` |
+| `check_in` with the right secret | 10.1 XLM returned |
+| `finalize` | no-shows settled, unspent fee pool returned |
 
-**The guest opened with 10,000 XLM and closed with 10,000.0926 XLM.** They got
-the deposit back and the 0.1 XLM allowance more than covered the ~0.0074 XLM of
-fees they spent across `rsvp` and `check_in` — which is the whole point of the
-organizer funding the pool upfront: showing up must never cost the guest money.
+**The guest opened with 10,000 XLM and closed with 10,000.19 XLM.** They got the
+deposit back and the 0.1 XLM allowance more than covered the fees they spent —
+which is the point of the organizer funding the pool upfront: showing up must
+never cost the guest money.
 
-Checking in with the wrong secret was rejected with `Error(Contract, #10)` —
-`WrongCode` — before any transfer happened.
+The two rejections in bold are the phase machine doing its job. Without it,
+someone forwarded the check-in link could reserve and check in on the spot
+without ever attending, pocketing the fee allowance and taking a cut of the
+no-shows' forfeited deposits.
 
 ## Reproducing
 

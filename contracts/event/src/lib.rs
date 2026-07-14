@@ -4,11 +4,24 @@
 //!
 //! Flow: the organizer creates an event with a deposit amount and a capacity,
 //! funding a pool that reimburses attendees' transaction fees. Guests `rsvp` by
-//! locking the deposit. On the day the organizer shares a secret (as a link/QR);
-//! a guest `check_in`s with it and gets their deposit back plus the fee
-//! reimbursement in the same call. When the organizer `finalize`s, the deposits
-//! of everyone who never showed are forfeited — either to the organizer or split
-//! among the people who did show, per the policy fixed at creation.
+//! locking the deposit. On the day the organizer calls `open_checkin` and shares
+//! the secret (as a link/QR); a guest `check_in`s with it and gets their deposit
+//! back plus the fee reimbursement in the same call. When the organizer
+//! `finalize`s, the deposits of everyone who never showed are forfeited — either
+//! to the organizer or split among the people who did show, per the policy fixed
+//! at creation.
+//!
+//! ```text
+//! Reserving  ──open_checkin──▶  CheckingIn  ──┐
+//!     ▲                              │        ├─finalize─▶  Finalized
+//!     └────────reopen_rsvp───────────┘        │             (terminal)
+//!     └───────────────────finalize────────────┘
+//! ```
+//!
+//! The phases are what stop someone who was forwarded the check-in link from
+//! reserving and checking in on the spot without ever attending — which would
+//! both pocket the fee allowance and dilute the real attendees' share of the
+//! forfeited deposits.
 
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
@@ -32,6 +45,23 @@ pub enum Error {
     AlreadyCheckedIn = 9,
     WrongCode = 10,
     AlreadyFinalized = 11,
+    /// `rsvp` after the organizer opened check-in.
+    ReservationsClosed = 12,
+    /// `check_in` before the organizer opened it.
+    CheckInNotOpen = 13,
+    /// `open_checkin` / `reopen_rsvp` from a phase that doesn't allow it.
+    WrongPhase = 14,
+}
+
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Phase {
+    /// Guests can reserve; nobody can check in yet.
+    Reserving,
+    /// The organizer has started check-in, so reservations are closed.
+    CheckingIn,
+    /// Settled. Terminal — there is deliberately no way back.
+    Finalized,
 }
 
 #[contracttype]
@@ -61,7 +91,7 @@ pub struct Config {
 #[contracttype]
 pub enum DataKey {
     Config,
-    Finalized,
+    Phase,
     Reserved,
     CheckedIn,
     Attendance(Address),
@@ -87,6 +117,11 @@ pub struct Finalized {
     pub no_shows: u32,
     /// Total deposits forfeited by no-shows.
     pub forfeited: i128,
+}
+
+#[contractevent]
+pub struct PhaseChanged {
+    pub phase: Phase,
 }
 
 #[contract]
@@ -141,7 +176,9 @@ impl EventContract {
             policy,
         };
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::Finalized, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::Phase, &Phase::Reserving);
         env.storage()
             .instance()
             .set(&DataKey::Reserved, &Vec::<Address>::new(&env));
@@ -151,10 +188,14 @@ impl EventContract {
         Ok(())
     }
 
-    /// Lock the deposit and reserve a spot.
+    /// Lock the deposit and reserve a spot. Only while the event is `Reserving`.
     pub fn rsvp(env: Env, guest: Address) -> Result<(), Error> {
         let config = Self::config(&env)?;
-        Self::require_open(&env)?;
+        match Self::phase(&env) {
+            Phase::Reserving => {}
+            Phase::CheckingIn => return Err(Error::ReservationsClosed),
+            Phase::Finalized => return Err(Error::AlreadyFinalized),
+        }
         guest.require_auth();
 
         if env
@@ -196,7 +237,11 @@ impl EventContract {
     /// come back and claim later.
     pub fn check_in(env: Env, guest: Address, secret: Bytes) -> Result<(), Error> {
         let config = Self::config(&env)?;
-        Self::require_open(&env)?;
+        match Self::phase(&env) {
+            Phase::CheckingIn => {}
+            Phase::Reserving => return Err(Error::CheckInNotOpen),
+            Phase::Finalized => return Err(Error::AlreadyFinalized),
+        }
         guest.require_auth();
 
         match env
@@ -233,10 +278,25 @@ impl EventContract {
         Ok(())
     }
 
+    /// Start check-in, closing reservations. Organizer only.
+    pub fn open_checkin(env: Env) -> Result<(), Error> {
+        Self::set_phase(&env, Phase::Reserving, Phase::CheckingIn)
+    }
+
+    /// Go back to taking reservations, e.g. to let a latecomer in. Organizer only.
+    ///
+    /// Guests who already checked in keep their refund and stay on the list; this
+    /// only reopens the door.
+    pub fn reopen_rsvp(env: Env) -> Result<(), Error> {
+        Self::set_phase(&env, Phase::CheckingIn, Phase::Reserving)
+    }
+
     /// Close the event and settle the no-shows' deposits.
     pub fn finalize(env: Env) -> Result<(), Error> {
         let config = Self::config(&env)?;
-        Self::require_open(&env)?;
+        if Self::phase(&env) == Phase::Finalized {
+            return Err(Error::AlreadyFinalized);
+        }
         config.organizer.require_auth();
 
         let reserved = Self::reserved_list(&env);
@@ -280,7 +340,9 @@ impl EventContract {
             }
         }
 
-        env.storage().instance().set(&DataKey::Finalized, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::Phase, &Phase::Finalized);
         Finalized {
             showed,
             no_shows,
@@ -294,11 +356,12 @@ impl EventContract {
         Self::config(&env)
     }
 
+    pub fn get_phase(env: Env) -> Phase {
+        Self::phase(&env)
+    }
+
     pub fn is_finalized(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Finalized)
-            .unwrap_or(false)
+        Self::phase(&env) == Phase::Finalized
     }
 
     pub fn get_reserved(env: Env) -> Vec<Address> {
@@ -320,15 +383,30 @@ impl EventContract {
             .ok_or(Error::NotInitialized)
     }
 
-    fn require_open(env: &Env) -> Result<(), Error> {
-        let finalized: bool = env
-            .storage()
+    fn phase(env: &Env) -> Phase {
+        env.storage()
             .instance()
-            .get(&DataKey::Finalized)
-            .unwrap_or(false);
-        if finalized {
+            .get(&DataKey::Phase)
+            .unwrap_or(Phase::Reserving)
+    }
+
+    /// Move `from` -> `to` on the organizer's authority.
+    ///
+    /// Finalized is terminal, so it is rejected before anything else — an event
+    /// that has paid out must never accept guests again.
+    fn set_phase(env: &Env, from: Phase, to: Phase) -> Result<(), Error> {
+        let config = Self::config(env)?;
+        let current = Self::phase(env);
+        if current == Phase::Finalized {
             return Err(Error::AlreadyFinalized);
         }
+        if current != from {
+            return Err(Error::WrongPhase);
+        }
+        config.organizer.require_auth();
+
+        env.storage().instance().set(&DataKey::Phase, &to);
+        PhaseChanged { phase: to }.publish(env);
         Ok(())
     }
 
