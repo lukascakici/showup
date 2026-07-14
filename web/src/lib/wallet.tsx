@@ -16,7 +16,12 @@ import {
   requestAccess,
   signTransaction,
 } from "@stellar/freighter-api";
-import { NETWORK_PASSPHRASE } from "./stellar";
+import {
+  NETWORK_PASSPHRASE,
+  fetchAccountState,
+  errMessage,
+  type AccountState,
+} from "./stellar";
 
 type WalletStatus = "idle" | "connecting" | "connected";
 
@@ -27,6 +32,10 @@ type WalletContextValue = {
   wrongNetwork: boolean;
   hasFreighter: boolean;
   error: string | null;
+  balance: AccountState | null;
+  balanceLoading: boolean;
+  balanceError: string | null;
+  refreshBalance: () => Promise<void>;
   connect: () => Promise<void>;
   disconnect: () => void;
   sign: (
@@ -45,11 +54,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [network, setNetwork] = useState<string | null>(null);
   const [hasFreighter, setHasFreighter] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [balance, setBalance] = useState<AccountState | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
 
   const refreshNetwork = useCallback(async () => {
     const net = await getNetwork();
     if (!net.error) setNetwork(net.network ?? null);
   }, []);
+
+  const refreshBalance = useCallback(async () => {
+    if (!address) {
+      setBalance(null);
+      return;
+    }
+    setBalanceLoading(true);
+    setBalanceError(null);
+    try {
+      setBalance(await fetchAccountState(address));
+    } catch (e) {
+      setBalanceError(errMessage(e) || "Couldn't load balance.");
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, [address]);
+
+  // Load balance whenever a wallet becomes connected / the address changes.
+  useEffect(() => {
+    if (status === "connected" && address) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refreshBalance();
+    } else {
+      setBalance(null);
+    }
+  }, [status, address, refreshBalance]);
 
   // Silent reconnect on load if previously connected and still allowed.
   useEffect(() => {
@@ -110,6 +148,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setStatus("idle");
     setNetwork(null);
     setError(null);
+    setBalance(null);
+    setBalanceError(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -136,11 +176,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       wrongNetwork,
       hasFreighter,
       error,
+      balance,
+      balanceLoading,
+      balanceError,
+      refreshBalance,
       connect,
       disconnect,
       sign,
     }),
-    [address, status, network, wrongNetwork, hasFreighter, error, connect, disconnect, sign],
+    [
+      address,
+      status,
+      network,
+      wrongNetwork,
+      hasFreighter,
+      error,
+      balance,
+      balanceLoading,
+      balanceError,
+      refreshBalance,
+      connect,
+      disconnect,
+      sign,
+    ],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

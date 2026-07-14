@@ -13,8 +13,8 @@ type TxState =
   | { kind: "success"; hash: string }
   | { kind: "error"; message: string };
 
-export function SendPayment({ onSent }: { onSent?: () => void }) {
-  const { address, sign } = useWallet();
+export function SendPayment() {
+  const { address, sign, refreshBalance } = useWallet();
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [tx, setTx] = useState<TxState>({ kind: "idle" });
@@ -41,7 +41,7 @@ export function SendPayment({ onSent }: { onSent?: () => void }) {
       setTx({ kind: "success", hash });
       setTo("");
       setAmount("");
-      onSent?.();
+      refreshBalance();
     } catch (err) {
       setTx({ kind: "error", message: friendlyTxError(err) });
     }

@@ -1,16 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Wallet, ShieldCheck, AlertTriangle } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { BalanceCard } from "@/components/BalanceCard";
 import { SendPayment } from "@/components/SendPayment";
 import { Button, Card } from "@/components/ui";
 
 export default function Home() {
   const { status, connect, wrongNetwork, error } = useWallet();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const bump = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="flex flex-col gap-8">
@@ -18,7 +14,7 @@ export default function Home() {
         <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
           Put a deposit on
           <br />
-          showing up.
+          <span className="text-accent">showing up.</span>
         </h1>
         <p className="mt-4 max-w-md text-base text-muted">
           Showup turns RSVPs into refundable on-chain deposits. This is the White
@@ -35,8 +31,8 @@ export default function Home() {
           <div>
             <h2 className="text-lg font-bold tracking-tight">Connect to begin</h2>
             <p className="mt-1 text-sm text-muted">
-              Connect your Freighter wallet on Testnet to see your balance and send
-              a payment.
+              Connect your Freighter wallet on Testnet to check your balance,
+              request test XLM, and send a payment.
             </p>
           </div>
           <Button onClick={connect} loading={status === "connecting"} size="lg" fullWidth>
@@ -61,8 +57,7 @@ export default function Home() {
               </div>
             </div>
           )}
-          <BalanceCard key={`bal-${refreshKey}`} onBalanceChange={bump} />
-          <SendPayment onSent={bump} />
+          <SendPayment />
         </>
       )}
     </div>

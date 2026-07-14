@@ -37,15 +37,24 @@ export async function fetchAccountState(address: string): Promise<AccountState> 
   }
 }
 
-/** Fund an account on Testnet via Friendbot. Idempotent-ish; throws on hard failure. */
-export async function fundWithFriendbot(address: string): Promise<void> {
+export type FaucetResult = "funded" | "already_funded";
+
+/**
+ * Fund an account on Testnet via Friendbot.
+ * Returns "funded" when it created/funded the account, or "already_funded" when
+ * the account already exists (Friendbot only funds a new account once).
+ */
+export async function fundWithFriendbot(address: string): Promise<FaucetResult> {
   const res = await fetch(`${FRIENDBOT_URL}/?addr=${encodeURIComponent(address)}`);
-  if (!res.ok) {
-    // 400 = "account already funded" is common and harmless
-    const body = await res.text();
-    if (res.status === 400 && body.includes("already funded")) return;
-    throw new Error(`Friendbot funding failed (${res.status})`);
+  if (res.ok) return "funded";
+  const body = await res.text();
+  if (
+    res.status === 400 &&
+    /already.*funded|op_already_exists|createAccountAlreadyExist|already exists/i.test(body)
+  ) {
+    return "already_funded";
   }
+  throw new Error(`Friendbot funding failed (${res.status})`);
 }
 
 export type SignFn = (
