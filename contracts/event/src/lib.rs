@@ -15,6 +15,8 @@ use soroban_sdk::{
     BytesN, Env, Vec,
 };
 
+pub use interfaces::ForfeitPolicy;
+
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -30,16 +32,6 @@ pub enum Error {
     AlreadyCheckedIn = 9,
     WrongCode = 10,
     AlreadyFinalized = 11,
-}
-
-/// Where the deposits of no-shows go when the event is finalized.
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ForfeitPolicy {
-    /// Straight to the organizer.
-    ToOrganizer,
-    /// Split evenly among everyone who checked in.
-    SplitAmongAttendees,
 }
 
 #[contracttype]

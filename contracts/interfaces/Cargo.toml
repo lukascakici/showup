@@ -1,0 +1,15 @@
+[package]
+name = "interfaces"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Deliberately a plain lib, never a cdylib: this crate is shared source for the
+# contracts, not a contract itself. Depending on a *contract* crate directly
+# would pollute the dependent's wasm spec.
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
