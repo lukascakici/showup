@@ -20,6 +20,10 @@
 # production
 /build
 
+# Compiled output of the generated contract bindings. `npm install` rebuilds it
+# via each package's prepare script, so it never needs to be committed.
+/packages/*/dist
+
 # misc
 .DS_Store
 *.pem
