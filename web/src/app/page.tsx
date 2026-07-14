@@ -13,7 +13,7 @@ export default function Home() {
         <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
           Put a deposit on
           <br />
-          <span className="text-accent">showing up.</span>
+          <span className="font-hand text-5xl text-accent sm:text-6xl">showing up.</span>
         </h1>
         <p className="mt-4 max-w-md text-base text-muted">
           Showup turns RSVPs into refundable on-chain deposits. This is the White
