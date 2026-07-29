@@ -4,7 +4,7 @@ import {
   type ForfeitPolicy,
 } from "factory-client";
 import { Client as EventClient } from "event-client";
-import { NETWORK_PASSPHRASE } from "./stellar";
+import { NETWORK_PASSPHRASE, type SignFn } from "./stellar";
 
 export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
 export const FACTORY_ID = factoryNetworks.testnet.contractId;
@@ -19,14 +19,9 @@ export const FEE_ALLOWANCE_STROOPS = 1_000_000n; // 0.1 XLM
 
 export type { ForfeitPolicy };
 
-export type SignTx = (
-  xdr: string,
-  opts?: { networkPassphrase?: string; address?: string },
-) => Promise<{ signedTxXdr: string; signerAddress?: string }>;
-
 type ClientOpts = {
   publicKey?: string;
-  signTransaction?: SignTx;
+  signTransaction?: SignFn;
 };
 
 function baseOptions(opts: ClientOpts) {

@@ -2,31 +2,21 @@
 
 import { useMemo } from "react";
 import { useWallet } from "./wallet";
-import { errMessage, NETWORK_PASSPHRASE } from "./stellar";
-import type { SignTx } from "./contracts";
+import type { SignFn } from "./stellar";
 
 /**
- * Adapt the wallet to what the generated contract clients expect.
+ * Hand the wallet to the generated contract clients.
  *
- * Freighter reports a rejection by returning an `error` field; the contract
- * client only understands a thrown error, so translate it here rather than
- * letting a rejected signature look like a successful empty one.
+ * The wallet kit signs by returning `{ signedTxXdr, signerAddress }` and throwing
+ * on rejection, which is exactly the hook shape the clients want — so there is
+ * nothing to translate. Returning an empty object while no wallet is connected is
+ * what gates the forms: without a signer the clients can only simulate.
  */
-export function useSigner(): { publicKey?: string; signTransaction?: SignTx } {
+export function useSigner(): { publicKey?: string; signTransaction?: SignFn } {
   const { address, sign } = useWallet();
 
-  return useMemo(() => {
-    if (!address) return {};
-    const signTransaction: SignTx = async (xdr) => {
-      const res = await sign(xdr, {
-        networkPassphrase: NETWORK_PASSPHRASE,
-        address,
-      });
-      if (res.error) {
-        throw new Error(errMessage(res.error) || "You rejected the request in your wallet.");
-      }
-      return { signedTxXdr: res.signedTxXdr, signerAddress: address };
-    };
-    return { publicKey: address, signTransaction };
-  }, [address, sign]);
+  return useMemo(
+    () => (address ? { publicKey: address, signTransaction: sign } : {}),
+    [address, sign],
+  );
 }

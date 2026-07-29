@@ -57,10 +57,17 @@ export async function fundWithFriendbot(address: string): Promise<FaucetResult> 
   throw new Error(`Friendbot funding failed (${res.status})`);
 }
 
+/**
+ * Sign an XDR with the connected wallet.
+ *
+ * Shaped to match both the wallet kit's `signTransaction` and the signing hook
+ * the generated contract clients accept, so it can be handed to either without
+ * an adapter. Rejection is a thrown error, never a returned field.
+ */
 export type SignFn = (
   xdr: string,
-  opts: { networkPassphrase: string; address: string },
-) => Promise<{ signedTxXdr: string; error?: string | { message?: string } }>;
+  opts?: { networkPassphrase?: string; address?: string },
+) => Promise<{ signedTxXdr: string; signerAddress?: string }>;
 
 /**
  * Build → sign (via wallet) → submit a native XLM payment.
@@ -94,10 +101,6 @@ export async function sendPayment(params: {
     networkPassphrase: NETWORK_PASSPHRASE,
     address: from,
   });
-
-  if (signed.error) {
-    throw new Error(errMessage(signed.error) || "Signing was rejected");
-  }
 
   const signedTx = TransactionBuilder.fromXDR(
     signed.signedTxXdr,
