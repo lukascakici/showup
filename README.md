@@ -108,9 +108,10 @@ to Horizon. The returned hash links straight to Stellar Explorer.
 
 ## Roadmap
 
-Showup grows one belt at a time; a git tag marks each level.
+Showup grows one belt at a time, and this README grows with it — every level keeps
+its own section below, so nothing that shipped ever disappears from the record.
 
-- [x] **L1 — White Belt** · wallet, balance, faucet, payments _(this build)_ — `v1-white`
+- [x] **L1 — White Belt** · wallet, balance, faucet, payments
 - [ ] **L2 — Yellow Belt** · first Soroban contract: RSVP deposit, check-in, claim + live event feed
 - [ ] **L3 — Orange Belt** · factory + reputation contracts, CI/CD, tests, docs
 - [ ] **L4 — Green Belt** · production MVP, real users, analytics, feedback
