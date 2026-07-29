@@ -70,7 +70,7 @@ tops it up from a faucet, and moves a deposit with full transaction feedback.
 
 ### Prerequisites
 
-- **Node.js 20+** and npm
+- **Node.js 24** and npm (pinned in `web/package.json`, matching CI and Vercel)
 - The **[Freighter](https://www.freighter.app)** browser extension, set to the
   **Test SDF Network / Testnet**
 

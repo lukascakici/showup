@@ -71,7 +71,9 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Kept in step with web/package.json's engines field, which is also what
+          # Vercel reads — an open range there silently follows each new major.
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 

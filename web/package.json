@@ -13,7 +13,7 @@
     "test:run": "vitest run"
   },
   "engines": {
-    "node": ">=20.9"
+    "node": "24.x"
   },
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",
