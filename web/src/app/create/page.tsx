@@ -7,7 +7,7 @@ import { CreateEvent } from "@/components/CreateEvent";
 import { Button, Card } from "@/components/ui";
 
 export default function CreatePage() {
-  const { status, connect, error } = useWallet();
+  const { status, openPicker, error } = useWallet();
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +36,7 @@ export default function CreatePage() {
               create one.
             </p>
           </div>
-          <Button onClick={connect} loading={status === "connecting"} size="lg" fullWidth>
+          <Button onClick={openPicker} loading={status === "connecting"} size="lg" fullWidth>
             <Wallet className="size-4" />
             Connect wallet
           </Button>

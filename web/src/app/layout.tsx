@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProvider } from "@/lib/wallet";
 import { TopBar } from "@/components/TopBar";
 import { GridTrail } from "@/components/GridTrail";
+import { WalletPicker } from "@/components/WalletPicker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +50,7 @@ export default function RootLayout({
               Showup runs on Stellar Testnet. No real funds are used.
             </div>
           </footer>
+          <WalletPicker />
         </WalletProvider>
       </body>
     </html>

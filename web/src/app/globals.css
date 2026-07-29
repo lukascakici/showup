@@ -83,6 +83,65 @@ body::before {
   -webkit-backdrop-filter: saturate(160%) blur(18px);
 }
 
+/*
+  Amber segments tracing the wallet panel's border.
+
+  The usual way to do this is a conic-gradient spun behind the panel, which the
+  no-gradients rule forbids — so it's a solid stroke instead: a dash on a
+  rounded-rect outline, travelling by dashoffset. `pathLength: 100` normalises the
+  outline, so the dash keeps its proportions whatever size the panel is.
+
+  Two variants, swapped by the class on the <svg>:
+    .runner-loop  one segment going all the way round
+    .runner-meet  two segments that collide at the top and bottom centre
+*/
+@keyframes border-runner {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.runner rect {
+  x: 1px;
+  y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: 15px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-dasharray: 16 84;
+  animation: border-runner 4s linear infinite;
+}
+
+.runner-loop rect + rect {
+  display: none;
+}
+
+/*
+  The second segment is the first one mirrored across the panel's vertical centre.
+  Because they are mirror images at every instant, they can only coincide on that
+  centre line — which is the top edge's middle and the bottom edge's middle. So
+  they meet head-on there and part again on opposite sides, at any panel size,
+  with no perimeter arithmetic.
+*/
+.runner-meet rect + rect {
+  transform: scaleX(-1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runner rect {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 ::selection {
   background-color: var(--accent);
   color: var(--accent-fg);

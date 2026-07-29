@@ -13,6 +13,29 @@ export type { ISupportedWallet };
  */
 export const WALLET_IDS = ["freighter", "xbull", "albedo", "hana"] as const;
 
+/**
+ * How each wallet is reached, and a monogram to stand in for its logo.
+ *
+ * The kit types all four as `HOT_WALLET`, so it can't tell a browser extension
+ * from a web wallet — that distinction is ours. The logos it points at are remote
+ * PNGs on a third-party host, in each wallet's own brand colours; a flat monogram
+ * keeps the picker on our palette and the page free of outside requests.
+ */
+export const WALLET_DISPLAY: Record<string, { kind: string; monogram: string }> = {
+  freighter: { kind: "Browser extension", monogram: "F" },
+  xbull: { kind: "Web or extension", monogram: "x" },
+  albedo: { kind: "Web", monogram: "A" },
+  hana: { kind: "Browser extension", monogram: "H" },
+};
+
+/**
+ * The wallets whose "available" answer means "installed".
+ *
+ * xBull and Albedo return available unconditionally because they need nothing
+ * installed, so offering to install them would be nonsense.
+ */
+export const DETECTS_INSTALL: ReadonlySet<string> = new Set(["freighter", "hana"]);
+
 type Kit = typeof import("@creit.tech/stellar-wallets-kit/sdk")["StellarWalletsKit"];
 type KitEvents = typeof import("@creit.tech/stellar-wallets-kit/types")["KitEventType"];
 

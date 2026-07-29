@@ -14,7 +14,7 @@ const TABS = [
 ];
 
 export function TopBar() {
-  const { status, connect } = useWallet();
+  const { status, openPicker } = useWallet();
   const pathname = usePathname();
 
   return (
@@ -51,7 +51,7 @@ export function TopBar() {
         {status === "connected" ? (
           <WalletMenu />
         ) : (
-          <Button onClick={connect} loading={status === "connecting"}>
+          <Button onClick={openPicker} loading={status === "connecting"}>
             <Wallet className="size-4" />
             Connect wallet
           </Button>

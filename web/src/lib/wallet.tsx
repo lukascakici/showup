@@ -42,10 +42,11 @@ type WalletContextValue = {
   balanceLoading: boolean;
   balanceError: string | null;
   refreshBalance: () => Promise<void>;
-  /** Fetch the wallet list. Call this as a picker opens, not on click. */
-  loadWallets: () => Promise<void>;
+  pickerOpen: boolean;
+  /** Open the wallet picker. Also warms the kit and the wallet list. */
+  openPicker: () => void;
+  closePicker: () => void;
   select: (walletId: string) => Promise<void>;
-  connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   sign: SignFn;
 };
@@ -58,6 +59,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [walletName, setWalletName] = useState<string | null>(null);
   const [wallets, setWallets] = useState<ISupportedWallet[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [network, setNetwork] = useState<NetworkState>({ passphrase: null, known: false });
   const [error, setError] = useState<string | null>(null);
   const [balance, setBalance] = useState<AccountState | null>(null);
@@ -178,18 +180,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refreshNetwork, readWalletName]);
 
-  const loadWallets = useCallback(async () => {
+  const openPicker = useCallback(() => {
+    setError(null);
+    setPickerOpen(true);
+    // Fetched as the picker opens rather than when a wallet is clicked: this
+    // races every wallet's availability check against a one second timeout, and
+    // spending that inside a click would cost the user's gesture — which xBull
+    // and Albedo need in order to open their popup.
     setWalletsLoading(true);
-    try {
-      const { kit } = await getKit();
-      // Races each wallet's availability check against a one second timeout, so
-      // this is worth doing before a click rather than during one.
-      setWallets(await kit.refreshSupportedWallets());
-    } catch (e) {
-      setError(errMessage(e) || "Couldn't load the wallet list.");
-    } finally {
-      setWalletsLoading(false);
-    }
+    void (async () => {
+      try {
+        const { kit } = await getKit();
+        setWallets(await kit.refreshSupportedWallets());
+      } catch (e) {
+        setError(errMessage(e) || "Couldn't load the wallet list.");
+      } finally {
+        setWalletsLoading(false);
+      }
+    })();
+  }, []);
+
+  const closePicker = useCallback(() => {
+    setPickerOpen(false);
+    setError(null);
   }, []);
 
   const select = useCallback(async (walletId: string) => {
@@ -205,33 +218,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       // STATE_UPDATED will also land, but setting it here avoids a flash of idle.
       setAddress(connected);
       setStatus("connected");
+      setPickerOpen(false);
     } catch (e) {
       setStatus("idle");
       setError(errMessage(e) || "Couldn't connect that wallet.");
     }
   }, []);
-
-  /**
-   * Connect without a picker: take the first wallet reporting itself available.
-   * The picker replaces this as the entry point; it stays because it's the
-   * sensible fallback when there's only one wallet to choose from anyway.
-   */
-  const connect = useCallback(async () => {
-    setError(null);
-    setStatus("connecting");
-    try {
-      const { kit } = await getKit();
-      const available = (await kit.refreshSupportedWallets()).filter((w) => w.isAvailable);
-      setWallets(available);
-      if (available.length === 0) {
-        throw new Error("No Stellar wallet found. Install one to continue.");
-      }
-      await select(available[0].id);
-    } catch (e) {
-      setStatus("idle");
-      setError(errMessage(e) || "Couldn't connect a wallet.");
-    }
-  }, [select]);
 
   const disconnect = useCallback(async () => {
     setError(null);
@@ -268,9 +260,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       balanceLoading,
       balanceError,
       refreshBalance,
-      loadWallets,
+      pickerOpen,
+      openPicker,
+      closePicker,
       select,
-      connect,
       disconnect,
       sign,
     }),
@@ -287,9 +280,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       balanceLoading,
       balanceError,
       refreshBalance,
-      loadWallets,
+      pickerOpen,
+      openPicker,
+      closePicker,
       select,
-      connect,
       disconnect,
       sign,
     ],
