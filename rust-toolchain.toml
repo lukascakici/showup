@@ -1,0 +1,6 @@
+[toolchain]
+# Pinned so a new stable can't turn a fresh clippy lint into a red CI run, and so
+# the wasm hash in docs/deployments.md stays reproducible.
+channel = "1.96.0"
+targets = ["wasm32v1-none"]
+components = ["rustfmt", "clippy"]
