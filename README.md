@@ -10,9 +10,10 @@ a "skin in the game" layer that a group chat can never enforce.
 
 > **Network:** Stellar **Testnet** only. No real funds are used.
 
-<!-- Live demo and video links go here once deployed (Vercel). -->
-- **Live demo:** _coming soon_
-- **Repo:** this repository
+[![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
+
+- **Live demo:** **[showup.click](https://showup.click)**
+- **Demo video:** _coming with Level 3_
 
 <p align="center">
   <img src="docs/screenshots/home.png" alt="Showup landing page" width="720" />
