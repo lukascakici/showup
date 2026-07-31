@@ -21,6 +21,21 @@ a "skin in the game" layer that a group chat can never enforce.
 
 ---
 
+## Deployed contracts (Testnet)
+
+| What | Address |
+| :-- | :-- |
+| **Event factory** | [`CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW`](https://stellar.expert/explorer/testnet/contract/CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW) |
+| **Event wasm hash** | `aef70ac35e540a1e5b48277c7c740277f91334f6defbf7dca47ca07f6fd8171d` |
+| **Native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+
+The factory holds the event wasm hash and deploys a fresh event contract per
+organizer, so the frontend only ever has to know one address. Full deployment
+record — including a complete event run end to end, with every phase-machine
+rejection — is in **[docs/deployments.md](docs/deployments.md)**.
+
+---
+
 ## Level 1 — White Belt
 
 The White Belt build is the **deposit primitive** before the contracts exist:
