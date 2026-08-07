@@ -2,24 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wallet, Send, CalendarPlus } from "lucide-react";
+import { Wallet, CalendarPlus } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { Button } from "./ui";
 import { WalletMenu } from "./WalletMenu";
 import { Logo } from "./Logo";
 
-const TABS = [
-  { href: "/create", label: "Create", icon: CalendarPlus },
-  { href: "/send", label: "Send", icon: Send },
-];
+const TABS = [{ href: "/create", label: "Create", icon: CalendarPlus }];
 
 export function TopBar() {
   const { status, openPicker } = useWallet();
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-4 z-50 px-4 sm:px-6">
-      <div className="glass mx-auto flex h-14 max-w-3xl items-center justify-between rounded-2xl border border-border-strong px-4 shadow-xl shadow-black/40 sm:px-5">
+    <header className="sticky top-0 z-50 border-b border-border bg-background">
+      <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-5">
           <Link href="/" aria-label="Showup home">
             <Logo />

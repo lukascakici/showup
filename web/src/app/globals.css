@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 /*
-  Showup design system — Uber-like: flat, high-contrast, single teal accent.
-  Dark-first. No gradients, no glow. Faint grid background only.
+  Showup design system — Uber-like: flat, high-contrast, single amber accent.
+  Dark-first. No gradients, no glow, no glassmorphism anywhere. Faint grid
+  background only.
 */
 
 :root {
@@ -74,13 +75,6 @@ body::before {
     transparent 45%,
     #000 100%
   );
-}
-
-/* Liquid-glass topbar — the ONLY allowed glassmorphism */
-.glass {
-  background-color: rgba(10, 10, 10, 0.55);
-  backdrop-filter: saturate(160%) blur(18px);
-  -webkit-backdrop-filter: saturate(160%) blur(18px);
 }
 
 /*

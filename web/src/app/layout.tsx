@@ -38,7 +38,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${handwriting.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col pt-4">
+      <body className="min-h-full flex flex-col">
         <WalletProvider>
           <GridTrail />
           <TopBar />
