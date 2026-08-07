@@ -51,14 +51,17 @@ balance, top it up from a faucet, and move a deposit with full transaction feedb
 - **Built-in faucet** — fund a new account with 10,000 test XLM via Friendbot,
   with honest "already funded" messaging.
 - **Send XLM** to any address with client-side validation, wallet signing, and a
-  **transaction hash + Explorer link** on success.
+  **transaction hash + Explorer link** on success. *Shipped in week 1 and
+  **removed on 07.08.2026** — it was a standalone payment tool from before the
+  contracts existed, and once every deposit moves through an event contract there
+  was nothing left for it to do. The screenshot below stays as the record of it.*
 - **Robust error handling** — wallet not installed, request rejected, pop-up
   blocked, wrong network, underfunded, non-existent destination, stale-sequence
   retries and every contract error code, all mapped to plain-language copy. Each
   wallet reports failure differently and none of them throw an `Error`, so the
   mapping is written against the shipped source of all four.
-- **Uber-like UI** — flat dark theme, a single warm-amber accent, a floating
-  liquid-glass navbar, and a subtle pointer-driven grid trail.
+- **Uber-like UI** — flat dark theme, a single warm-amber accent, a plain solid top
+  bar, and a subtle pointer-driven grid trail. No gradients, no glassmorphism.
 
 **Screenshots**
 
@@ -66,7 +69,7 @@ balance, top it up from a faucet, and move a deposit with full transaction feedb
 | :--: | :--: |
 | ![Connected wallet on the home screen](docs/screenshots/connected.png) | ![Wallet menu showing XLM balance and faucet](docs/screenshots/balance.png) |
 
-| Successful transaction |
+| Successful transaction — from the send tool, since removed |
 | :--: |
 | ![Successful payment with transaction hash and Explorer link](docs/screenshots/transaction.png) |
 
@@ -108,23 +111,25 @@ Open [http://localhost:3000](http://localhost:3000).
 
 1. **Connect wallet** (top right) — pick a wallet and approve the connection.
 2. Open the wallet menu and hit **Request test XLM** if your account is new.
-3. Go to **Send**, enter a destination and amount, and **Send payment**.
+3. Go to **Create**, set a deposit, a capacity and a forfeit policy, and create the
+   event — the factory deploys it and funds its fee pool in one transaction.
 4. Copy the **transaction hash** or open it on **Stellar Explorer** to verify.
 
 ---
 
-## How a payment works
+## How money moves
 
 ```
 Wallet ──connect──▶ Showup ──loadAccount──▶ Horizon (Testnet)
     │                  │
     │                  └──friendbot?──▶ fund new account (10,000 XLM)
     │
-    └──sign payment XDR──▶ Showup ──submitTransaction──▶ Horizon ──▶ tx hash
+    └──sign contract XDR──▶ Showup ──Soroban RPC──▶ event contract ──▶ tx hash
 ```
 
-Payments are built with `TransactionBuilder`, signed in the connected wallet, and
-submitted to Horizon. The returned hash links straight to Stellar Explorer.
+Balances and the faucet go through Horizon; everything that moves a deposit goes
+through a Soroban contract call, signed in the connected wallet and submitted over
+Soroban RPC. Either way the returned hash links straight to Stellar Explorer.
 
 ---
 
