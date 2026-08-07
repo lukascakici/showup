@@ -87,7 +87,19 @@ if (drifted) {
       "  stellar contract bindings typescript --wasm target/wasm32v1-none/release/event.wasm \\\n" +
       "    --output-dir web/packages/event-client --overwrite\n" +
       "  stellar contract bindings typescript --contract-id <factory> --network testnet \\\n" +
-      "    --output-dir web/packages/factory-client --overwrite\n",
+      "    --output-dir web/packages/factory-client --overwrite\n" +
+      "\n" +
+      "Then check `git diff web/packages` before committing. `--overwrite` rewrites the\n" +
+      "whole package, not just src/index.ts, and it will happily undo three things that\n" +
+      "are maintained by hand:\n" +
+      "  * package.json      loses `prepare: tsc` (Vercel builds the package at install\n" +
+      "                      time and has nothing to import without it), downgrades\n" +
+      "                      @stellar/stellar-sdk, and drops `private: true`\n" +
+      "  * src/index.ts      loses the `networks` export when generated from --wasm,\n" +
+      "                      because a wasm file cannot know a deployed address\n" +
+      "  * README.md         reverts to INSERT_CONTRACT_ID_HERE placeholders\n" +
+      "`git checkout -- web/packages/<pkg>/package.json web/packages/<pkg>/README.md` is\n" +
+      "usually the whole fix.\n",
   );
   process.exit(1);
 }
