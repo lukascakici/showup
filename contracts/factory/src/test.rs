@@ -5,11 +5,15 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
 use soroban_sdk::Bytes;
 
-// The event contract is pulled in as built wasm, not as a crate dependency —
+// The other contracts are pulled in as built wasm, not as crate dependencies —
 // CI must therefore build the wasm before running these tests.
 #[allow(clippy::too_many_arguments)] // generated client mirrors initialize's arity
 mod event_contract {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/event.wasm");
+}
+
+mod reputation_contract {
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/reputation.wasm");
 }
 
 const DEPOSIT: i128 = 100;
@@ -19,9 +23,11 @@ const CAPACITY: u32 = 4;
 struct Fixture {
     env: Env,
     factory: EventFactoryClient<'static>,
+    admin: Address,
     token: Address,
     code_hash: BytesN<32>,
     secret: Bytes,
+    event_wasm_hash: BytesN<32>,
 }
 
 fn setup() -> Fixture {
@@ -33,8 +39,8 @@ fn setup() -> Fixture {
 
     let admin = Address::generate(&env);
     let factory = EventFactoryClient::new(&env, &env.register(EventFactory, ()));
-    let wasm_hash = env.deployer().upload_contract_wasm(event_contract::WASM);
-    factory.initialize(&admin, &wasm_hash);
+    let event_wasm_hash = env.deployer().upload_contract_wasm(event_contract::WASM);
+    factory.initialize(&admin, &event_wasm_hash);
 
     let secret = Bytes::from_slice(&env, b"open-sesame");
     let code_hash = env.crypto().sha256(&secret).to_bytes();
@@ -42,9 +48,11 @@ fn setup() -> Fixture {
     Fixture {
         env,
         factory,
+        admin,
         token,
         code_hash,
         secret,
+        event_wasm_hash,
     }
 }
 
@@ -69,6 +77,33 @@ impl Fixture {
             &self.code_hash,
             &ForfeitPolicy::ToOrganizer,
         )
+    }
+
+    fn try_create(&self, organizer: &Address) -> Result<Address, ()> {
+        self.factory
+            .try_create_event(
+                organizer,
+                &self.token,
+                &DEPOSIT,
+                &FEE_ALLOWANCE,
+                &CAPACITY,
+                &self.code_hash,
+                &ForfeitPolicy::ToOrganizer,
+            )
+            .map(|ok| ok.unwrap())
+            .map_err(|_| ())
+    }
+
+    /// Deploy a reputation ledger that trusts this factory, and wire the factory
+    /// back to it — the same two-way setup the Testnet deployment does.
+    fn with_reputation(&self) -> reputation_contract::Client<'static> {
+        let reputation = reputation_contract::Client::new(
+            &self.env,
+            &self.env.register(reputation_contract::WASM, ()),
+        );
+        reputation.initialize(&self.admin, &self.factory.address);
+        self.factory.set_reputation(&reputation.address);
+        reputation
     }
 }
 
@@ -199,6 +234,129 @@ fn create_event_before_initialize_is_rejected() {
         ),
         Err(Ok(Error::NotInitialized))
     );
+}
+
+#[test]
+fn create_event_registers_the_event_with_reputation() {
+    let f = setup();
+    let reputation = f.with_reputation();
+    let organizer = f.funded(10_000);
+
+    let event = f.create(&organizer);
+
+    // The gate, from the other side: the ledger only ever hears about events
+    // from the factory, so anything it has registered is by construction a
+    // contract the factory deployed from an admin-chosen wasm.
+    assert!(reputation.is_registered(&event));
+    assert!(!reputation.is_registered(&Address::generate(&f.env)));
+    assert_eq!(f.factory.get_reputation(), Some(reputation.address.clone()));
+}
+
+#[test]
+fn create_event_works_without_a_reputation_ledger() {
+    let f = setup();
+    let organizer = f.funded(10_000);
+
+    assert_eq!(f.factory.get_reputation(), None);
+    let event = f.create(&organizer);
+
+    // Not decoration: the v1 factory already live on Testnet has no ledger, and
+    // an unwired factory must keep producing perfectly working events.
+    assert_eq!(
+        event_contract::Client::new(&f.env, &event)
+            .get_config()
+            .organizer,
+        organizer
+    );
+}
+
+#[test]
+fn set_reputation_moves_new_events_to_the_new_ledger() {
+    let f = setup();
+    let first_ledger = f.with_reputation();
+    let organizer = f.funded(10_000);
+    let before = f.create(&organizer);
+
+    let second_ledger = f.with_reputation();
+    let after = f.create(&organizer);
+
+    assert!(first_ledger.is_registered(&before));
+    assert!(second_ledger.is_registered(&after));
+    // Each event stays with the ledger it was registered against. Moving the
+    // factory moves new events; it does not re-home old ones behind their back,
+    // and it does not reach forward into a ledger that has not seen them.
+    assert!(!first_ledger.is_registered(&after));
+    assert!(!second_ledger.is_registered(&before));
+}
+
+#[test]
+fn set_event_wasm_hash_points_new_events_at_the_new_wasm() {
+    let f = setup();
+    let organizer = f.funded(10_000);
+    let first = f.create(&organizer);
+
+    // A hash nothing was ever uploaded under. create_event reads the stored
+    // hash at deploy time, so the very next creation has to fail on it.
+    let bogus: BytesN<32> = BytesN::from_array(&f.env, &[9u8; 32]);
+    f.factory.set_event_wasm_hash(&bogus);
+    assert_eq!(f.factory.get_event_wasm_hash(), bogus);
+    assert!(f.try_create(&organizer).is_err());
+
+    // The event created before the change carries on untouched — people have
+    // deposits locked in there.
+    assert_eq!(
+        event_contract::Client::new(&f.env, &first)
+            .get_config()
+            .deposit,
+        DEPOSIT
+    );
+
+    // And pointing back at a real wasm brings the factory straight back, with
+    // no redeploy. That recoverability is the entire reason this setter exists.
+    f.factory.set_event_wasm_hash(&f.event_wasm_hash);
+    let second = f.create(&organizer);
+    assert_ne!(first, second);
+    assert_eq!(f.factory.get_event_count(), 2);
+}
+
+#[test]
+fn the_admin_setters_reject_everyone_else() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let hash: BytesN<32> = BytesN::from_array(&f.env, &[9u8; 32]);
+
+    // Nobody has authorized anything now, the admin least of all.
+    f.env.set_auths(&[]);
+    assert!(f.factory.try_set_event_wasm_hash(&hash).is_err());
+    assert!(f.factory.try_set_reputation(&stranger).is_err());
+    assert!(f.factory.try_upgrade(&hash).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_event_wasm_hash(), f.event_wasm_hash);
+    assert_eq!(f.factory.get_reputation(), None);
+}
+
+#[test]
+fn upgrade_replaces_the_factorys_code() {
+    let f = setup();
+    let address = f.factory.address.clone();
+    let organizer = f.funded(10_000);
+    f.create(&organizer);
+
+    let hash = f
+        .env
+        .deployer()
+        .upload_contract_wasm(reputation_contract::WASM);
+    f.factory.upgrade(&hash);
+
+    // The address now answers a completely different contract's interface,
+    // which is the strongest proof available that the code itself was swapped
+    // rather than some pointer being rewritten. Nothing else in Showup would
+    // ever upgrade a factory into a reputation ledger — it is only here because
+    // it is the most unambiguous "this is not the same code" a test can assert.
+    let swapped = reputation_contract::Client::new(&f.env, &address);
+    assert!(!swapped.is_registered(&Address::generate(&f.env)));
+    assert!(f.factory.try_get_event_count().is_err());
 }
 
 #[test]
