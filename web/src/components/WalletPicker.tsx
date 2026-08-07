@@ -52,7 +52,9 @@ function Picker() {
     setPending(wallet.id);
     // Deliberately not awaited before touching the wallet: xBull and Albedo open
     // a popup, and the browser only allows that while the click is still fresh.
-    void select(wallet.id);
+    // Released either way, so a rejected request leaves the rows clickable again —
+    // `select` reports failure through the context rather than by throwing.
+    void select(wallet.id).finally(() => setPending(null));
   };
 
   return (

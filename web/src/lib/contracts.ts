@@ -4,7 +4,8 @@ import {
   type ForfeitPolicy,
 } from "factory-client";
 import { Client as EventClient } from "event-client";
-import { NETWORK_PASSPHRASE, type SignFn } from "./stellar";
+import { NETWORK_PASSPHRASE, errMessage, type SignFn } from "./stellar";
+import { readWalletError } from "./wallet-errors";
 
 export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
 export const FACTORY_ID = factoryNetworks.testnet.contractId;
@@ -91,11 +92,21 @@ export function secretToBuffer(secret: string): Buffer {
   return Buffer.from(secretToBytes(secret));
 }
 
-/** Map contract error codes to copy a guest can act on. */
+/**
+ * Map contract error codes to copy a guest can act on.
+ *
+ * The message is read with `errMessage` rather than `String(err)`: a call that fails
+ * at the signing step throws the wallet kit's plain `{ code, message }` object, and
+ * stringifying that yields "[object Object]".
+ */
 export function friendlyContractError(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = errMessage(err);
 
-  const event: Record<number, string> = {
+  // Serves both contracts: 1 and 2 are `AlreadyInitialized` / `NotInitialized` in
+  // the factory and in the event alike, and the rest only the event can raise.
+  const contractErrors: Record<number, string> = {
+    1: "This event has already been set up.",
+    2: "This event hasn't been set up yet.",
     3: "The deposit amount is invalid.",
     4: "The capacity is invalid.",
     5: "The fee allowance is invalid.",
@@ -112,14 +123,15 @@ export function friendlyContractError(err: unknown): string {
 
   const match = message.match(/Error\(Contract,\s*#(\d+)\)/);
   if (match) {
-    const known = event[Number(match[1])];
+    const known = contractErrors[Number(match[1])];
     if (known) return known;
   }
   if (/insufficient|underfunded|balance/i.test(message)) {
     return "Not enough XLM to cover the deposit.";
   }
-  if (/rejected|denied|declined/i.test(message)) {
-    return "You rejected the request in your wallet.";
-  }
-  return message || "The transaction failed. Please try again.";
+  if (!message) return "The transaction failed. Please try again.";
+  // Whatever is left didn't come from the contract: the call had to be signed to get
+  // this far, so the wallet is the other thing that can fail. Its own mapping knows
+  // the vocabulary, including the case where backing out isn't a failure at all.
+  return readWalletError(err).message ?? "The request was cancelled.";
 }

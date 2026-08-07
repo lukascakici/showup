@@ -60,6 +60,27 @@ describe("friendlyContractError", () => {
     }
   });
 
+  it("reads the wallet kit's plain object, which is not an Error", () => {
+    // The kit builds every failure as { code, message } rather than throwing an
+    // Error, so reading this with String(err) would print "[object Object]" — and a
+    // signing rejection reaches here, because a contract call has to be signed.
+    expect(friendlyContractError({ code: -4, message: "User declined access" })).toBe(
+      "You rejected the request in your wallet.",
+    );
+    expect(
+      friendlyContractError({ code: -1, message: "HostError: Error(Contract, #7)" }),
+    ).toBe("This event is full.");
+  });
+
+  it("maps the two setup errors the factory can hit", () => {
+    expect(friendlyContractError(new Error("Error(Contract, #1)"))).toBe(
+      "This event has already been set up.",
+    );
+    expect(friendlyContractError(new Error("Error(Contract, #2)"))).toBe(
+      "This event hasn't been set up yet.",
+    );
+  });
+
   it("recognises a rejection or an empty balance from the message alone", () => {
     expect(friendlyContractError(new Error("insufficient funds"))).toBe(
       "Not enough XLM to cover the deposit.",

@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { getKit, type ISupportedWallet } from "./kit";
+import { readWalletError } from "./wallet-errors";
 import {
   NETWORK_PASSPHRASE,
   fetchAccountState,
@@ -52,6 +53,12 @@ type WalletContextValue = {
 };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
+
+/** Drop the kit's remembered wallet and address. Emits DISCONNECT, which resets us. */
+async function forgetWallet(): Promise<void> {
+  const { kit } = await getKit();
+  await kit.disconnect();
+}
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
@@ -144,7 +151,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       try {
         void kit.selectedModule;
       } catch {
-        await kit.disconnect();
+        await forgetWallet();
       }
 
       track(
@@ -221,14 +228,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setPickerOpen(false);
     } catch (e) {
       setStatus("idle");
-      setError(errMessage(e) || "Couldn't connect that wallet.");
+      const failure = readWalletError(e);
+      // Backing out isn't a failure — leave the picker open and say nothing.
+      setError(failure.message);
+      // Whatever the kit remembered can't be resolved, so clear it rather than let
+      // every later call fail the same way.
+      if (failure.stale) await forgetWallet();
     }
   }, []);
 
   const disconnect = useCallback(async () => {
     setError(null);
-    const { kit } = await getKit();
-    await kit.disconnect();
+    await forgetWallet();
   }, []);
 
   // The kit throws on rejection rather than returning an error field, which is
