@@ -13,7 +13,7 @@ a "skin in the game" layer that a group chat can never enforce.
 [![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
 
 - **Live demo:** **[showup.click](https://showup.click)**
-- **Demo video:** _coming with Level 3_
+- **Demo video:** _coming with the real event run_
 
 <p align="center">
   <img src="docs/screenshots/home.png" alt="Showup landing page" width="720" />
@@ -36,24 +36,27 @@ rejection — is in **[docs/deployments.md](docs/deployments.md)**.
 
 ---
 
-## Level 1 — White Belt
+## Wallets, balances and payments
 
-The White Belt build is the **deposit primitive** before the contracts exist:
-a production-grade Stellar Testnet dApp that connects a wallet, shows a balance,
-tops it up from a faucet, and moves a deposit with full transaction feedback.
+The layer underneath the contracts: connect any of four Stellar wallets, see a
+balance, top it up from a faucet, and move a deposit with full transaction feedback.
 
 **Features**
 
-- **Freighter wallet** connect / disconnect on Testnet, with silent reconnect.
+- **Four wallets** — Freighter, xBull, Albedo and Hana via
+  [StellarWalletsKit](https://github.com/Creit-Tech/Stellar-Wallets-Kit), behind a
+  flat picker of our own rather than the kit's modal, with silent reconnect.
 - **Balance** fetched from Horizon and shown in a wallet menu, with copy-address
   and Stellar Explorer links.
 - **Built-in faucet** — fund a new account with 10,000 test XLM via Friendbot,
   with honest "already funded" messaging.
 - **Send XLM** to any address with client-side validation, wallet signing, and a
   **transaction hash + Explorer link** on success.
-- **Robust error handling** — wallet not found, request rejected, wrong network,
-  underfunded, non-existent destination, and stale-sequence retries — all mapped
-  to friendly copy.
+- **Robust error handling** — wallet not installed, request rejected, pop-up
+  blocked, wrong network, underfunded, non-existent destination, stale-sequence
+  retries and every contract error code, all mapped to plain-language copy. Each
+  wallet reports failure differently and none of them throw an `Error`, so the
+  mapping is written against the shipped source of all four.
 - **Uber-like UI** — flat dark theme, a single warm-amber accent, a floating
   liquid-glass navbar, and a subtle pointer-driven grid trail.
 
@@ -75,8 +78,9 @@ tops it up from a faucet, and moves a deposit with full transaction feedback.
 - **[Tailwind CSS v4](https://tailwindcss.com)** (class-based dark mode)
 - **[@stellar/stellar-sdk](https://github.com/stellar/js-stellar-sdk)** — Horizon
   queries, transaction building & submission
-- **[@stellar/freighter-api](https://github.com/stellar/freighter)** — wallet
-  connection & signing
+- **[StellarWalletsKit](https://github.com/Creit-Tech/Stellar-Wallets-Kit)** — wallet
+  connection & signing across Freighter, xBull, Albedo and Hana
+- **[Vitest](https://vitest.dev)** + jsdom — frontend unit tests
 - **[lucide-react](https://lucide.dev)** — line icons
 - Deployed on **[Vercel](https://vercel.com)** (Root Directory = `web`)
 
@@ -87,8 +91,10 @@ tops it up from a faucet, and moves a deposit with full transaction feedback.
 ### Prerequisites
 
 - **Node.js 24** and npm (pinned in `web/package.json`, matching CI and Vercel)
-- The **[Freighter](https://www.freighter.app)** browser extension, set to the
-  **Test SDF Network / Testnet**
+- A Stellar wallet on the **Test SDF Network / Testnet**. Any of
+  **[Freighter](https://www.freighter.app)**, **[xBull](https://xbull.app)**,
+  **[Albedo](https://albedo.link)** or **[Hana](https://hanawallet.io)** — xBull and
+  Albedo need nothing installed, they open in a pop-up.
 
 ### Run locally
 
@@ -100,37 +106,42 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-1. **Connect wallet** (top right) — approve the connection in Freighter.
+1. **Connect wallet** (top right) — pick a wallet and approve the connection.
 2. Open the wallet menu and hit **Request test XLM** if your account is new.
 3. Go to **Send**, enter a destination and amount, and **Send payment**.
 4. Copy the **transaction hash** or open it on **Stellar Explorer** to verify.
 
 ---
 
-## How it works (L1)
+## How a payment works
 
 ```
-Freighter ──connect──▶ Showup ──loadAccount──▶ Horizon (Testnet)
-    │                     │
-    │                     └──friendbot?──▶ fund new account (10,000 XLM)
+Wallet ──connect──▶ Showup ──loadAccount──▶ Horizon (Testnet)
+    │                  │
+    │                  └──friendbot?──▶ fund new account (10,000 XLM)
     │
     └──sign payment XDR──▶ Showup ──submitTransaction──▶ Horizon ──▶ tx hash
 ```
 
-Payments are built with `TransactionBuilder`, signed in Freighter, and submitted
-to Horizon. The returned hash links straight to Stellar Explorer.
+Payments are built with `TransactionBuilder`, signed in the connected wallet, and
+submitted to Horizon. The returned hash links straight to Stellar Explorer.
 
 ---
 
 ## Roadmap
 
-Showup grows one belt at a time, and this README grows with it — every level keeps
-its own section below, so nothing that shipped ever disappears from the record.
+Showup is being built as a 30-day [Instawards](https://stellar.org) engagement with
+the Stellar Türkiye chapter, in four weeks. This README grows with it — nothing that
+shipped ever disappears from the record.
 
-- [x] **L1 — White Belt** · wallet, balance, faucet, payments
-- [ ] **L2 — Yellow Belt** · first Soroban contract: RSVP deposit, check-in, claim + live event feed
-- [ ] **L3 — Orange Belt** · factory + reputation contracts, CI/CD, tests, docs
-- [ ] **L4 — Green Belt** · production MVP, real users, analytics, feedback
+- [x] **Week 1** · four wallets via StellarWalletsKit, every failure mode in plain
+      language, public deployment, GitHub Actions CI on every push
+- [ ] **Week 2** · on-chain `reputation` contract — a factory-gated show-up score,
+      raised on check-in and lowered on a finalised no-show
+- [ ] **Week 3** · product pass: event list and detail, organizer check-in link/QR,
+      mobile over every screen, honest empty/loading/error states, docs
+- [ ] **Week 4** · one real event with 10+ real attendees, every transaction hash
+      recorded, and a demo video of the full flow
 
 ---
 
