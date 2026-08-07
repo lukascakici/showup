@@ -23,6 +23,7 @@
 //! both pocket the fee allowance and dilute the real attendees' share of the
 //! forfeited deposits.
 
+use interfaces::ReputationClient;
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
     BytesN, Env, Vec,
@@ -86,6 +87,12 @@ pub struct Config {
     /// until a guest reveals it by checking in.
     pub code_hash: BytesN<32>,
     pub policy: ForfeitPolicy,
+    /// Where show-up scores are recorded, if the factory had a ledger wired up
+    /// when this event was created. Fixed for the event's whole life: an event
+    /// people have locked deposits in must not have its scoring moved
+    /// underneath them, and `None` has to keep working because events created
+    /// before reputation existed still run.
+    pub reputation: Option<Address>,
 }
 
 #[contracttype]
@@ -124,6 +131,25 @@ pub struct PhaseChanged {
     pub phase: Phase,
 }
 
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScoreKind {
+    CheckIn,
+    NoShow,
+}
+
+/// Published when a write to the reputation ledger failed and was swallowed.
+///
+/// Swallowing it is deliberate — see `record_score` — but swallowing it
+/// *silently* would mean a ledger could quietly stop recording and nobody would
+/// find out until someone compared two sets of numbers. This makes every
+/// dropped write visible on-chain.
+#[contractevent]
+pub struct ReputationSkipped {
+    pub member: Address,
+    pub kind: ScoreKind,
+}
+
 #[contract]
 pub struct EventContract;
 
@@ -145,6 +171,7 @@ impl EventContract {
         capacity: u32,
         code_hash: BytesN<32>,
         policy: ForfeitPolicy,
+        reputation: Option<Address>,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -174,6 +201,7 @@ impl EventContract {
             capacity,
             code_hash,
             policy,
+            reputation,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage()
@@ -274,6 +302,10 @@ impl EventContract {
             .persistent()
             .set(&DataKey::Attendance(guest.clone()), &Attendance::CheckedIn);
 
+        // Last, and unable to matter. The guest has already been paid by the
+        // time this runs.
+        Self::record_score(&env, &config, &guest, ScoreKind::CheckIn);
+
         CheckedIn { guest, refunded }.publish(&env);
         Ok(())
     }
@@ -340,6 +372,23 @@ impl EventContract {
             }
         }
 
+        // Only now, with every transfer done, does anyone's score move. The
+        // count above is enough to settle the money; lowering scores needs the
+        // identities, so this reads each reserved guest's attendance back.
+        //
+        // That makes finalize scale with capacity rather than with the number of
+        // no-shows. At the sizes this is built for it is comfortable; a
+        // several-hundred-person event would want the settle batched.
+        for guest in reserved.iter() {
+            let attendance = env
+                .storage()
+                .persistent()
+                .get::<_, Attendance>(&DataKey::Attendance(guest.clone()));
+            if attendance == Some(Attendance::Reserved) {
+                Self::record_score(&env, &config, &guest, ScoreKind::NoShow);
+            }
+        }
+
         env.storage()
             .instance()
             .set(&DataKey::Phase, &Phase::Finalized);
@@ -374,6 +423,41 @@ impl EventContract {
 
     pub fn get_attendance(env: Env, guest: Address) -> Option<Attendance> {
         env.storage().persistent().get(&DataKey::Attendance(guest))
+    }
+
+    /// Record a show or a no-show, and never let it matter.
+    ///
+    /// This is the one rule the whole reputation design bends around: **a
+    /// reputation failure must never stop a guest getting their deposit back.**
+    /// `check_in` is the only place on the happy path where a guest is paid, so
+    /// if a call into the ledger trapped, the trap would take the refund with it
+    /// and the guest's money would sit locked until finalize. Nothing about a
+    /// score is worth that.
+    ///
+    /// So every call goes through the generated `try_` variant and the result is
+    /// dropped. The ledger can be broken, upgraded to something incompatible,
+    /// un-registered, or gone; the money still moves. A dropped write publishes
+    /// `ReputationSkipped` rather than vanishing.
+    fn record_score(env: &Env, config: &Config, member: &Address, kind: ScoreKind) {
+        let reputation = match &config.reputation {
+            Some(address) => address,
+            None => return,
+        };
+        let client = ReputationClient::new(env, reputation);
+        let this = env.current_contract_address();
+
+        let outcome = match kind {
+            ScoreKind::CheckIn => client.try_record_checkin(&this, member),
+            ScoreKind::NoShow => client.try_record_no_show(&this, member),
+        };
+
+        if outcome.is_err() {
+            ReputationSkipped {
+                member: member.clone(),
+                kind,
+            }
+            .publish(env);
+        }
     }
 
     fn config(env: &Env) -> Result<Config, Error> {

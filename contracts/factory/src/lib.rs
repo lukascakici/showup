@@ -107,6 +107,11 @@ impl EventFactory {
             .with_current_contract(salt)
             .deploy_v2(wasm_hash, ());
 
+        // The ledger is read once and used twice, so an event can never be
+        // registered against one ledger while being configured to write to
+        // another.
+        let reputation = Self::reputation(&env);
+
         EventClient::new(&env, &event).initialize(
             &organizer,
             &token,
@@ -115,6 +120,7 @@ impl EventFactory {
             &capacity,
             &code_hash,
             &policy,
+            &reputation,
         );
 
         // Deliberately not a `try_` call. If the ledger is configured but won't
@@ -123,8 +129,8 @@ impl EventFactory {
         // that looks normal and silently records nobody. The event contract's
         // own calls into reputation are the opposite case, and are guarded:
         // there, a failure would be sitting on top of a guest's refund.
-        if let Some(reputation) = Self::reputation(&env) {
-            ReputationClient::new(&env, &reputation).register_event(&event);
+        if let Some(address) = &reputation {
+            ReputationClient::new(&env, address).register_event(&event);
         }
 
         let mut events = Self::events_list(&env);

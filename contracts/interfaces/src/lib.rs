@@ -35,6 +35,7 @@ pub trait Event {
         capacity: u32,
         code_hash: BytesN<32>,
         policy: ForfeitPolicy,
+        reputation: Option<Address>,
     );
 }
 
