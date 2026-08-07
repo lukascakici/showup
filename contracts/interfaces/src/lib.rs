@@ -37,3 +37,20 @@ pub trait Event {
         policy: ForfeitPolicy,
     );
 }
+
+/// The slice of the reputation ledger its two callers need.
+///
+/// The factory calls `register_event` when it deploys an event; the event
+/// itself calls the two `record_*` functions. Nothing here returns a score —
+/// reading one is a frontend concern and does not belong in a contract's wasm
+/// spec.
+///
+/// Everything here can fail without consequence, and the event contract calls
+/// these through the generated `try_` variants precisely so it can ignore a
+/// failure. A score is never worth trapping a guest's refund for.
+#[contractclient(name = "ReputationClient")]
+pub trait Reputation {
+    fn register_event(env: Env, event: Address);
+    fn record_checkin(env: Env, event: Address, member: Address);
+    fn record_no_show(env: Env, event: Address, member: Address);
+}
