@@ -13,6 +13,14 @@ build/
 .env.local
 .env*.local
 
+# Firebase service-account keys. These bypass firestore.rules completely, so the
+# filename patterns Google hands them out under are blocked everywhere rather
+# than trusted to be moved somewhere safe first.
+*serviceAccount*.json
+*service-account*.json
+*-firebase-adminsdk-*.json
+.firebase/
+
 # Editor
 .vscode/
 .idea/

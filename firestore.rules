@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Showup — Firestore security rules.
+//
+// The whole policy in one sentence: anyone may read, nobody may write.
+//
+// Writes are not "restricted", they are impossible from any client. The only
+// thing that writes here is /api/events/sync, which runs on the server with the
+// Admin SDK — and the Admin SDK bypasses these rules entirely. So this file is
+// the complete client-side surface, and it grants nothing.
+//
+// That is deliberate rather than lazy. A Firebase web config ships inside the
+// browser bundle and is public by construction, so "the client has the key" is
+// never a reason to trust a write. And the sync route accepts no data anyway:
+// it re-reads every field from the chain, which is what makes an open write path
+// unnecessary instead of merely locked down.
+//
+// Reads are open because everything indexed here is already public on Stellar
+// Testnet. Nothing secret may ever be stored in this database — in particular
+// the check-in secret, which would let someone check in without turning up and
+// would defeat the entire point of the deposit.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Anything not named above is denied outright, so a new collection cannot
+    // be created by a client and quietly become writable.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
