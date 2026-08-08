@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchActivity, listEventIds, loadEvent } from "./chain";
+import { fetchActivity, listEventIds, loadEvent, type EventState } from "./chain";
+import { readIndexedEvents, toEventState } from "./event-index";
 
 /**
  * The React side of reading events: polling hooks, and nothing else.
@@ -58,11 +59,84 @@ function usePolled<T>(load: () => Promise<T>, intervalMs: number) {
   return { data, error, loading, refresh };
 }
 
+/** An event as listed, and how much to trust it. */
+export type ListedEvent = EventState & {
+  source: "chain" | "index";
+  /** ms since epoch of the index snapshot. Only set when `source` is "index". */
+  syncedAt?: number;
+};
+
+export type EventList = {
+  events: ListedEvent[];
+  /** Events the factory knows about that neither the chain nor the index could answer for. */
+  unreadable: string[];
+};
+
+/**
+ * The event list, assembled so that one bad read cannot empty the page.
+ *
+ * This used to be `Promise.all(ids.map(loadEvent))`, which meant a single
+ * unreadable event rejected the whole batch and the list rendered as if no
+ * events existed. Combined with Soroban archiving state after about a week, that
+ * is what "the events keep disappearing" actually was.
+ *
+ * Now each event stands alone, and anything the chain cannot answer for falls
+ * back to the off-chain index — clearly marked, because a snapshot from twenty
+ * minutes ago is worth showing but is not worth mistaking for live state.
+ */
+export async function loadEventList(): Promise<EventList> {
+  let ids: string[] | null = null;
+  try {
+    ids = await listEventIds();
+  } catch {
+    // The factory itself is unreadable. Rare, and exactly when the index earns
+    // its keep — but it is a genuine outage, so say nothing false about it.
+    ids = null;
+  }
+
+  if (ids === null) {
+    const indexed = await readIndexedEvents();
+    if (indexed.length === 0) {
+      throw new Error("Couldn't reach the network, and there's nothing cached to fall back on.");
+    }
+    return {
+      events: indexed.map((doc) => ({
+        ...toEventState(doc),
+        source: "index" as const,
+        syncedAt: doc.syncedAt,
+      })),
+      unreadable: [],
+    };
+  }
+
+  const settled = await Promise.allSettled(ids.map(loadEvent));
+
+  // Slots rather than pushes, so the factory's ordering survives a partial
+  // failure — the page relies on it to put the newest event first.
+  const slots: (ListedEvent | null)[] = settled.map((result) =>
+    result.status === "fulfilled" ? { ...result.value, source: "chain" as const } : null,
+  );
+  const gaps = ids.filter((_, i) => slots[i] === null);
+  const unreadable: string[] = [];
+
+  if (gaps.length > 0) {
+    const byId = new Map((await readIndexedEvents()).map((doc) => [doc.id, doc]));
+    ids.forEach((id, i) => {
+      if (slots[i] !== null) return;
+      const doc = byId.get(id);
+      if (doc) {
+        slots[i] = { ...toEventState(doc), source: "index", syncedAt: doc.syncedAt };
+      } else {
+        unreadable.push(id);
+      }
+    });
+  }
+
+  return { events: slots.filter((e): e is ListedEvent => e !== null), unreadable };
+}
+
 export function useEventList(intervalMs = 10_000) {
-  const load = useCallback(async () => {
-    const ids = await listEventIds();
-    return Promise.all(ids.map(loadEvent));
-  }, []);
+  const load = useCallback(() => loadEventList(), []);
   return usePolled(load, intervalMs);
 }
 

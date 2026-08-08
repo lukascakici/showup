@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { CalendarPlus, Users } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { useEventList, spotsLeft, type EventState } from "@/lib/events";
+import { useEventList, spotsLeft, type ListedEvent } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { shortAddr } from "@/lib/format";
 import { ButtonLink, Card } from "@/components/ui";
 
 export default function Home() {
   const { address } = useWallet();
-  const { data: events, loading, error } = useEventList();
+  const { data: list, loading, error } = useEventList();
+  const events = list?.events;
 
   return (
     <div className="flex flex-col gap-8">
@@ -57,6 +58,13 @@ export default function Home() {
           </ul>
         )}
 
+        {list && list.unreadable.length > 0 && (
+          <p className="mt-3 text-xs text-muted-2">
+            {list.unreadable.length} {list.unreadable.length === 1 ? "event" : "events"} couldn&apos;t
+            be read right now. They still exist on-chain — nothing was lost.
+          </p>
+        )}
+
         {error && !events && (
           <p className="mt-3 text-sm text-danger">Couldn&apos;t load events: {error}</p>
         )}
@@ -65,7 +73,17 @@ export default function Home() {
   );
 }
 
-function EventRow({ event, you }: { event: EventState; you: string | null }) {
+/** "3 minutes ago" for an index snapshot, so staleness is a number, not a vibe. */
+function since(ms: number): string {
+  const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
+  if (minutes < 1) return "moments ago";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
   const left = spotsLeft(event);
   const yours = !!you && event.organizer === you;
 
@@ -106,6 +124,15 @@ function EventRow({ event, you }: { event: EventState; you: string | null }) {
                 : "Full"}
         </span>
       </div>
+
+      {/* Say it plainly when the numbers above are a snapshot rather than the
+          chain. Showing stale state silently is worse than showing nothing. */}
+      {event.source === "index" && event.syncedAt !== undefined && (
+        <p className="mt-2 text-xs text-muted-2">
+          Couldn&apos;t reach this event just now — showing what we last saw{" "}
+          {since(event.syncedAt)}.
+        </p>
+      )}
     </Link>
   );
 }
