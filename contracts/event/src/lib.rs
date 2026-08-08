@@ -23,10 +23,10 @@
 //! both pocket the fee allowance and dilute the real attendees' share of the
 //! forfeited deposits.
 
-use interfaces::{ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD};
+use interfaces::{ReputationClient, MAX_TITLE_BYTES, TTL_EXTEND_TO, TTL_THRESHOLD};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
-    BytesN, Env, Vec,
+    BytesN, Env, String, Vec,
 };
 
 pub use interfaces::ForfeitPolicy;
@@ -52,6 +52,10 @@ pub enum Error {
     CheckInNotOpen = 13,
     /// `open_checkin` / `reopen_rsvp` from a phase that doesn't allow it.
     WrongPhase = 14,
+    /// Empty, or longer than `MAX_TITLE_BYTES`.
+    InvalidTitle = 15,
+    /// Zero. An event with no start time cannot be sorted or described.
+    InvalidStartTime = 16,
 }
 
 #[contracttype]
@@ -76,6 +80,21 @@ pub enum Attendance {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
     pub organizer: Address,
+    /// What the event is called. Up to `MAX_TITLE_BYTES` of UTF-8.
+    ///
+    /// On-chain rather than in the off-chain index, and that is the whole reason
+    /// the index needs no login: `/api/events/sync` can only store what it can
+    /// re-read from a contract, so a title it could not verify would be a title
+    /// anybody could set.
+    pub title: String,
+    /// Unix seconds, UTC. **Informational.**
+    ///
+    /// The phase machine is the single authority on what is allowed when, and a
+    /// second time-based authority would contradict it — `reopen_rsvp` exists
+    /// precisely so a latecomer can still reserve after the event has begun.
+    /// This earns its place by making events sortable and by letting the UI say
+    /// "starts in 3 hours".
+    pub starts_at: u64,
     pub token: Address,
     /// Locked by each guest to reserve a spot.
     pub deposit: i128,
@@ -165,6 +184,8 @@ impl EventContract {
     pub fn initialize(
         env: Env,
         organizer: Address,
+        title: String,
+        starts_at: u64,
         token: Address,
         deposit: i128,
         fee_allowance: i128,
@@ -175,6 +196,12 @@ impl EventContract {
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
+        }
+        if title.is_empty() || title.len() > MAX_TITLE_BYTES {
+            return Err(Error::InvalidTitle);
+        }
+        if starts_at == 0 {
+            return Err(Error::InvalidStartTime);
         }
         if deposit <= 0 {
             return Err(Error::InvalidDeposit);
@@ -195,6 +222,8 @@ impl EventContract {
 
         let config = Config {
             organizer,
+            title,
+            starts_at,
             token,
             deposit,
             fee_allowance,

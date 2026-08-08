@@ -3,7 +3,7 @@
 use super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::StellarAssetClient;
-use soroban_sdk::Bytes;
+use soroban_sdk::{Bytes, String};
 
 // The other contracts are pulled in as built wasm, not as crate dependencies —
 // CI must therefore build the wasm before running these tests.
@@ -16,6 +16,8 @@ mod reputation_contract {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/reputation.wasm");
 }
 
+const TITLE: &str = "Thursday football at Kadikoy";
+const STARTS_AT: u64 = 1_787_252_400;
 const DEPOSIT: i128 = 100;
 const FEE_ALLOWANCE: i128 = 2;
 const CAPACITY: u32 = 4;
@@ -70,6 +72,8 @@ impl Fixture {
     fn create(&self, organizer: &Address) -> Address {
         self.factory.create_event(
             organizer,
+            &String::from_str(&self.env, TITLE),
+            &STARTS_AT,
             &self.token,
             &DEPOSIT,
             &FEE_ALLOWANCE,
@@ -83,6 +87,8 @@ impl Fixture {
         self.factory
             .try_create_event(
                 organizer,
+                &String::from_str(&self.env, TITLE),
+                &STARTS_AT,
                 &self.token,
                 &DEPOSIT,
                 &FEE_ALLOWANCE,
@@ -190,6 +196,8 @@ fn create_event_requires_the_organizers_authorization() {
     env.set_auths(&[]);
     let attempt = factory.try_create_event(
         &organizer,
+        &String::from_str(&env, TITLE),
+        &STARTS_AT,
         &token,
         &DEPOSIT,
         &FEE_ALLOWANCE,
@@ -225,6 +233,8 @@ fn create_event_before_initialize_is_rejected() {
     assert_eq!(
         factory.try_create_event(
             &organizer,
+            &String::from_str(&env, TITLE),
+            &STARTS_AT,
             &token,
             &DEPOSIT,
             &FEE_ALLOWANCE,

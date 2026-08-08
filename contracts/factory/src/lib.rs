@@ -19,7 +19,8 @@
 
 use interfaces::{EventClient, ForfeitPolicy, ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD};
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
+    String, Vec,
 };
 
 #[contracterror]
@@ -47,6 +48,10 @@ pub enum DataKey {
 pub struct EventCreated {
     pub event: Address,
     pub organizer: Address,
+    /// Carried on the event so a feed or an indexer can show names without
+    /// reading every event contract one at a time.
+    pub title: String,
+    pub starts_at: u64,
     pub deposit: i128,
     pub capacity: u32,
 }
@@ -84,6 +89,8 @@ impl EventFactory {
     pub fn create_event(
         env: Env,
         organizer: Address,
+        title: String,
+        starts_at: u64,
         token: Address,
         deposit: i128,
         fee_allowance: i128,
@@ -115,6 +122,8 @@ impl EventFactory {
 
         EventClient::new(&env, &event).initialize(
             &organizer,
+            &title,
+            &starts_at,
             &token,
             &deposit,
             &fee_allowance,
@@ -143,6 +152,8 @@ impl EventFactory {
         EventCreated {
             event: event.clone(),
             organizer,
+            title,
+            starts_at,
             deposit,
             capacity,
         }

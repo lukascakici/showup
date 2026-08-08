@@ -6,7 +6,15 @@
 //! rather than depending on each other's crates, which would drag the callee's
 //! whole spec into the caller's wasm.
 
-use soroban_sdk::{contractclient, contracttype, Address, BytesN, Env};
+use soroban_sdk::{contractclient, contracttype, Address, BytesN, Env, String};
+
+/// The longest an event title may be, in **bytes** of UTF-8.
+///
+/// Bytes, not characters, because that is what storage costs and what the
+/// contract can cheaply check. "Kadıköy'de perşembe maçı" is 24 characters and
+/// 27 bytes; a title counter that counts characters would let a Turkish title
+/// through and then fail on-chain.
+pub const MAX_TITLE_BYTES: u32 = 100;
 
 /// Testnet and Mainnet both close a ledger roughly every 5 seconds.
 pub const LEDGERS_PER_DAY: u32 = 17_280;
@@ -49,6 +57,8 @@ pub trait Event {
     fn initialize(
         env: Env,
         organizer: Address,
+        title: String,
+        starts_at: u64,
         token: Address,
         deposit: i128,
         fee_allowance: i128,

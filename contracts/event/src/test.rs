@@ -43,6 +43,9 @@ enum Ledger {
     Panicking,
 }
 
+const TITLE: &str = "Thursday football at Kadikoy";
+/// 2026-08-20 19:00 UTC. Informational only, but every event needs one.
+const STARTS_AT: u64 = 1_787_252_400;
 const DEPOSIT: i128 = 100;
 const FEE_ALLOWANCE: i128 = 2;
 const CAPACITY: u32 = 4;
@@ -101,6 +104,8 @@ fn setup_with(policy: ForfeitPolicy, ledger: Ledger) -> Fixture {
 
     client.initialize(
         &organizer,
+        &String::from_str(&env, TITLE),
+        &STARTS_AT,
         &token,
         &DEPOSIT,
         &FEE_ALLOWANCE,
@@ -359,6 +364,8 @@ fn initialize_twice_is_rejected() {
     assert_eq!(
         f.client.try_initialize(
             &f.organizer,
+            &String::from_str(&f.env, TITLE),
+            &STARTS_AT,
             &f.token,
             &DEPOSIT,
             &FEE_ALLOWANCE,
@@ -387,6 +394,8 @@ fn initialize_rejects_nonsense_parameters() {
     assert_eq!(
         client.try_initialize(
             &organizer,
+            &String::from_str(&env, TITLE),
+            &STARTS_AT,
             &token,
             &0,
             &FEE_ALLOWANCE,
@@ -400,6 +409,8 @@ fn initialize_rejects_nonsense_parameters() {
     assert_eq!(
         client.try_initialize(
             &organizer,
+            &String::from_str(&env, TITLE),
+            &STARTS_AT,
             &token,
             &DEPOSIT,
             &FEE_ALLOWANCE,
@@ -502,6 +513,84 @@ fn a_fresh_event_starts_in_reserving() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     assert_eq!(f.client.get_phase(), Phase::Reserving);
     assert!(!f.client.is_finalized());
+}
+
+#[test]
+fn an_event_carries_its_name_and_time() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let config = f.client.get_config();
+
+    assert_eq!(config.title, String::from_str(&f.env, TITLE));
+    assert_eq!(config.starts_at, STARTS_AT);
+}
+
+#[test]
+fn a_nameless_or_timeless_event_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let issuer = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(issuer).address();
+    let organizer = Address::generate(&env);
+    // The accepted case really initializes, which pulls the fee pool out of the
+    // organizer's wallet — so they need one.
+    StellarAssetClient::new(&env, &token).mint(&organizer, &1_000_000);
+    let code_hash = env
+        .crypto()
+        .sha256(&Bytes::from_slice(&env, b"x"))
+        .to_bytes();
+    let client = EventContractClient::new(&env, &env.register(EventContract, ()));
+
+    let attempt = |title: &str, starts_at: u64| {
+        client.try_initialize(
+            &organizer,
+            &String::from_str(&env, title),
+            &starts_at,
+            &token,
+            &DEPOSIT,
+            &FEE_ALLOWANCE,
+            &CAPACITY,
+            &code_hash,
+            &ForfeitPolicy::ToOrganizer,
+            &None,
+        )
+    };
+
+    assert_eq!(attempt("", STARTS_AT), Err(Ok(Error::InvalidTitle)));
+    assert_eq!(attempt(TITLE, 0), Err(Ok(Error::InvalidStartTime)));
+
+    // The cap is 100 *bytes*, not characters, and Turkish is where that stops
+    // being pedantry: this title is well under 100 characters but its multi-byte
+    // letters take it close to the limit.
+    let turkish = "çğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜç";
+    assert!(turkish.chars().count() < turkish.len(), "not multi-byte");
+    assert!(turkish.len() <= 100);
+    assert!(attempt(turkish, STARTS_AT).is_ok());
+
+    // Still under 100 characters, now over 100 bytes. A counter that measured
+    // characters would accept this and the contract would reject it — which is
+    // exactly the mismatch the frontend has to avoid showing people.
+    let too_long = "çğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜçğıöşüÇĞIÖŞÜçğıöşü";
+    assert!(
+        too_long.chars().count() < 100,
+        "should pass a character count"
+    );
+    assert!(too_long.len() > 100, "but fail a byte count");
+    let fresh = EventContractClient::new(&env, &env.register(EventContract, ()));
+    assert_eq!(
+        fresh.try_initialize(
+            &organizer,
+            &String::from_str(&env, too_long),
+            &STARTS_AT,
+            &token,
+            &DEPOSIT,
+            &FEE_ALLOWANCE,
+            &CAPACITY,
+            &code_hash,
+            &ForfeitPolicy::ToOrganizer,
+            &None,
+        ),
+        Err(Ok(Error::InvalidTitle))
+    );
 }
 
 #[test]
