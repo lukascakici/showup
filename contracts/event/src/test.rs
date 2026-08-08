@@ -505,6 +505,54 @@ fn a_fresh_event_starts_in_reserving() {
 }
 
 #[test]
+fn an_untouched_event_outlives_the_default_archival_window() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+
+    // The bug this pins: Soroban state is rented, and Testnet's default lease is
+    // about a week. An event created today for a date three weeks out would
+    // archive before anyone could check in, and every read against it would
+    // start failing — which looks exactly like the event having been deleted.
+    //
+    // `initialize` therefore extends the lease immediately, without waiting for
+    // a first guest. Nobody has touched this event since it was created.
+    use soroban_sdk::testutils::storage::Instance as _;
+    let ledgers_left = f
+        .env
+        .as_contract(&f.client.address, || f.env.storage().instance().get_ttl());
+
+    assert!(
+        ledgers_left >= interfaces::LEDGERS_PER_DAY * 89,
+        "an untouched event has only {ledgers_left} ledgers left, \
+         which is about {} days — it needs ~90",
+        ledgers_left / interfaces::LEDGERS_PER_DAY
+    );
+}
+
+#[test]
+fn a_guests_attendance_gets_its_own_lease() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    // Attendance is persistent storage keyed per address, so it is a separate
+    // entry from the instance and expires on its own schedule. A guest whose
+    // attendance archived would read as never having reserved — and `finalize`
+    // would then not even count them as a no-show.
+    use soroban_sdk::testutils::storage::Persistent as _;
+    let ledgers_left = f.env.as_contract(&f.client.address, || {
+        f.env
+            .storage()
+            .persistent()
+            .get_ttl(&DataKey::Attendance(guest.clone()))
+    });
+
+    assert!(
+        ledgers_left >= interfaces::LEDGERS_PER_DAY * 89,
+        "attendance has only {ledgers_left} ledgers left"
+    );
+}
+
+#[test]
 fn a_check_in_raises_exactly_one_score_by_one() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let shower = f.guest(DEPOSIT);

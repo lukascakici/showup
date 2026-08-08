@@ -8,6 +8,26 @@
 
 use soroban_sdk::{contractclient, contracttype, Address, BytesN, Env};
 
+/// Testnet and Mainnet both close a ledger roughly every 5 seconds.
+pub const LEDGERS_PER_DAY: u32 = 17_280;
+
+/// How far ahead every stored entry is pushed when it is touched.
+///
+/// Soroban state is rented, not permanent: an entry that is not extended is
+/// archived and stops being readable. Testnet hands out roughly **7 days** by
+/// default, which is shorter than a single sprint — an event created today and
+/// held two weeks out would archive before anyone could check in, and the
+/// contract would answer nothing until somebody paid to restore it.
+///
+/// Measured on the live reputation ledger before this was applied everywhere:
+/// entries covered by `extend_ttl` had 89.9 days left, entries without it had
+/// 6.9. The gap was exactly the missing call.
+pub const TTL_EXTEND_TO: u32 = LEDGERS_PER_DAY * 90;
+
+/// Only pay to extend once an entry is inside 30 days of expiry, so a busy
+/// event is not rewriting the same TTL on every single call.
+pub const TTL_THRESHOLD: u32 = LEDGERS_PER_DAY * 30;
+
 /// Where the deposits of no-shows go when an event is finalized.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

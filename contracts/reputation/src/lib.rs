@@ -68,11 +68,13 @@ pub struct ScoreChanged {
     pub no_shows: u32,
 }
 
-/// Testnet and Mainnet both close a ledger roughly every 5 seconds.
+/// Mirrors `interfaces::TTL_EXTEND_TO` / `TTL_THRESHOLD`, copied rather than
+/// imported — see this crate's `Cargo.toml` for why linking `interfaces` here
+/// would publish a `ForfeitPolicy` type on a reputation ledger.
+///
+/// Soroban state is rented. Without these, entries archive in roughly a week on
+/// Testnet and stop being readable at all.
 const LEDGERS_PER_DAY: u32 = 17_280;
-/// State inside an event contract only has to outlive that one event. A
-/// reputation entry is the opposite: it is the thing that carries across events,
-/// so it gets bumped back to a long life on every write.
 const TTL_EXTEND_TO: u32 = LEDGERS_PER_DAY * 90;
 const TTL_THRESHOLD: u32 = LEDGERS_PER_DAY * 30;
 
@@ -96,6 +98,7 @@ impl ReputationContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Factory, &factory);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -117,6 +120,7 @@ impl ReputationContract {
             .publish(&env);
         }
         Self::bump(&env, &key);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -149,6 +153,7 @@ impl ReputationContract {
     pub fn set_factory(env: Env, factory: Address) -> Result<(), Error> {
         Self::admin(&env)?.require_auth();
         env.storage().instance().set(&DataKey::Factory, &factory);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -157,6 +162,7 @@ impl ReputationContract {
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
         Self::admin(&env)?.require_auth();
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -210,6 +216,7 @@ impl ReputationContract {
         let key = DataKey::Score(member.clone());
         env.storage().persistent().set(&key, &updated);
         Self::bump(env, &key);
+        Self::bump_instance(env);
 
         ScoreChanged {
             member,
@@ -259,6 +266,18 @@ impl ReputationContract {
         env.storage()
             .persistent()
             .extend_ttl(key, TTL_THRESHOLD, TTL_EXTEND_TO);
+    }
+
+    /// Push the instance entry out, on every call that writes anything.
+    ///
+    /// The instance entry holds the admin and the factory — this contract's
+    /// identity. Scores were already being extended; the instance was not, so
+    /// the ledger would have kept perfectly healthy 90-day scores inside a
+    /// contract that had archived out from under them after 7 days.
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
     }
 }
 

@@ -9,6 +9,12 @@ crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
+# Deliberately no `interfaces` dependency, even though the TTL constants live
+# there and event/factory take them from it. `interfaces` also defines
+# `#[contracttype] ForfeitPolicy`, and linking the crate drags that type into
+# this contract's wasm spec — a forfeit policy published on a reputation ledger
+# that has no concept of one. `scripts/check-bindings.mjs` caught it the first
+# time it was tried. The constants below mirror `interfaces` by hand instead.
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]

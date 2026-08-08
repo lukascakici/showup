@@ -23,7 +23,7 @@
 //! both pocket the fee allowance and dilute the real attendees' share of the
 //! forfeited deposits.
 
-use interfaces::ReputationClient;
+use interfaces::{ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
     BytesN, Env, Vec,
@@ -213,6 +213,7 @@ impl EventContract {
         env.storage()
             .instance()
             .set(&DataKey::CheckedIn, &Vec::<Address>::new(&env));
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -248,6 +249,8 @@ impl EventContract {
         env.storage()
             .persistent()
             .set(&DataKey::Attendance(guest.clone()), &Attendance::Reserved);
+        Self::bump_attendance(&env, &guest);
+        Self::bump_instance(&env);
 
         Reserved {
             guest,
@@ -301,6 +304,8 @@ impl EventContract {
         env.storage()
             .persistent()
             .set(&DataKey::Attendance(guest.clone()), &Attendance::CheckedIn);
+        Self::bump_attendance(&env, &guest);
+        Self::bump_instance(&env);
 
         // Last, and unable to matter. The guest has already been paid by the
         // time this runs.
@@ -389,9 +394,12 @@ impl EventContract {
             }
         }
 
+        // A finalized event is the evidence a settled event actually settled, so
+        // it gets the same 90 days as a live one rather than being left to rot.
         env.storage()
             .instance()
             .set(&DataKey::Phase, &Phase::Finalized);
+        Self::bump_instance(&env);
         Finalized {
             showed,
             no_shows,
@@ -423,6 +431,32 @@ impl EventContract {
 
     pub fn get_attendance(env: Env, guest: Address) -> Option<Attendance> {
         env.storage().persistent().get(&DataKey::Attendance(guest))
+    }
+
+    /// Push this event's storage out of reach of the archiver.
+    ///
+    /// Soroban state is rented. Left alone, an event archives in about a week on
+    /// Testnet and every read against it — the deposit, the guest list, who
+    /// checked in — starts failing, which looks exactly like the event having
+    /// been deleted. It hasn't been; it just stopped paying rent.
+    ///
+    /// Called from `initialize` too, so an event created today and held three
+    /// weeks out is safe before a single guest has touched it. Waiting for the
+    /// first `rsvp` to extend would be a race against an empty room.
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+    }
+
+    /// A guest's attendance lives in persistent storage, keyed per address, so
+    /// it needs extending separately from the instance.
+    fn bump_attendance(env: &Env, guest: &Address) {
+        env.storage().persistent().extend_ttl(
+            &DataKey::Attendance(guest.clone()),
+            TTL_THRESHOLD,
+            TTL_EXTEND_TO,
+        );
     }
 
     /// Record a show or a no-show, and never let it matter.
@@ -490,6 +524,7 @@ impl EventContract {
         config.organizer.require_auth();
 
         env.storage().instance().set(&DataKey::Phase, &to);
+        Self::bump_instance(env);
         PhaseChanged { phase: to }.publish(env);
         Ok(())
     }

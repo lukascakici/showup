@@ -17,7 +17,7 @@
 //! in the system costs an upload and an admin call — not a new factory address,
 //! a binding regeneration and a v2/v3 split through every doc.
 
-use interfaces::{EventClient, ForfeitPolicy, ReputationClient};
+use interfaces::{EventClient, ForfeitPolicy, ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env, Vec,
 };
@@ -71,6 +71,7 @@ impl EventFactory {
             .instance()
             .set(&DataKey::Events, &Vec::<Address>::new(&env));
         env.storage().instance().set(&DataKey::Count, &0u32);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -137,6 +138,7 @@ impl EventFactory {
         events.push_back(event.clone());
         env.storage().instance().set(&DataKey::Events, &events);
         env.storage().instance().set(&DataKey::Count, &(count + 1));
+        Self::bump_instance(&env);
 
         EventCreated {
             event: event.clone(),
@@ -158,6 +160,7 @@ impl EventFactory {
         env.storage()
             .instance()
             .set(&DataKey::EventWasmHash, &event_wasm_hash);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -171,6 +174,7 @@ impl EventFactory {
         env.storage()
             .instance()
             .set(&DataKey::Reputation, &reputation);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -179,6 +183,7 @@ impl EventFactory {
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
         Self::admin(&env)?.require_auth();
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Self::bump_instance(&env);
         Ok(())
     }
 
@@ -217,6 +222,18 @@ impl EventFactory {
 
     fn reputation(env: &Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::Reputation)
+    }
+
+    /// Push the factory's storage out of reach of the archiver.
+    ///
+    /// Everything the factory knows — the admin, the event wasm hash, the
+    /// reputation address and the list of every event ever created — is one
+    /// instance entry. If it archives, `list_events` stops answering and the
+    /// whole app looks empty even though every event contract is still fine.
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
     }
 
     fn events_list(env: &Env) -> Vec<Address> {
