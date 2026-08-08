@@ -4,11 +4,22 @@ import {
   type ForfeitPolicy,
 } from "factory-client";
 import { Client as EventClient } from "event-client";
+import {
+  Client as ReputationClient,
+  networks as reputationNetworks,
+  type Score,
+} from "reputation-client";
 import { NETWORK_PASSPHRASE, errMessage, type SignFn } from "./stellar";
 import { readWalletError } from "./wallet-errors";
 
 export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+
+// Both addresses come out of the generated bindings rather than being typed
+// here, so a redeploy is a regeneration and never an edit somebody can forget.
+// `contracts.test.ts` pins them against docs/deployments.md, because a binding
+// regenerated against a stale contract looks exactly like working code.
 export const FACTORY_ID = factoryNetworks.testnet.contractId;
+export const REPUTATION_ID = reputationNetworks.testnet.contractId;
 
 /** The Stellar Asset Contract for native XLM on Testnet. */
 export const NATIVE_SAC = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
@@ -42,6 +53,19 @@ export function factory(opts: ClientOpts = {}) {
 export function event(contractId: string, opts: ClientOpts = {}) {
   return new EventClient({ ...baseOptions(opts), contractId });
 }
+
+/**
+ * The show-up ledger. One address for every event, unlike `event()`.
+ *
+ * Reads only, in practice: the app never writes a score. Writes are gated to
+ * event contracts the factory deployed, so a score can only ever be the result
+ * of someone actually checking in or actually failing to.
+ */
+export function reputation(opts: ClientOpts = {}) {
+  return new ReputationClient({ ...baseOptions(opts), contractId: REPUTATION_ID });
+}
+
+export type { Score };
 
 /** "10.5" -> 105000000n. Rejects more precision than Stellar can hold. */
 export function toStroops(xlm: string): bigint {

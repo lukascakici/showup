@@ -24,6 +24,10 @@ const PACKAGES = [
     wasm: "target/wasm32v1-none/release/factory.wasm",
     committed: "web/packages/factory-client/src/index.ts",
   },
+  {
+    wasm: "target/wasm32v1-none/release/reputation.wasm",
+    committed: "web/packages/reputation-client/src/index.ts",
+  },
 ];
 
 /**

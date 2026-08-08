@@ -25,14 +25,20 @@ a "skin in the game" layer that a group chat can never enforce.
 
 | What | Address |
 | :-- | :-- |
-| **Event factory** | [`CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW`](https://stellar.expert/explorer/testnet/contract/CAI5RQZFS46KK2MWOBW7EEM3DJWJN6JSE5LW5JRJ6RCIJMTHCA7JD3CW) |
-| **Event wasm hash** | `aef70ac35e540a1e5b48277c7c740277f91334f6defbf7dca47ca07f6fd8171d` |
+| **Event factory** | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
+| **Reputation ledger** | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
+| **Event wasm hash** | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
 | **Native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
 The factory holds the event wasm hash and deploys a fresh event contract per
-organizer, so the frontend only ever has to know one address. Full deployment
-record — including a complete event run end to end, with every phase-machine
-rejection — is in **[docs/deployments.md](docs/deployments.md)**.
+organizer, so the frontend only ever has to know one address. It is also the root
+of trust for scoring: the reputation ledger accepts registrations from this
+factory and nobody else.
+
+The original factory (`CAI5RQZF…CA7JD3CW`) is superseded but still live and still
+verifiable — its full end-to-end run is kept intact. Full deployment record,
+including why the address changed and what it cost, is in
+**[docs/deployments.md](docs/deployments.md)**.
 
 ---
 

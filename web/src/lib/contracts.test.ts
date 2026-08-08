@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { friendlyContractError, fromStroops, toStroops } from "./contracts";
+import {
+  FACTORY_ID,
+  REPUTATION_ID,
+  friendlyContractError,
+  fromStroops,
+  toStroops,
+} from "./contracts";
+
+describe("deployed contract addresses", () => {
+  // These read as tautologies and are not. Both constants come out of generated
+  // bindings, and the generator is happy to regenerate a package against a
+  // stale contract, the wrong network, or a local wasm with no address at all —
+  // each of which produces code that compiles, type-checks and points at the
+  // wrong chain state. Pinning them here means a regeneration that silently
+  // moved an address fails the build instead of the event list.
+  //
+  // Expected values live in docs/deployments.md. Changing one is a deliberate
+  // edit in two places, which is the point.
+  it("match the v2 deployment recorded in docs/deployments.md", () => {
+    expect(FACTORY_ID).toBe("CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE");
+    expect(REPUTATION_ID).toBe("CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ");
+  });
+
+  it("are Soroban contract addresses, not accounts", () => {
+    // A G… address here would mean a networks block was hand-edited with a
+    // wallet address, which the SDK only rejects at call time.
+    for (const id of [FACTORY_ID, REPUTATION_ID]) {
+      expect(id).toMatch(/^C[A-Z2-7]{55}$/);
+    }
+  });
+});
 
 describe("toStroops", () => {
   it("converts XLM to stroops at full ledger precision", () => {
