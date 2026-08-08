@@ -73,6 +73,23 @@ export default function Home() {
   );
 }
 
+/**
+ * The start time in the reader's own timezone.
+ *
+ * The contract stores UTC seconds; a person thinks in their own clock, and an
+ * event they are travelling to is the last place to make them do the arithmetic.
+ */
+function formatWhen(startsAt: number): string {
+  if (!startsAt) return "No date";
+  return new Date(startsAt * 1000).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** "3 minutes ago" for an index snapshot, so staleness is a number, not a vibe. */
 function since(ms: number): string {
   const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
@@ -94,8 +111,19 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="truncate font-mono text-sm text-foreground">{shortAddr(event.id, 6, 6)}</p>
+          {/* An event from before names existed still has to be openable, so it
+              falls back to what it has always been shown as: its address. */}
+          {event.title ? (
+            <p className="truncate text-base font-bold tracking-tight text-foreground">
+              {event.title}
+            </p>
+          ) : (
+            <p className="truncate font-mono text-sm text-foreground">
+              {shortAddr(event.id, 6, 6)}
+            </p>
+          )}
           <p className="mt-1 text-xs text-muted">
+            {event.startsAt > 0 && `${formatWhen(event.startsAt)} · `}
             {yours ? "Yours" : `by ${shortAddr(event.organizer)}`}
           </p>
         </div>

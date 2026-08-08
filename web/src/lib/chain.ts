@@ -20,6 +20,10 @@ export type { Phase };
 
 export type EventState = {
   id: string;
+  /** What the event is called. On-chain, so it is as trustworthy as the deposit. */
+  title: string;
+  /** Unix seconds, UTC. Informational — the phase machine decides what is allowed. */
+  startsAt: number;
   organizer: string;
   deposit: bigint;
   feeAllowance: bigint;
@@ -48,6 +52,16 @@ export async function loadEvent(id: string): Promise<EventState> {
   const c = config.result.unwrap();
   return {
     id,
+    // Events created before the title revision have no `title` or `starts_at`
+    // in their Config at all — the fields are simply absent, so the generated
+    // binding's non-optional types are a lie for them. They are still perfectly
+    // valid events with real deposits in them, so they get an honest blank
+    // rather than being dropped or given an invented name.
+    title: c.title ?? "",
+    // Checked for finiteness rather than for undefined: an absent field decodes
+    // to something `Number()` turns into NaN, and NaN reaches Firestore as a
+    // stored value that every later comparison silently gets wrong.
+    startsAt: Number.isFinite(Number(c.starts_at)) ? Number(c.starts_at) : 0,
     organizer: c.organizer,
     deposit: c.deposit,
     feeAllowance: c.fee_allowance,

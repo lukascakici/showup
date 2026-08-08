@@ -22,6 +22,8 @@ import type { EventState } from "./chain";
  */
 export type IndexedEvent = {
   id: string;
+  title: string;
+  startsAt: number;
   /** Which factory deployed it, so a migration is visible instead of confusing. */
   factory: string;
   organizer: string;
@@ -43,6 +45,8 @@ export const EVENTS_COLLECTION = "events";
 export function toEventState(doc: IndexedEvent): EventState {
   return {
     id: doc.id,
+    title: doc.title,
+    startsAt: doc.startsAt,
     organizer: doc.organizer,
     deposit: BigInt(doc.deposit),
     feeAllowance: BigInt(doc.feeAllowance),

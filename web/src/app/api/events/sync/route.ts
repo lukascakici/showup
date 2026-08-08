@@ -97,6 +97,8 @@ export async function POST(request: Request) {
     const e = result.value;
     const record: IndexedEvent = {
       id: e.id,
+      title: e.title,
+      startsAt: e.startsAt,
       factory: FACTORY_ID,
       organizer: e.organizer,
       deposit: e.deposit.toString(),
