@@ -56,6 +56,62 @@ factory.get_event_wasm_hash() -> 96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8d
 reputation.get_factory()      -> CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE
 ```
 
+### Upgraded in place, 08.08.2026 — no new addresses
+
+Two changes had to reach the chain: storage leases (Soroban archives state after
+about a week on Testnet, and nothing was extending it) and event titles. Both
+landed **without a single address changing**, which is the entire argument for
+the admin setters added on day two.
+
+| Step | Transaction |
+| :-- | :-- |
+| `factory.set_event_wasm_hash` → new event revision | [`84c4088b…ac8aee`](https://stellar.expert/explorer/testnet/tx/84c4088ba46c0ba3632176c123ca3e2008c3634ad0ee4d369695296558ac8aee) |
+| `factory.upgrade` → new factory code | [`4b81178d…1d2115`](https://stellar.expert/explorer/testnet/tx/4b81178d10794af68b9f510490f9414d04c5b9ee04aa9e312a7fb095781d2115) |
+| `reputation.upgrade` → new ledger code | [`a3cc5193…983588`](https://stellar.expert/explorer/testnet/tx/a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588) |
+| extend the D2 event's lease from outside | [`30f4193f…69eb44`](https://stellar.expert/explorer/testnet/tx/30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44) |
+
+Current event wasm hash: `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949`
+
+State survived both upgrades — `reputation.get_score()` still returns
+`{ shows: 1, no_shows: 0 }` for the guest who checked in, and the factory still
+lists its events.
+
+**One thing worth knowing before upgrading anything:** `upgrade` runs the *old*
+code. `update_current_contract_wasm` swaps the code for the *next* invocation, so
+the TTL extension written into the new version did not run during the upgrade
+itself. Both contracts still read 6.9 days afterwards. One further admin call
+each — `set_event_wasm_hash` and `set_factory`, both idempotent, both re-setting
+the value they already held — ran the new code and took them to 90 days.
+
+The D2 event could not fix itself either way: it runs the pre-TTL event wasm, and
+an event contract has no `upgrade`. It was extended from outside with
+`stellar contract extend`, which anyone can pay for on any entry. It is graded
+evidence, so it must not archive.
+
+| Contract | Lease before | after |
+| :-- | --: | --: |
+| factory | 6.9 days | **90.0 days** |
+| reputation | 6.9 days | **90.0 days** |
+| D2 event | 6.9 days | **90.0 days** |
+
+### Events have names now
+
+`Config` gained `title` (≤ 100 **bytes** of UTF-8) and `starts_at` (unix seconds,
+UTC, informational — the phase machine remains the only authority on what is
+allowed when). The first titled event, created through the upgraded factory:
+
+[`CCWYYTY5…OMST6FL7C`](https://stellar.expert/explorer/testnet/contract/CCWYYTY5XCJY7KFPUWKMP4MELJG3G3FIYW2O3WJSMEIZTDKOMST6FL7C) — *"Perşembe halı saha, Kadıköy"*, created in
+[`fa17c710…592c1a`](https://stellar.expert/explorer/testnet/tx/fa17c71042ca4ce3a2133504c5eb9c0421f953943891378d090b148c18592c1a)
+
+The limit is bytes rather than characters because that is what storage costs.
+"Perşembe halı saha, Kadıköy" is 27 characters and 31 bytes; a form that counted
+characters would let a Turkish title through and the contract would reject it
+after the wallet prompt.
+
+Events created before this revision — including the D2 event below — have no
+title at all. They still work, still settle, and are still listed; they show
+their address, exactly as every event did until now.
+
 ## Deliverable 2 evidence — a score rises and falls
 
 One event run start to finish with two guests: **one shows up, one doesn't.**
