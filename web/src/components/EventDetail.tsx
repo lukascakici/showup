@@ -19,7 +19,7 @@ import {
   fromStroops,
   secretToBuffer,
 } from "@/lib/contracts";
-import { EXPLORER_TX } from "@/lib/stellar";
+import { EXPLORER_CONTRACT, EXPLORER_TX } from "@/lib/stellar";
 import { useSigner } from "@/lib/signer";
 import { useWallet } from "@/lib/wallet";
 import { recallSecret, rememberSecret } from "@/lib/secrets";
@@ -31,7 +31,7 @@ import {
   useEvent,
   type EventState,
 } from "@/lib/events";
-import { shortAddr } from "@/lib/format";
+import { formatWhen, shortAddr } from "@/lib/format";
 import { Button, Card, Field, Input } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
 
@@ -66,16 +66,24 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   };
 
   if (loading && !event) {
-    return <Card><p className="text-sm text-muted">Loading event…</p></Card>;
+    return (
+      <div className="flex flex-col gap-6">
+        <EventHeader id={id} />
+        <Card><p className="text-sm text-muted">Loading event…</p></Card>
+      </div>
+    );
   }
   if (!event) {
     return (
-      <Card>
-        <h2 className="text-lg font-bold tracking-tight">Event not found</h2>
-        <p className="mt-1 text-sm text-muted">
-          {error ?? "No event lives at this address on Testnet."}
-        </p>
-      </Card>
+      <div className="flex flex-col gap-6">
+        <EventHeader id={id} />
+        <Card>
+          <h2 className="text-lg font-bold tracking-tight">Event not found</h2>
+          <p className="mt-1 text-sm text-muted">
+            {error ?? "No event lives at this address on Testnet."}
+          </p>
+        </Card>
+      </div>
     );
   }
 
@@ -123,6 +131,8 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
 
   return (
     <div className="flex flex-col gap-6">
+      <EventHeader id={id} title={event.title} startsAt={event.startsAt} />
+
       <Card>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -290,6 +300,43 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
 
       <ActivityFeed activity={activity ?? []} />
     </div>
+  );
+}
+
+/**
+ * What the event is, above what it technically is.
+ *
+ * The name and the date come off the chain like everything else on this page,
+ * so they are exactly as trustworthy as the deposit. Events created before
+ * either field existed have neither, and keep the heading they always had —
+ * their address is still right there underneath, which is all they ever showed.
+ */
+function EventHeader({
+  id,
+  title,
+  startsAt,
+}: {
+  id: string;
+  title?: string;
+  startsAt?: number;
+}) {
+  return (
+    <section>
+      <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title || "Event"}</h1>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+        {!!startsAt && <span>{formatWhen(startsAt)}</span>}
+        <a
+          href={EXPLORER_CONTRACT(id)}
+          target="_blank"
+          rel="noreferrer"
+          title={id}
+          className="inline-flex items-center gap-1 font-mono transition-colors hover:text-accent"
+        >
+          {shortAddr(id, 8, 8)}
+          <ExternalLink className="size-3.5" />
+        </a>
+      </div>
+    </section>
   );
 }
 

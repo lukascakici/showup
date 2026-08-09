@@ -8,6 +8,8 @@ export const EXPLORER_TX = (hash: string) =>
   `https://stellar.expert/explorer/testnet/tx/${hash}`;
 export const EXPLORER_ACCOUNT = (id: string) =>
   `https://stellar.expert/explorer/testnet/account/${id}`;
+export const EXPLORER_CONTRACT = (id: string) =>
+  `https://stellar.expert/explorer/testnet/contract/${id}`;
 
 export const horizon = new Horizon.Server(HORIZON_URL);
 

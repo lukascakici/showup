@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { use } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { EventDetail } from "@/components/EventDetail";
-import { shortAddr } from "@/lib/format";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -22,19 +21,8 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         Events
       </Link>
 
-      <section>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Event</h1>
-        <a
-          href={`https://stellar.expert/explorer/testnet/contract/${id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 font-mono text-sm text-muted transition-colors hover:text-accent"
-        >
-          {shortAddr(id, 8, 8)}
-          <ExternalLink className="size-3.5" />
-        </a>
-      </section>
-
+      {/* The heading lives in EventDetail: it is the event's own name, and only
+          the component that loads the event knows it. */}
       <EventDetail id={id} linkSecret={linkSecret} />
     </div>
   );

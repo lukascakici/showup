@@ -4,7 +4,7 @@ import { CheckCircle2, DoorOpen, ExternalLink, Flag, Lock } from "lucide-react";
 import type { Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
-import { shortAddr } from "@/lib/format";
+import { shortAddr, shortHash } from "@/lib/format";
 import { Card } from "./ui";
 
 /** Everything here is read back off the ledger — the contract's own events. */
@@ -23,13 +23,20 @@ export function ActivityFeed({ activity }: { activity: Activity[] }) {
               <Icon kind={a.kind} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-foreground">{describe(a)}</p>
+                {/* The hash, not the ledger number. Every one of these rows is a
+                    piece of evidence someone has to be able to read off the
+                    screen and check on Stellar Expert — a ledger number sends
+                    them looking through a whole ledger for which transaction
+                    was theirs. `title` carries the full 64 characters for
+                    copying; the link carries them for opening. */}
                 <a
                   href={EXPLORER_TX(a.txHash)}
                   target="_blank"
                   rel="noreferrer"
+                  title={a.txHash}
                   className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted transition-colors hover:text-accent"
                 >
-                  ledger {a.ledger}
+                  {shortHash(a.txHash)}
                   <ExternalLink className="size-3" />
                 </a>
               </div>

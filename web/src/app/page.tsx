@@ -5,7 +5,7 @@ import { CalendarPlus, Users } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { useEventList, spotsLeft, type ListedEvent } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
-import { shortAddr } from "@/lib/format";
+import { formatWhen, shortAddr } from "@/lib/format";
 import { ButtonLink, Card } from "@/components/ui";
 
 export default function Home() {
@@ -71,23 +71,6 @@ export default function Home() {
       </section>
     </div>
   );
-}
-
-/**
- * The start time in the reader's own timezone.
- *
- * The contract stores UTC seconds; a person thinks in their own clock, and an
- * event they are travelling to is the last place to make them do the arithmetic.
- */
-function formatWhen(startsAt: number): string {
-  if (!startsAt) return "No date";
-  return new Date(startsAt * 1000).toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 /** "3 minutes ago" for an index snapshot, so staleness is a number, not a vibe. */
