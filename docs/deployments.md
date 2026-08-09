@@ -220,7 +220,7 @@ reading back the notes.
 | Does the ledger know the factory? | `reputation.get_factory()` → `CD5AEMRB…RKQLE7FCE` |
 | Is the score readable from the contract? | guest who showed → `{ shows: 1, no_shows: 0 }` · guest who flaked → `{ shows: 0, no_shows: 1 }` |
 | Is the D2 event still registered? | `reputation.is_registered(CA6GPBTW…)` → `true` |
-| Is the deployed event wasm the one in this repo? | `factory.get_event_wasm_hash()` → `8fe992b8…c69c10949`, byte-identical to `sha256(target/wasm32v1-none/release/event.wasm)` from a clean `stellar contract build` |
+| What wasm does the factory deploy events from? | `factory.get_event_wasm_hash()` → `8fe992b8…c69c10949` — the hash this machine's build produced when it was uploaded, and now what the README publishes |
 
 Two things came out of it rather than passing quietly.
 
@@ -228,11 +228,24 @@ Two things came out of it rather than passing quietly.
 `96cd1eb6…140a6860` after two contract revisions and a redeploy. That is exactly
 the kind of claim SOW §6.1 gets graded on, so it now has a check:
 `scripts/check-wasm-hash.mjs` runs in CI right after `check-bindings` and fails
-the build if what the README publishes isn't what the repo builds. It is
-hermetic — it never calls the network, so CI stays offline and deterministic,
-which also means it can only prove README-matches-source. The last hop,
-source-matches-chain, is the `get_event_wasm_hash` row above and stays a human
-step because it costs a call.
+the build when the README's hash isn't the one the deployed factory uses. Both
+values come out of the README's own table — the factory address and the hash —
+so the table verifies itself. The read is keyless and free (`stellar contract
+read` needs no source account), an unreachable RPC skips with a warning, and a
+mismatch always fails.
+
+**And the wasm turned out not to be byte-reproducible.** The first version of
+that check compared the README against `sha256` of a local `stellar contract
+build`, which is the obvious way to write it and is wrong. CI went red on its
+first run: this repo builds `8fe992b8…` on macOS/arm64 and `fd400806…` on
+Linux/x64 — same source, same pinned rustc 1.96.0, same locked soroban-sdk
+27.0.0, same stellar CLI 27.0.0. The wasm's metadata sections carry nothing but
+those version strings, so what differs is codegen across host platforms. The
+comment in `rust-toolchain.toml` claiming the pin kept the hash reproducible has
+been corrected; `stellar contract build --locked` was added in CI so the
+lockfile can't quietly stop applying. The practical consequence: **the hash to
+record is the one `stellar contract upload` prints, never one from a local
+build on a different machine.**
 
 **Storage leases are healthy.** The archival problem found on 08.08 is closed,
 measured rather than assumed:

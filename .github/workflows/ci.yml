@@ -49,7 +49,7 @@ jobs:
       # compile time. Without it, `cargo clippy --all-targets` and `cargo test`
       # both fail to build.
       - name: Build the contracts
-        run: stellar contract build
+        run: stellar contract build --locked
 
       - name: Check the committed bindings against the contract source
         run: node scripts/check-bindings.mjs
@@ -57,7 +57,12 @@ jobs:
       # The README publishes the event wasm hash as Deliverable 1 and 2 evidence.
       # Nothing was checking it, and it sat at v1's hash through two contract
       # revisions and a redeploy. Now a stale claim is a red build.
-      - name: Check the published event wasm hash against the build
+      #
+      # This one reads Testnet — a keyless, free `stellar contract read`. It
+      # can't compare against the local build instead: the wasm is not
+      # byte-reproducible across host platforms. An unreachable RPC skips with a
+      # warning; a genuine mismatch always fails.
+      - name: Check the published event wasm hash against the deployed factory
         run: node scripts/check-wasm-hash.mjs
 
       - name: Clippy

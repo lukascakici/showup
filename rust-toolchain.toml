@@ -1,6 +1,13 @@
 [toolchain]
-# Pinned so a new stable can't turn a fresh clippy lint into a red CI run, and so
-# the wasm hash in docs/deployments.md stays reproducible.
+# Pinned so a new stable can't turn a fresh clippy lint into a red CI run.
+#
+# This does NOT make the wasm hash reproducible, as the comment here used to
+# claim. With this toolchain pinned, soroban-sdk locked and the stellar CLI
+# version-pinned in CI, the same source still builds to a different hash on
+# macOS/arm64 than on Linux/x64 — measured 09.08.2026, when a CI check written
+# on the reproducibility assumption failed on its first run. The published hash
+# is therefore checked against the deployed factory rather than against a build;
+# see scripts/check-wasm-hash.mjs.
 channel = "1.96.0"
 targets = ["wasm32v1-none"]
 components = ["rustfmt", "clippy"]
