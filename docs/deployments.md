@@ -112,6 +112,32 @@ Events created before this revision — including the D2 event below — have no
 title at all. They still work, still settle, and are still listed; they show
 their address, exactly as every event did until now.
 
+## Deliverable 1 evidence — the app itself moves money
+
+SOW §6.1 asks Deliverable 1 for the live link, the repo with CI passing, and two
+screenshots: the wallet-selection dialog, and a completed transaction with its
+hash and Explorer link. The link is [showup.click](https://showup.click); the
+screenshots are `docs/screenshots/wallets.png` and
+`docs/screenshots/event-created.png`. Both transactions behind the second one
+were made through the app's own UI and signed in a browser wallet — not from the
+CLI — which is the part a screenshot alone cannot prove:
+
+[`CCBELUML…CDYA4G6X`](https://stellar.expert/explorer/testnet/contract/CCBELUML3QPYDXC7RSQUD3GPDCZ6P3DZYORTY6MCBRMIHFKLCDYA4G6X) — *"stellar party"*, Wed 26.08.2026 19:00 (UTC+3), 10 XLM deposit, capacity 10
+
+| Action | Ledger | Transaction |
+| :-- | --: | :-- |
+| `create_event` | 4,056,609 | [`ca6c5474…f5104ffe`](https://stellar.expert/explorer/testnet/tx/ca6c547481a3704198f027157acba1bfd4f3b45f14210039daa06c97f5104ffe) |
+| `rsvp` — the row visible in the screenshot | 4,056,613 | [`03d15919…416de3c8`](https://stellar.expert/explorer/testnet/tx/03d159194db4242e884c2b85d00fb4ea7c729e0b4684ec5e7e8ee35a416de3c8) |
+
+Getting this screenshot took two attempts and changed the product, which is worth
+recording rather than tidying away. The first one showed `ledger 4056613` where
+the hash should have been: activity rows linked to Stellar Expert but printed the
+ledger number, so the evidence was in the href and nowhere a reader could see it.
+The same screenshot showed the heading `Event` on an event that by then had a
+name on-chain — the detail page had never been taught to read `title`. Both are
+fixed; the rows now print the hash and the page prints the name. The screenshot
+requirement found two real gaps that the tests did not.
+
 ## Deliverable 2 evidence — a score rises and falls
 
 One event run start to finish with two guests: **one shows up, one doesn't.**
