@@ -206,6 +206,48 @@ contracts — not the cost of running an event.
 
 The event contract's balance after `finalize` is **0**. Nothing is stranded.
 
+## Week 2 audit — everything above, re-checked against the live chain
+
+Run on **09.08.2026** at ledger 4,056,789, reading the deployed contracts rather
+than trusting anything written above. SOW §3 asks for this before a week can be
+called done; the point is that every row here was produced by a call, not by
+reading back the notes.
+
+| Question | Answer from the chain |
+| :-- | :-- |
+| Is the reputation contract deployed? | yes — `CDFGVEIJ…YPEOLA3DJ` answers `get_admin` |
+| Does the factory know the ledger? | `factory.get_reputation()` → `CDFGVEIJ…YPEOLA3DJ` |
+| Does the ledger know the factory? | `reputation.get_factory()` → `CD5AEMRB…RKQLE7FCE` |
+| Is the score readable from the contract? | guest who showed → `{ shows: 1, no_shows: 0 }` · guest who flaked → `{ shows: 0, no_shows: 1 }` |
+| Is the D2 event still registered? | `reputation.is_registered(CA6GPBTW…)` → `true` |
+| Is the deployed event wasm the one in this repo? | `factory.get_event_wasm_hash()` → `8fe992b8…c69c10949`, byte-identical to `sha256(target/wasm32v1-none/release/event.wasm)` from a clean `stellar contract build` |
+
+Two things came out of it rather than passing quietly.
+
+**The README's wasm hash was wrong.** It still published v1's
+`96cd1eb6…140a6860` after two contract revisions and a redeploy. That is exactly
+the kind of claim SOW §6.1 gets graded on, so it now has a check:
+`scripts/check-wasm-hash.mjs` runs in CI right after `check-bindings` and fails
+the build if what the README publishes isn't what the repo builds. It is
+hermetic — it never calls the network, so CI stays offline and deterministic,
+which also means it can only prove README-matches-source. The last hop,
+source-matches-chain, is the `get_event_wasm_hash` row above and stays a human
+step because it costs a call.
+
+**Storage leases are healthy.** The archival problem found on 08.08 is closed,
+measured rather than assumed:
+
+| Contract instance | Ledgers left | ~days |
+| :-- | --: | --: |
+| factory | 1,534,836 | 88.8 |
+| reputation | 1,534,837 | 88.8 |
+| event — D2 evidence | 1,534,840 | 88.8 |
+| event — first titled | 1,534,849 | 88.8 |
+| event — *"stellar party"* | 1,555,020 | 90.0 |
+
+Week 4's real event runs around 26–29.08. Every one of these outlives it by more
+than two months, and each write extends its own lease again on the way past.
+
 ## Contracts — v1 (superseded, still verifiable)
 
 The original deployment, kept intact. Its events are still readable on Stellar
