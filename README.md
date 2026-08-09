@@ -27,7 +27,7 @@ a "skin in the game" layer that a group chat can never enforce.
 | :-- | :-- |
 | **Event factory** | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | **Reputation ledger** | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| **Event wasm hash** | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
+| **Event wasm hash** | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
 | **Native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
 The factory holds the event wasm hash and deploys a fresh event contract per
@@ -147,8 +147,9 @@ shipped ever disappears from the record.
 
 - [x] **Week 1** · four wallets via StellarWalletsKit, every failure mode in plain
       language, public deployment, GitHub Actions CI on every push
-- [ ] **Week 2** · on-chain `reputation` contract — a factory-gated show-up score,
-      raised on check-in and lowered on a finalised no-show
+- [x] **Week 2** · on-chain `reputation` contract — a factory-gated show-up score,
+      raised on check-in and lowered on a finalised no-show, written in the same
+      transaction as the money it describes
 - [ ] **Week 3** · product pass: event list and detail, organizer check-in link/QR,
       mobile over every screen, honest empty/loading/error states, docs
 - [ ] **Week 4** · one real event with 10+ real attendees, every transaction hash
