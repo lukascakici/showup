@@ -17,7 +17,9 @@
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^2.5.0",
+    "@reown/appkit": "^1.8.23",
     "@stellar/stellar-sdk": "^16.0.1",
+    "@walletconnect/sign-client": "^2.23.10",
     "event-client": "*",
     "factory-client": "*",
     "firebase": "^12.17.1",
