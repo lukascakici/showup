@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHECK_IN_PARAM, checkInUrl, inviteUrl } from "./links";
+import { CHECK_IN_PARAM, SITE_URL, checkInUrl, inviteUrl } from "./links";
 
 const ORIGIN = "https://showup.click";
 // A real Testnet event contract, so the shape of what gets embedded is honest.
@@ -7,10 +7,25 @@ const EVENT = "CCBELUML3QPYDXC7RSQUD3GPDCZ6P3DZYORTY6MCBRMIHFKLCDYA4G6X";
 // 16 random bytes as hex, which is what generateSecret() produces.
 const SECRET = "0123456789abcdef0123456789abcdef";
 
+describe("SITE_URL", () => {
+  // The reason these links are built on a fixed host instead of
+  // window.location.origin: an invite created on localhost, or on a preview
+  // deployment, is one nobody else can open. Sharing is the entire job.
+  it("is an absolute https origin with no trailing slash", () => {
+    expect(SITE_URL).toMatch(/^https:\/\/[^/]+$/);
+  });
+});
+
 describe("inviteUrl", () => {
   it("points at the event and carries nothing else", () => {
     expect(inviteUrl(EVENT, ORIGIN)).toBe(`${ORIGIN}/e/${EVENT}`);
   });
+
+  it("uses the canonical host, not whatever browser built it", () => {
+    expect(inviteUrl(EVENT)).toBe(`${SITE_URL}/e/${EVENT}`);
+    expect(inviteUrl(EVENT)).not.toContain("localhost");
+  });
+
 
   // The invite link is the one an organizer posts in a group chat. If it ever
   // gained a query string it would be worth re-reading this test's name: the

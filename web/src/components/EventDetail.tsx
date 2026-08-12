@@ -8,6 +8,7 @@ import {
   Flag,
   Link2,
   Lock,
+  Send,
   Undo2,
   Users,
 } from "lucide-react";
@@ -30,7 +31,7 @@ import {
   type EventState,
 } from "@/lib/events";
 import { formatWhen, shortAddr } from "@/lib/format";
-import { checkInUrl } from "@/lib/links";
+import { checkInUrl, inviteUrl } from "@/lib/links";
 import { Button, Card, Field, Input } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
@@ -373,14 +374,38 @@ function OrganizerPanel({
     setSecret(recallSecret(id));
   }, [id]);
 
+  const invite = inviteUrl(id);
   const link = secret ? checkInUrl(id, secret) : null;
 
   return (
     <Card>
       <h3 className="text-base font-bold tracking-tight">You&apos;re the organizer</h3>
 
+      {/* The invite link is rebuilt from the address in the URL bar, so it is
+          here on any device, in any browser, forever — nothing about it depends
+          on having created the event in this browser. Unlike the check-in link
+          below, which does. */}
+      {!finalized && (
+        <div className="mt-5 border-t border-border pt-5">
+          <div className="flex items-center gap-2">
+            <Send className="size-4 shrink-0 text-muted" />
+            <h4 className="text-sm font-semibold text-foreground">Invite link</h4>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            Send this to the people you want there. Opening it lets them reserve a spot
+            with the deposit — it gives nothing else away.
+          </p>
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+            <QrCode value={invite} label="QR code linking to this event" size={148} />
+            <div className="min-w-0 flex-1">
+              <CopyLink url={invite} label="Copy the invite link" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {!finalized && !checkingIn && (
-        <div className="mt-4 border-b border-border pb-5">
+        <div className="mt-5 border-t border-border pt-5">
           <p className="text-sm text-muted">
             When everyone&apos;s there, start check-in. That closes reservations for
             good measure — nobody who was forwarded your link can grab a spot on the
