@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Loader2, X } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { DETECTS_INSTALL, WALLET_DISPLAY, type ISupportedWallet } from "@/lib/kit";
+import {
+  DETECTS_INSTALL,
+  WALLET_DISPLAY,
+  insideFreighterMobile,
+  walletConnectConfigured,
+  type ISupportedWallet,
+} from "@/lib/kit";
 
 /**
  * Our own wallet picker, rather than the kit's built-in modal.
@@ -22,8 +28,16 @@ export function WalletPicker() {
 function Picker() {
   const { closePicker, wallets, walletsLoading, select, error } = useWallet();
   const [pending, setPending] = useState<string | null>(null);
+  const [inFreighterApp, setInFreighterApp] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const firstItem = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    // `window.stellar` is injected by the host app, so it can only be read after
+    // mount — reading it during render would disagree with the prerender.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInFreighterApp(insideFreighterMobile());
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,6 +103,23 @@ function Picker() {
           </button>
         </div>
 
+        {/* Inside Freighter's own browser the kit reports Freighter unavailable,
+            so without this the row below reads "Not installed" to someone who is,
+            at that moment, inside the app it is talking about. The row that does
+            work is called WalletConnect, which nobody would guess. */}
+        {inFreighterApp && (
+          <div className="border-b border-border bg-surface-2 px-5 py-4">
+            <p className="text-sm font-semibold text-foreground">
+              You&apos;re in Freighter&apos;s in-app browser
+            </p>
+            <p className="mt-1.5 text-sm text-muted">
+              {walletConnectConfigured
+                ? "Freighter signs over WalletConnect here — pick that row below and approve it in the app."
+                : "Freighter only signs over WalletConnect here, which this deploy isn't set up for. Open showup.click in Safari or Chrome instead — xBull and Albedo work there with nothing to install."}
+            </p>
+          </div>
+        )}
+
         {walletsLoading && wallets.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-muted">
             Checking which wallets you have…
@@ -106,6 +137,9 @@ function Picker() {
                 wallet={wallet}
                 pending={pending === wallet.id}
                 disabled={pending !== null}
+                // Offering to install Freighter from inside Freighter is a loop,
+                // and the reason it's unreachable isn't that it's missing.
+                installable={!(inFreighterApp && wallet.id === "freighter")}
                 onChoose={() => choose(wallet)}
               />
             ))}
@@ -129,12 +163,15 @@ function WalletRow({
   wallet,
   pending,
   disabled,
+  installable = true,
   onChoose,
 }: {
   ref?: React.Ref<HTMLButtonElement>;
   wallet: ISupportedWallet;
   pending: boolean;
   disabled: boolean;
+  /** False when the wallet is unreachable for a reason installing won't fix. */
+  installable?: boolean;
   onChoose: () => void;
 }) {
   const display = WALLET_DISPLAY[wallet.id];
@@ -153,11 +190,19 @@ function WalletRow({
           {wallet.name}
         </span>
         <span className="block truncate text-xs text-muted">
-          {missing ? "Not installed" : kind}
+          {missing ? (installable ? "Not installed" : "Not available in this browser") : kind}
         </span>
       </span>
     </>
   );
+
+  if (missing && !installable) {
+    return (
+      <li>
+        <div className="flex items-center gap-3 px-5 py-3.5 opacity-40">{body}</div>
+      </li>
+    );
+  }
 
   if (missing) {
     return (
