@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CalendarPlus, Info } from "lucide-react";
 import {
   FEE_ALLOWANCE_STROOPS,
@@ -17,8 +16,16 @@ import {
 import { useSigner } from "@/lib/signer";
 import { rememberSecret } from "@/lib/secrets";
 import { Button, Card, Field, Input } from "./ui";
+import { EventCreated } from "./EventCreated";
 
-type State = { kind: "idle" } | { kind: "creating" } | { kind: "error"; message: string };
+type State =
+  | { kind: "idle" }
+  | { kind: "creating" }
+  | { kind: "error"; message: string }
+  // Holding the secret in state rather than re-reading it from localStorage is
+  // deliberate: this is the one render where it is guaranteed to exist, and the
+  // whole point of the screen is to get it out of a single browser.
+  | { kind: "created"; id: string; title: string; secret: string };
 
 /** Matches `interfaces::MAX_TITLE_BYTES`. Bytes, because that is what the contract counts. */
 const MAX_TITLE_BYTES = 100;
@@ -61,7 +68,6 @@ const POLICIES: { value: ForfeitPolicy["tag"]; label: string; hint: string }[] =
 ];
 
 export function CreateEvent() {
-  const router = useRouter();
   const signer = useSigner();
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState(defaultStart);
@@ -128,13 +134,19 @@ export function CreateEvent() {
       const eventId = sent.result.unwrap();
 
       // The chain only ever sees sha256(secret); the organizer holds the only
-      // copy of the secret itself, so it has to survive this navigation.
+      // copy of the secret itself, so it has to outlive this component.
       rememberSecret(eventId, secret);
-      router.push(`/e/${eventId}`);
+      setState({ kind: "created", id: eventId, title: title.trim(), secret });
     } catch (err) {
       setState({ kind: "error", message: friendlyContractError(err) });
     }
   };
+
+  // Creating an event used to navigate straight to it, which meant the check-in
+  // secret was generated and hidden in the same instant. Hand it over first.
+  if (state.kind === "created") {
+    return <EventCreated id={state.id} title={state.title} secret={state.secret} />;
+  }
 
   return (
     <Card>

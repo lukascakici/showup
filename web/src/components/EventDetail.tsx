@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Check,
   CheckCircle2,
-  Copy,
   DoorOpen,
   ExternalLink,
   Flag,
@@ -32,8 +30,11 @@ import {
   type EventState,
 } from "@/lib/events";
 import { formatWhen, shortAddr } from "@/lib/format";
+import { checkInUrl } from "@/lib/links";
 import { Button, Card, Field, Input } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
+import { CopyLink } from "./CopyLink";
+import { QrCode } from "./QrCode";
 
 type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
@@ -364,7 +365,6 @@ function OrganizerPanel({
   const finalized = phase === "Finalized";
   const checkingIn = phase === "CheckingIn";
   const [secret, setSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     // localStorage only exists after hydration, so this genuinely cannot be read
@@ -373,14 +373,7 @@ function OrganizerPanel({
     setSecret(recallSecret(id));
   }, [id]);
 
-  const link = secret ? `${window.location.origin}/e/${id}?c=${encodeURIComponent(secret)}` : null;
-
-  const copy = async () => {
-    if (!link) return;
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const link = secret ? checkInUrl(id, secret) : null;
 
   return (
     <Card>
@@ -407,44 +400,49 @@ function OrganizerPanel({
         </div>
       )}
 
-      {checkingIn && (
-        <>
-          <p className="mt-1 text-sm text-muted">
-            Share this link at the event. Anyone who opens it can check in with the
-            wallet they reserved from.
+      {/* Shown from the moment the event exists, not only once check-in opens.
+          The link is the organizer's only backup of a secret that otherwise
+          lives in one browser, so hiding it until check-in was hiding it during
+          exactly the window where losing it is still recoverable. */}
+      {!finalized && (
+        <div className="mt-5 border-t border-border pt-5">
+          <div className="flex items-center gap-2">
+            <Link2 className="size-4 shrink-0 text-muted" />
+            <h4 className="text-sm font-semibold text-foreground">Check-in link</h4>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            {checkingIn
+              ? "Share it now. Anyone who opens it can check in with the wallet they reserved from."
+              : "Keep this until the event starts. Anyone holding it can check in, whether they showed up or not."}
           </p>
+
           {link ? (
-            <div className="mt-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2 rounded-xl border border-border-strong bg-surface-2 p-3">
-                <Link2 className="size-4 shrink-0 text-muted" />
-                <code className="min-w-0 flex-1 truncate font-mono text-xs">{link}</code>
-                <button
-                  onClick={copy}
-                  className="shrink-0 text-muted transition-colors hover:text-foreground"
-                  aria-label="Copy check-in link"
-                >
-                  {copied ? <Check className="size-4 text-accent" /> : <Copy className="size-4" />}
-                </button>
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+              {/* The QR earns its space once people are being checked in; before
+                  that it is a picture of a link nobody should be scanning yet. */}
+              {checkingIn && <QrCode value={link} label="QR code for checking in" size={148} />}
+              <div className="min-w-0 flex-1">
+                <CopyLink url={link} label="Copy the check-in link" />
               </div>
-              <p className="text-xs text-muted-2">
-                Anyone holding this link can check in, so share it at the event rather
-                than before it.
-              </p>
             </div>
           ) : (
             <p className="mt-4 rounded-xl border border-danger/40 bg-surface-2 p-3 text-sm text-danger">
               The check-in code for this event isn&apos;t in this browser. Only its hash
               is on-chain, so the code can&apos;t be recovered — it lives in the browser
-              that created the event, or in a check-in link you already shared.
+              that created the event, or in a check-in link you already saved.
             </p>
           )}
+        </div>
+      )}
 
+      {checkingIn && (
+        <div className="mt-5 border-t border-border pt-5">
           <Button
             onClick={onReopenRsvp}
             variant="ghost"
             fullWidth
-            className="mt-3"
             disabled={busy}
+            loading={busy}
           >
             <Undo2 className="size-4" />
             Reopen reservations
@@ -452,7 +450,7 @@ function OrganizerPanel({
           <p className="mt-2 text-xs text-muted-2">
             Lets a latecomer reserve. Anyone who already checked in keeps their refund.
           </p>
-        </>
+        </div>
       )}
 
       <div className="mt-5 border-t border-border pt-5">
