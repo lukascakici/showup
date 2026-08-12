@@ -5,16 +5,57 @@ import type { Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
 import { shortAddr, shortHash } from "@/lib/format";
-import { Card } from "./ui";
+import { Button, Card, Skeleton } from "./ui";
 
-/** Everything here is read back off the ledger — the contract's own events. */
-export function ActivityFeed({ activity }: { activity: Activity[] }) {
+/**
+ * Everything here is read back off the ledger — the contract's own events.
+ *
+ * `loading` and `error` are props rather than something the parent resolves
+ * before rendering, because this component used to take only `activity` and
+ * therefore printed **"Nothing yet."** for three unrelated situations: the feed
+ * still loading, the event genuinely having no history, and the RPC failing
+ * outright. The caller was discarding `useActivity`'s loading and error, but the
+ * signature is what made discarding them the path of least resistance.
+ */
+export function ActivityFeed({
+  activity,
+  loading = false,
+  error = null,
+  truncated = false,
+  onRetry,
+}: {
+  activity: Activity[];
+  loading?: boolean;
+  error?: string | null;
+  /** The feed stopped early — history exists above what's shown. */
+  truncated?: boolean;
+  onRetry?: () => void;
+}) {
+  const empty = activity.length === 0;
+
   return (
     <Card>
       <h3 className="text-base font-bold tracking-tight">Activity</h3>
       <p className="mt-1 text-sm text-muted">Straight from the contract&apos;s events on-chain.</p>
 
-      {activity.length === 0 ? (
+      {loading && empty ? (
+        <div className="mt-4 flex flex-col gap-3" role="status" aria-label="Loading activity">
+          <Skeleton className="h-9 w-3/4" />
+          <Skeleton className="h-9 w-1/2" />
+        </div>
+      ) : error && empty ? (
+        <div className="mt-4">
+          <p className="text-sm text-danger">
+            Couldn&apos;t read this contract&apos;s events just now. The event itself is
+            fine — this is the history feed, not the money.
+          </p>
+          {onRetry && (
+            <Button variant="secondary" onClick={onRetry} className="mt-3">
+              Try again
+            </Button>
+          )}
+        </div>
+      ) : empty ? (
         <p className="mt-4 text-sm text-muted-2">Nothing yet.</p>
       ) : (
         <ul className="mt-4 flex flex-col divide-y divide-border">
@@ -43,6 +84,22 @@ export function ActivityFeed({ activity }: { activity: Activity[] }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Said out loud rather than left as a short list: a feed that stopped
+          early is indistinguishable from a quiet event unless it admits it. */}
+      {!empty && truncated && (
+        <p className="mt-3 border-t border-border pt-3 text-xs text-muted-2">
+          Older activity isn&apos;t shown — this feed reaches back about a day, and
+          Soroban RPC only keeps recent history. The contract&apos;s own state above
+          is complete.
+        </p>
+      )}
+
+      {!empty && error && (
+        <p className="mt-3 border-t border-border pt-3 text-xs text-muted-2">
+          Couldn&apos;t refresh just now, so this may be missing the last few moments.
+        </p>
       )}
     </Card>
   );

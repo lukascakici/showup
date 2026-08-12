@@ -6,11 +6,11 @@ import { useWallet } from "@/lib/wallet";
 import { useEventList, spotsLeft, type ListedEvent } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { formatWhen, shortAddr } from "@/lib/format";
-import { ButtonLink, Card } from "@/components/ui";
+import { Button, ButtonLink, Card, Skeleton } from "@/components/ui";
 
 export default function Home() {
   const { address } = useWallet();
-  const { data: list, loading, error } = useEventList();
+  const { data: list, loading, error, refreshing, refresh } = useEventList();
   const events = list?.events;
 
   return (
@@ -34,7 +34,12 @@ export default function Home() {
       <section>
         <h2 className="text-lg font-bold tracking-tight">Events</h2>
 
-        {loading && !events && <p className="mt-3 text-sm text-muted">Loading events…</p>}
+        {loading && !events && (
+          <div className="mt-3 flex flex-col gap-3" role="status" aria-label="Loading events">
+            <Skeleton className="h-[7.5rem] w-full" />
+            <Skeleton className="h-[7.5rem] w-full" />
+          </div>
+        )}
 
         {events && events.length === 0 && (
           <Card className="mt-3">
@@ -66,7 +71,24 @@ export default function Home() {
         )}
 
         {error && !events && (
-          <p className="mt-3 text-sm text-danger">Couldn&apos;t load events: {error}</p>
+          <Card className="mt-3">
+            <p className="text-sm text-danger">Couldn&apos;t load events.</p>
+            <p className="mt-1 font-mono text-xs text-muted-2">{error}</p>
+            <Button variant="secondary" onClick={() => void refresh()} loading={refreshing} className="mt-4">
+              Try again
+            </Button>
+          </Card>
+        )}
+
+        {/* The case the old `error && !events` guard silently swallowed. Once one
+            load has succeeded, `events` stays populated forever, so a network
+            that dies afterwards left real-looking numbers frozen on screen with
+            nothing to indicate they had stopped moving. */}
+        {error && events && (
+          <p className="mt-3 text-xs text-muted-2">
+            These numbers stopped updating — the chain isn&apos;t answering right now.
+            Nothing is wrong with the events themselves.
+          </p>
         )}
       </section>
     </div>

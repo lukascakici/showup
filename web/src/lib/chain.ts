@@ -41,6 +41,21 @@ export async function listEventIds(): Promise<string[]> {
   return tx.result;
 }
 
+/**
+ * Does the factory know this address?
+ *
+ * Asked only when `loadEvent` has already failed, to tell two very different
+ * failures apart. `loadEvent` fans four RPC calls out with `Promise.all`, so a
+ * single dropped read rejects the lot — indistinguishable, from the outside,
+ * from an address where no event was ever deployed. Telling someone with a real
+ * deposit locked in a real contract that their event does not exist is the worse
+ * of the two mistakes by a distance, so nothing claims it without asking here
+ * first.
+ */
+export async function isKnownEvent(id: string): Promise<boolean> {
+  return (await listEventIds()).includes(id);
+}
+
 export async function loadEvent(id: string): Promise<EventState> {
   const client = eventClient(id);
   const [config, reserved, checkedIn, phase] = await Promise.all([
@@ -132,17 +147,28 @@ function cursorLedger(cursor: string): number {
  * getHealth's oldestLedger), so this feed is recent activity, not the whole
  * story. Contract state is what the UI trusts for who's reserved and who showed.
  */
+/**
+ * Activity, plus whether this is all of it.
+ *
+ * `truncated` is the honest half. Paging stops early on a failed request or on
+ * hitting `maxPages`, and a shortened feed looks exactly like a quiet event —
+ * so the caller is told, rather than left to present a partial history as a
+ * complete one.
+ */
+export type ActivityFeedResult = { activity: Activity[]; truncated: boolean };
+
 export async function fetchActivity(
   contractId: string,
   lookback = 17_280, // ~24h at ~5s/ledger
   maxPages = 6,
-): Promise<Activity[]> {
+): Promise<ActivityFeedResult> {
   const filters = [{ type: "contract" as const, contractIds: [contractId] }];
   const [latest, health] = await Promise.all([server.getLatestLedger(), server.getHealth()]);
   const startLedger = Math.max(health.oldestLedger, latest.sequence - lookback, 1);
 
   const raw: rpc.Api.EventResponse[] = [];
   let cursor: string | undefined;
+  let truncated = false;
 
   for (let page = 0; page < maxPages; page++) {
     let res: rpc.Api.GetEventsResponse;
@@ -151,12 +177,17 @@ export async function fetchActivity(
         cursor ? { cursor, filters, limit: 200 } : { startLedger, filters, limit: 200 },
       );
     } catch {
-      break; // Keep whatever we already have rather than losing the feed.
+      // Keep whatever we already have rather than losing the feed — but say so,
+      // because a feed that stops early is otherwise a feed that looks finished.
+      truncated = true;
+      break;
     }
     raw.push(...res.events);
     if (!res.cursor) break;
     cursor = res.cursor;
     if (cursorLedger(res.cursor) >= latest.sequence) break;
+    // Ran out of pages before reaching the present: there is more up there.
+    if (page === maxPages - 1) truncated = true;
   }
 
   const out: Activity[] = [];
@@ -200,5 +231,5 @@ export async function fetchActivity(
       });
     }
   }
-  return out.reverse();
+  return { activity: out.reverse(), truncated };
 }

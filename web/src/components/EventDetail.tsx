@@ -25,6 +25,7 @@ import { recallSecret, rememberSecret } from "@/lib/secrets";
 import {
   attendanceOf,
   forfeitPool,
+  isKnownEvent,
   spotsLeft,
   useActivity,
   useEvent,
@@ -32,7 +33,7 @@ import {
 } from "@/lib/events";
 import { formatWhen, shortAddr } from "@/lib/format";
 import { checkInUrl, inviteUrl } from "@/lib/links";
-import { Button, Card, Field, Input } from "./ui";
+import { Button, Card, Field, Input, Skeleton } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
 import { QrCode } from "./QrCode";
@@ -42,8 +43,28 @@ type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: st
 export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string | null }) {
   const { address } = useWallet();
   const signer = useSigner();
-  const { data: event, error, loading, refresh } = useEvent(id);
-  const { data: activity, refresh: refreshActivity } = useActivity(id);
+  const { data: event, error, loading, refreshing, refresh } = useEvent(id);
+  const {
+    data: activityResult,
+    error: activityError,
+    loading: activityLoading,
+    refresh: refreshActivity,
+  } = useActivity(id);
+  // null while unasked or unanswerable; only `false` is a confirmed "no such event".
+  const [known, setKnown] = useState<boolean | null>(null);
+
+  // Asked once, and only after a read has already failed — the answer costs an
+  // RPC call and is worthless while the event is loading fine.
+  useEffect(() => {
+    if (event || !error) return;
+    let live = true;
+    isKnownEvent(id)
+      .then((answer) => live && setKnown(answer))
+      .catch(() => live && setKnown(null));
+    return () => {
+      live = false;
+    };
+  }, [event, error, id]);
   const [action, setAction] = useState<Action>({ kind: "idle" });
   // A guest arriving through the organizer's link shouldn't have to type
   // anything — the secret is already in the URL. Derive rather than seed state,
@@ -71,7 +92,13 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     return (
       <div className="flex flex-col gap-6">
         <EventHeader id={id} />
-        <Card><p className="text-sm text-muted">Loading event…</p></Card>
+        <Card>
+          <div className="flex flex-col gap-3" role="status" aria-label="Loading event">
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </Card>
       </div>
     );
   }
@@ -80,10 +107,37 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
       <div className="flex flex-col gap-6">
         <EventHeader id={id} />
         <Card>
-          <h2 className="text-lg font-bold tracking-tight">Event not found</h2>
-          <p className="mt-1 text-sm text-muted">
-            {error ?? "No event lives at this address on Testnet."}
-          </p>
+          {/* Only `false` — a confirmed answer from the factory — is allowed to
+              say the event doesn't exist. Both "we haven't asked yet" and "we
+              couldn't ask" fall through to the recoverable message, because
+              `loadEvent` fans four RPC reads out at once and a single dropped
+              one looks exactly like an address that was never deployed to. */}
+          {known === false ? (
+            <>
+              <h2 className="text-lg font-bold tracking-tight">No event here</h2>
+              <p className="mt-1 text-sm text-muted">
+                This factory has never deployed an event at this address. Check the
+                link — it may have been cut short, or point at a different network.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-bold tracking-tight">Couldn&apos;t load this event</h2>
+              <p className="mt-1 text-sm text-muted">
+                The chain didn&apos;t answer just now. Nothing has happened to the event
+                or to any deposit in it — this is a failed read, and it usually passes.
+              </p>
+              {error && <p className="mt-2 font-mono text-xs text-muted-2">{error}</p>}
+              <Button
+                variant="secondary"
+                onClick={() => void refresh()}
+                loading={refreshing}
+                className="mt-4"
+              >
+                Try again
+              </Button>
+            </>
+          )}
         </Card>
       </div>
     );
@@ -300,7 +354,13 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         </p>
       )}
 
-      <ActivityFeed activity={activity ?? []} />
+      <ActivityFeed
+        activity={activityResult?.activity ?? []}
+        loading={activityLoading}
+        error={activityError}
+        truncated={activityResult?.truncated ?? false}
+        onRetry={() => void refreshActivity()}
+      />
     </div>
   );
 }

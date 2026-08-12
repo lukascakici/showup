@@ -86,6 +86,17 @@ export function Card({
   );
 }
 
+/**
+ * A placeholder the shape of the thing that hasn't arrived.
+ *
+ * Only honest before the first result — once data exists, a skeleton would be
+ * hiding numbers that are still true. `aria-hidden` because there is nothing
+ * here to read out; the surrounding region carries the live announcement.
+ */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div aria-hidden className={`animate-pulse rounded-lg bg-surface-2 ${className}`} />;
+}
+
 export function Label({ children }: { children: ReactNode }) {
   return (
     <span className="text-xs font-medium uppercase tracking-wide text-muted">
