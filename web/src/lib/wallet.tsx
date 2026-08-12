@@ -19,7 +19,21 @@ import {
   type SignFn,
 } from "./stellar";
 
-type WalletStatus = "idle" | "connecting" | "connected";
+/**
+ * `restoring` is the state the app was missing.
+ *
+ * The kit persists the chosen wallet and address and hands them back after an
+ * async load, so on every page load there is a window where we genuinely do not
+ * yet know whether anyone is connected. Without a name for it, that window was
+ * indistinguishable from "disconnected" — `/create` rendered its full
+ * "connect first" card and then swapped it out, and the top bar reflowed twice,
+ * on every single load for a returning visitor.
+ *
+ * It resolves synchronously in practice: `kit.on(STATE_UPDATED)` installs a
+ * signals effect that runs during subscription, so the answer arrives in the
+ * same tick. The explicit fallback below is for the case where it doesn't.
+ */
+type WalletStatus = "restoring" | "idle" | "connecting" | "connected";
 
 /**
  * What we know about the network the connected wallet is on.
@@ -62,7 +76,7 @@ async function forgetWallet(): Promise<void> {
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
-  const [status, setStatus] = useState<WalletStatus>("idle");
+  const [status, setStatus] = useState<WalletStatus>("restoring");
   const [walletName, setWalletName] = useState<string | null>(null);
   const [wallets, setWallets] = useState<ISupportedWallet[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
@@ -140,7 +154,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       try {
         ({ kit, events } = await getKit());
       } catch (e) {
-        if (!cancelled) setError(errMessage(e) || "Couldn't load wallet support.");
+        if (!cancelled) {
+          setError(errMessage(e) || "Couldn't load wallet support.");
+          // The question has an answer now — nobody is connected, and nobody is
+          // going to be. Leaving this at `restoring` would spin forever.
+          setStatus("idle");
+        }
         return;
       }
       if (cancelled) return;
@@ -154,8 +173,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         await forgetWallet();
       }
 
+      // Set from inside the subscription, which the kit runs synchronously as a
+      // signals effect — so by the time `kit.on` returns, this says whether the
+      // question was answered at all.
+      let answered = false;
+
       track(
         kit.on(events.STATE_UPDATED, (event) => {
+          answered = true;
           const next = event.payload.address ?? null;
           setAddress(next);
           setStatus(next ? "connected" : "idle");
@@ -168,6 +193,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }),
       );
+
+      // Nothing to restore, and the kit stayed quiet about it.
+      if (!answered) setStatus("idle");
 
       track(
         kit.on(events.DISCONNECT, () => {

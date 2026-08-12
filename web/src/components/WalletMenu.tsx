@@ -17,9 +17,22 @@ import {
   errMessage,
 } from "@/lib/stellar";
 import { formatXlm, shortAddr } from "@/lib/format";
-import { Button } from "./ui";
+import { Button, Skeleton } from "./ui";
 
-type FaucetMsg = { ok: boolean; text: string } | null;
+/**
+ * Three tones, because two collapsed a real failure into an FYI.
+ *
+ * "Already funded" and "the faucet is down" were both rendered in the same muted
+ * grey, so an exception looked like a note. `info` is the benign one; `error` is
+ * the one that means the next step won't work.
+ */
+type FaucetMsg = { tone: "ok" | "info" | "error"; text: string } | null;
+
+const FAUCET_TONE = {
+  ok: "text-accent",
+  info: "text-muted",
+  error: "text-danger",
+} as const;
 
 export function WalletMenu() {
   const {
@@ -33,6 +46,7 @@ export function WalletMenu() {
 
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [funding, setFunding] = useState(false);
   const [faucet, setFaucet] = useState<FaucetMsg>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -55,10 +69,16 @@ export function WalletMenu() {
 
   if (!address) return null;
 
+  // Guarded: writeText rejects on an insecure origin or a denied permission, and
+  // unguarded it left the button doing nothing at all, silently.
   const copy = async () => {
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopyFailed(true);
+    }
   };
 
   const requestFaucet = async () => {
@@ -69,14 +89,14 @@ export function WalletMenu() {
       await refreshBalance();
       setFaucet(
         result === "funded"
-          ? { ok: true, text: "Funded — 10,000 test XLM added." }
+          ? { tone: "ok", text: "Funded — 10,000 test XLM added." }
           : {
-              ok: false,
+              tone: "info",
               text: "Already funded. Friendbot only funds a new account once.",
             },
       );
     } catch (e) {
-      setFaucet({ ok: false, text: errMessage(e) || "Faucet request failed." });
+      setFaucet({ tone: "error", text: errMessage(e) || "Faucet request failed." });
     } finally {
       setFunding(false);
     }
@@ -93,8 +113,16 @@ export function WalletMenu() {
         <span className="font-mono text-xs text-foreground">
           {shortAddr(address)}
         </span>
+        {/* "—" used to mean both "still fetching" and "this account doesn't
+            exist", which are different answers to different questions. */}
         <span className="hidden text-xs text-muted sm:inline">
-          {balance?.funded ? `${formatXlm(balance.xlm, 2)} XLM` : "—"}
+          {balance?.funded
+            ? `${formatXlm(balance.xlm, 2)} XLM`
+            : balance
+              ? "Not funded"
+              : balanceLoading
+                ? "…"
+                : "—"}
         </span>
         <ChevronDown
           className={`size-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
@@ -109,16 +137,27 @@ export function WalletMenu() {
               <span className="text-xs font-medium uppercase tracking-wide text-muted">
                 Balance
               </span>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tracking-tight tabular-nums">
-                  {balanceLoading && !balance
-                    ? "—"
-                    : balance?.funded
-                      ? formatXlm(balance.xlm)
-                      : "0"}
-                </span>
-                <span className="text-sm font-medium text-muted">XLM</span>
-              </div>
+              {/* An account that doesn't exist on the ledger yet is not an
+                  account holding zero. Printing "0" for both meant the faucet
+                  below looked optional to the one person who needs it. */}
+              {balanceLoading && !balance ? (
+                <Skeleton className="mt-1 h-9 w-32" />
+              ) : balance?.funded ? (
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold tracking-tight tabular-nums">
+                    {formatXlm(balance.xlm)}
+                  </span>
+                  <span className="text-sm font-medium text-muted">XLM</span>
+                </div>
+              ) : (
+                <div className="mt-1">
+                  <span className="text-xl font-bold tracking-tight">Not funded yet</span>
+                  <p className="mt-1 text-xs text-muted">
+                    This account doesn&apos;t exist on Testnet until it holds some XLM.
+                    Use the faucet below.
+                  </p>
+                </div>
+              )}
             </div>
             <button
               onClick={refreshBalance}
@@ -159,6 +198,20 @@ export function WalletMenu() {
             </a>
           </div>
 
+          {/* The button above shows a shortened address, so "select it yourself"
+              would hand over something truncated and useless. The full one gets
+              rendered instead, selectable. */}
+          {copyFailed && (
+            <div className="mt-2">
+              <p className="text-xs text-danger">
+                Couldn&apos;t reach the clipboard. Copy it by hand:
+              </p>
+              <code className="mt-1 block select-all break-all rounded-lg border border-border bg-surface-2 p-2 font-mono text-[11px] text-foreground">
+                {address}
+              </code>
+            </div>
+          )}
+
           {/* Faucet */}
           <div className="mt-4">
             <span className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -175,11 +228,7 @@ export function WalletMenu() {
               Request test XLM
             </Button>
             {faucet && (
-              <p
-                className={`mt-2 text-xs ${faucet.ok ? "text-accent" : "text-muted"}`}
-              >
-                {faucet.text}
-              </p>
+              <p className={`mt-2 text-xs ${FAUCET_TONE[faucet.tone]}`}>{faucet.text}</p>
             )}
           </div>
 

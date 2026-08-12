@@ -41,7 +41,7 @@ import { QrCode } from "./QrCode";
 type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
 export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string | null }) {
-  const { address } = useWallet();
+  const { address, refreshBalance } = useWallet();
   const signer = useSigner();
   const { data: event, error, loading, refreshing, refresh } = useEvent(id);
   const {
@@ -73,10 +73,13 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const code = typedCode ?? linkSecret ?? "";
   const setCode = setTypedCode;
 
+  // The balance is otherwise fetched only on connect and on a manual click, so
+  // every action on this page — all of which move XLM — left the number in the
+  // top bar quietly wrong until someone thought to refresh it.
   const after = useCallback(async () => {
-    await Promise.all([refresh(), refreshActivity()]);
+    await Promise.all([refresh(), refreshActivity(), refreshBalance()]);
     setAction({ kind: "idle" });
-  }, [refresh, refreshActivity]);
+  }, [refresh, refreshActivity, refreshBalance]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setAction({ kind: "busy" });

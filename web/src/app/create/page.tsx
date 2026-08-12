@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { CreateEvent } from "@/components/CreateEvent";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Skeleton } from "@/components/ui";
 
 export default function CreatePage() {
   const { status, openPicker, error } = useWallet();
@@ -27,7 +27,18 @@ export default function CreatePage() {
         </p>
       </section>
 
-      {status !== "connected" ? (
+      {/* A returning visitor is already connected — we just don't know it yet for
+          the moment the kit takes to say so. Rendering the full "connect first"
+          card in that window and swapping it out is worse than a placeholder. */}
+      {status === "restoring" ? (
+        <Card>
+          <div className="flex flex-col gap-3" role="status" aria-label="Checking your wallet">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="mt-1 h-14 w-full" />
+          </div>
+        </Card>
+      ) : status !== "connected" ? (
         <Card className="flex flex-col items-start gap-4">
           <div>
             <h2 className="text-lg font-bold tracking-tight">Connect first</h2>

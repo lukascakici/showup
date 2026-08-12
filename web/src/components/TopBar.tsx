@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wallet, CalendarPlus } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { Button } from "./ui";
+import { Button, Skeleton } from "./ui";
 import { WalletMenu } from "./WalletMenu";
 import { Logo } from "./Logo";
 
@@ -45,7 +45,12 @@ export function TopBar() {
           )}
         </div>
 
-        {status === "connected" ? (
+        {/* Same width as the button it stands in for, so the header doesn't jump
+            when the kit finally answers. The nav tab above is gated on
+            "connected" too, so it simply appears rather than flickering. */}
+        {status === "restoring" ? (
+          <Skeleton className="h-11 w-36 rounded-xl" />
+        ) : status === "connected" ? (
           <WalletMenu />
         ) : (
           <Button onClick={openPicker} loading={status === "connecting"}>
