@@ -11,9 +11,11 @@ export default function CreatePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Padding plus a matching negative margin: a thumb-sized hit area that
+          doesn't move anything on the page. */}
       <Link
         href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
+        className="-my-3 inline-flex w-fit items-center gap-1.5 py-3 text-sm text-muted transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
         Events

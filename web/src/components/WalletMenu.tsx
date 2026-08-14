@@ -106,7 +106,7 @@ export function WalletMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-xl border border-border-strong bg-surface px-3 py-2 text-sm transition-colors hover:border-muted"
+        className="flex h-11 items-center gap-2 rounded-xl border border-border-strong bg-surface px-3 text-sm transition-colors hover:border-muted"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -130,7 +130,11 @@ export function WalletMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/40">
+        // A hard w-80 is 320px, and it hangs off the *left* edge of anything
+        // narrower than about 352px with no scrollbar to bring it back — the
+        // balance and the faucet simply weren't there. It gives up width to the
+        // viewport now instead of leaving the page.
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/40">
           {/* Balance */}
           <div className="flex items-start justify-between">
             <div>
@@ -159,9 +163,13 @@ export function WalletMenu() {
                 </div>
               )}
             </div>
+            {/* Was a bare 16px icon — a third of the 44px a thumb needs, on the
+                one control that answers "did my refund arrive". The negative
+                margins keep it visually where it was while the hit area grows
+                out to the panel's padding. */}
             <button
               onClick={refreshBalance}
-              className="mt-1 text-muted transition-colors hover:text-foreground"
+              className="-mr-2 -mt-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:text-foreground"
               aria-label="Refresh balance"
             >
               <RefreshCw
@@ -175,23 +183,26 @@ export function WalletMenu() {
           )}
 
           {/* Address */}
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-surface-2 px-3 py-2.5">
+          {/* Both of these were ~36px tall because the row's padding was doing
+              the sizing. They set their own height now, so the row is 44px and
+              so is each half of it. */}
+          <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-2 px-3">
             <button
               onClick={copy}
-              className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground transition-colors hover:text-accent"
+              className="inline-flex min-h-11 min-w-0 items-center gap-1.5 font-mono text-xs text-foreground transition-colors hover:text-accent"
             >
-              {shortAddr(address, 6, 6)}
+              <span className="truncate">{shortAddr(address, 6, 6)}</span>
               {copied ? (
-                <Check className="size-3.5 text-accent" />
+                <Check className="size-3.5 shrink-0 text-accent" />
               ) : (
-                <Copy className="size-3.5 text-muted" />
+                <Copy className="size-3.5 shrink-0 text-muted" />
               )}
             </button>
             <a
               href={EXPLORER_ACCOUNT(address)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
             >
               Explorer
               <ExternalLink className="size-3.5" />

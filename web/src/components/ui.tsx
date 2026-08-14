@@ -78,8 +78,10 @@ export function Card({
   className?: string;
 }) {
   return (
+    // p-6 on both sides costs 48px of a 390px phone — 12% of the viewport spent
+    // on nothing, and the page already spends another 32px on its own gutters.
     <div
-      className={`rounded-2xl border border-border bg-surface p-6 ${className}`}
+      className={`rounded-2xl border border-border bg-surface p-5 sm:p-6 ${className}`}
     >
       {children}
     </div>
@@ -129,11 +131,21 @@ export function Field({
   );
 }
 
+/**
+ * 16px text, and it has to stay 16px.
+ *
+ * iOS Safari zooms the page in whenever a focused input's font-size is under
+ * 16px, and it does not zoom back out afterwards — so at `text-sm` every one of
+ * these fields left the visitor on a page wider than their screen, panning
+ * sideways to find the button they were about to press. The alternative fix is
+ * `maximum-scale=1` on the viewport, which solves it by taking pinch-zoom away
+ * from everyone; this one costs a 2px type bump.
+ */
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-12 rounded-xl border border-border-strong bg-surface-2 px-4 text-sm text-foreground placeholder:text-muted-2 outline-none focus:border-accent transition-colors ${
+      className={`h-12 rounded-xl border border-border-strong bg-surface-2 px-4 text-base text-foreground placeholder:text-muted-2 outline-none focus:border-accent transition-colors ${
         props.className ?? ""
       }`}
     />

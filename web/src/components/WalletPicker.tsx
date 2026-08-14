@@ -73,14 +73,20 @@ function Picker() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="wallet-picker-title"
     >
+      {/* The panel used to be as tall as its contents while the body behind it
+          was scroll-locked, so in landscape — or on a short phone with six
+          wallets listed — the last rows and the Testnet note were simply below
+          the fold and unreachable. It caps itself and scrolls its own list now;
+          `100dvh` rather than `100vh` because iOS Safari's `vh` counts the URL
+          bar's space whether or not the bar is there. */}
       <div
         ref={panel}
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-surface shadow-2xl shadow-black/60"
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/60"
       >
         <svg
           className="runner runner-loop pointer-events-none absolute inset-0 size-full"
@@ -90,67 +96,77 @@ function Picker() {
           <rect pathLength={100} />
         </svg>
 
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border py-2 pl-5 pr-2">
           <h2 id="wallet-picker-title" className="text-base font-bold tracking-tight">
             Connect a wallet
           </h2>
+          {/* 24px before this — the dismiss control on a modal that covers the
+              whole screen, and the only way out of it on a phone besides
+              tapping the scrim. */}
           <button
             onClick={closePicker}
             aria-label="Close"
-            className="-mr-1 rounded-lg p-1 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        {/* Inside Freighter's own browser the kit reports Freighter unavailable,
-            so without this the row below reads "Not installed" to someone who is,
-            at that moment, inside the app it is talking about. The row that does
-            work is called WalletConnect, which nobody would guess. */}
-        {inFreighterApp && (
-          <div className="border-b border-border bg-surface-2 px-5 py-4">
-            <p className="text-sm font-semibold text-foreground">
-              You&apos;re in Freighter&apos;s in-app browser
-            </p>
-            <p className="mt-1.5 text-sm text-muted">
-              {walletConnectConfigured
-                ? "Freighter signs over WalletConnect here — pick that row below and approve it in the app."
-                : "Freighter only signs over WalletConnect here, which this deploy isn't set up for. Open showup.click in Safari or Chrome instead — xBull and Albedo work there with nothing to install."}
-            </p>
-          </div>
-        )}
+        {/* The list is the only part that scrolls. The title, the error and the
+            Testnet note stay put, because they are the three things you need to
+            still be able to read while hunting for your wallet. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {/* Inside Freighter's own browser the kit reports Freighter unavailable,
+              so without this the row below reads "Not installed" to someone who is,
+              at that moment, inside the app it is talking about. The row that does
+              work is called WalletConnect, which nobody would guess. */}
+          {inFreighterApp && (
+            <div className="border-b border-border bg-surface-2 px-5 py-4">
+              <p className="text-sm font-semibold text-foreground">
+                You&apos;re in Freighter&apos;s in-app browser
+              </p>
+              <p className="mt-1.5 text-sm text-muted">
+                {walletConnectConfigured
+                  ? "Freighter signs over WalletConnect here — pick that row below and approve it in the app."
+                  : "Freighter only signs over WalletConnect here, which this deploy isn't set up for. Open showup.click in Safari or Chrome instead — xBull and Albedo work there with nothing to install."}
+              </p>
+            </div>
+          )}
 
-        {walletsLoading && wallets.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted">
-            Checking which wallets you have…
-          </p>
-        ) : wallets.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted">
-            No Stellar wallet found. Install one to continue.
-          </p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-border">
-            {wallets.map((wallet, i) => (
-              <WalletRow
-                key={wallet.id}
-                ref={i === 0 ? firstItem : undefined}
-                wallet={wallet}
-                pending={pending === wallet.id}
-                disabled={pending !== null}
-                // Offering to install Freighter from inside Freighter is a loop,
-                // and the reason it's unreachable isn't that it's missing.
-                installable={!(inFreighterApp && wallet.id === "freighter")}
-                onChoose={() => choose(wallet)}
-              />
-            ))}
-          </ul>
-        )}
+          {walletsLoading && wallets.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-muted">
+              Checking which wallets you have…
+            </p>
+          ) : wallets.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-muted">
+              No Stellar wallet found. Install one to continue.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {wallets.map((wallet, i) => (
+                <WalletRow
+                  key={wallet.id}
+                  ref={i === 0 ? firstItem : undefined}
+                  wallet={wallet}
+                  pending={pending === wallet.id}
+                  disabled={pending !== null}
+                  // Offering to install Freighter from inside Freighter is a loop,
+                  // and the reason it's unreachable isn't that it's missing.
+                  installable={!(inFreighterApp && wallet.id === "freighter")}
+                  onChoose={() => choose(wallet)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
 
         {error && (
-          <p className="border-t border-border px-5 py-3 text-sm text-danger">{error}</p>
+          <p className="shrink-0 border-t border-border px-5 py-3 text-sm text-danger">
+            {error}
+          </p>
         )}
 
-        <p className="border-t border-border px-5 py-3 text-xs text-muted-2">
+        <p className="shrink-0 border-t border-border px-5 py-3 text-xs text-muted-2">
           Showup runs on Stellar Testnet. Your wallet must be on Testnet too.
         </p>
       </div>

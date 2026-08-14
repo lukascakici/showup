@@ -193,8 +193,8 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
       <EventHeader id={id} title={event.title} startsAt={event.startsAt} />
 
       <Card>
-        <div className="flex items-start justify-between gap-4">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold tracking-tight">
               {finalized ? "Event closed" : checkingIn ? "Check-in is open" : "Taking reservations"}
             </h2>
@@ -206,7 +206,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
                   : `${left} of ${event.capacity} spots left.`}
             </p>
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <div className="text-2xl font-bold tracking-tight">
               {fromStroops(event.deposit)}
               <span className="ml-1 text-sm font-medium text-muted">XLM</span>
@@ -215,7 +215,10 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
           </div>
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border pt-5 text-sm">
+        {/* Two columns hold at 320px once the card gives back its padding, but
+            the labels wrap there, so the rows need vertical room that a single
+            `gap-3` didn't leave them. */}
+        <dl className="mt-5 grid grid-cols-2 gap-x-3 gap-y-4 border-t border-border pt-5 text-sm">
           <div>
             <dt className="text-xs uppercase tracking-wide text-muted">Reserved</dt>
             <dd className="mt-1 inline-flex items-center gap-1.5 font-semibold">
@@ -390,12 +393,16 @@ function EventHeader({
       <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title || "Event"}</h1>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
         {!!startsAt && <span>{formatWhen(startsAt)}</span>}
+        {/* This is the link a reviewer taps to open the event on Stellar
+            Expert, and it was 20px tall. The only other thing in this row is
+            the date, which isn't a link, so the hit area can take the full 44
+            without landing on top of anything. */}
         <a
           href={EXPLORER_CONTRACT(id)}
           target="_blank"
           rel="noreferrer"
           title={id}
-          className="inline-flex items-center gap-1 font-mono transition-colors hover:text-accent"
+          className="-my-3 inline-flex items-center gap-1 py-3 font-mono transition-colors hover:text-accent"
         >
           {shortAddr(id, 8, 8)}
           <ExternalLink className="size-3.5" />

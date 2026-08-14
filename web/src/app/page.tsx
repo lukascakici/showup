@@ -112,9 +112,9 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
   return (
     <Link
       href={`/e/${event.id}`}
-      className="block rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-border-strong"
+      className="block rounded-2xl border border-border bg-surface p-4 transition-colors hover:border-border-strong sm:p-5"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {/* An event from before names existed still has to be openable, so it
               falls back to what it has always been shown as: its address. */}
@@ -132,7 +132,7 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
             {yours ? "Yours" : `by ${shortAddr(event.organizer)}`}
           </p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <div className="font-bold tracking-tight">
             {fromStroops(event.deposit)}
             <span className="ml-1 text-xs font-medium text-muted">XLM</span>
@@ -141,7 +141,10 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-xs text-muted">
+      {/* Three stats on one nowrap line ran off the card on a phone as soon as
+          the numbers reached two digits — "12 / 20 reserved" is the common case
+          next week, not the edge case. */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted">
         <span className="inline-flex items-center gap-1.5">
           <Users className="size-3.5" />
           {event.reserved.length} / {event.capacity} reserved

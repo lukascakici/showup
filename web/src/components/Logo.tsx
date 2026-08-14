@@ -28,7 +28,11 @@ export function Logo({ className = "" }: { className?: string }) {
           strokeLinejoin="round"
         />
       </svg>
-      <span className="relative -top-[3px] font-hand text-2xl font-bold leading-none text-accent">
+      {/* Below ~380px the wordmark, the Create tab and the wallet chip don't all
+          fit on one line, and the chip is the one that gets pushed off. The pin
+          on its own is still the home link, so this is the cheapest thing to
+          drop. Above that width nothing changes. */}
+      <span className="relative -top-[3px] hidden font-hand text-2xl font-bold leading-none text-accent min-[380px]:inline">
         showup
       </span>
     </span>

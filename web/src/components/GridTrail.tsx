@@ -46,8 +46,17 @@ export function GridTrail() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (reduce.matches) return;
+    // Off on phones. This is a requestAnimationFrame loop that never stops, and
+    // it is decoration — on a touch device it competes with scrolling for the
+    // main thread and runs the battery down for a texture nobody came for. A
+    // coarse pointer is the honest signal for "this is a phone or a tablet";
+    // it isn't a viewport width, so a narrow desktop window keeps it.
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(pointer: coarse)").matches
+    ) {
+      return;
+    }
 
     let width = 0;
     let height = 0;
@@ -55,16 +64,20 @@ export function GridTrail() {
     let cy = 0;
     let dpr = 1;
 
+    // Measured off the canvas, not off `window`. `innerWidth` counts the
+    // vertical scrollbar and the canvas is `fixed inset-0`, which doesn't — so
+    // writing innerWidth back as an inline style made the element a scrollbar's
+    // width wider than the viewport it was supposed to cover. CSS owns the box
+    // now; this only sizes the backing store to match it.
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = window.innerWidth;
-      height = window.innerHeight;
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
       cx = width / 2;
       cy = height * 0.42; // align phase with the CSS grid position
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
@@ -178,7 +191,12 @@ export function GridTrail() {
     <canvas
       ref={canvasRef}
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10"
+      // `size-full` and not just `inset-0`: a canvas is a replaced element, so
+      // `left:0; right:0` leaves it at its intrinsic 300×150 rather than
+      // stretching it. The effect used to hide that by setting an explicit
+      // style on every resize — which it no longer reaches on a phone, where it
+      // bails out, leaving a 300px box hanging off a 280px screen.
+      className="pointer-events-none fixed inset-0 -z-10 size-full"
     />
   );
 }
