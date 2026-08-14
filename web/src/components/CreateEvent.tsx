@@ -20,7 +20,14 @@ import { EventCreated } from "./EventCreated";
 
 type State =
   | { kind: "idle" }
-  | { kind: "creating" }
+  /**
+   * Two steps, because this is a 10–30 second wait and it used to be one
+   * unchanging "Creating…". `preparing` is us simulating and assembling the
+   * invocation; `submitting` is the wallet prompt and then the ledger. They
+   * fail for completely different reasons and they ask different things of the
+   * person watching — one of them wants them to go and press something.
+   */
+  | { kind: "creating"; step: "preparing" | "submitting" }
   | { kind: "error"; message: string }
   // Holding the secret in state rather than re-reading it from localStorage is
   // deliberate: this is the one render where it is guaranteed to exist, and the
@@ -54,6 +61,34 @@ function defaultStart(): string {
   return localInputValue(d);
 }
 
+/** Strings, not numbers: they go straight into the field they set. */
+const DEPOSIT_PRESETS = ["5", "10", "25", "50"] as const;
+
+/** A 44px square, because this is the control people use instead of typing. */
+function Stepper({
+  label,
+  onClick,
+  disabled = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-surface-2 text-lg font-semibold text-foreground transition-colors hover:border-muted disabled:pointer-events-none disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
 const POLICIES: { value: ForfeitPolicy["tag"]; label: string; hint: string }[] = [
   {
     value: "SplitAmongAttendees",
@@ -75,6 +110,21 @@ export function CreateEvent() {
   const [capacity, setCapacity] = useState("10");
   const [policy, setPolicy] = useState<ForfeitPolicy["tag"]>("SplitAmongAttendees");
   const [state, setState] = useState<State>({ kind: "idle" });
+
+  /**
+   * Which fields have been left, so the form can stop correcting people
+   * mid-word. Typing "Perşembe" produced "That's 12 too long" after the fourth
+   * character of a title that was going to be fine; typing "10." produced
+   * "Enter an amount with at most 7 decimals" before the decimal was reached.
+   * Errors are true either way — the question is when saying them is help.
+   */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const leave = (field: string) => () => setTouched((t) => ({ ...t, [field]: true }));
+  const shown = (field: string, error: string | null) =>
+    submitted || touched[field] ? error : null;
+
+  const busy = state.kind === "creating";
 
   const titleBytes = byteLength(title.trim());
   const titleError =
@@ -113,8 +163,9 @@ export function CreateEvent() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitted(true);
     if (!signer.publicKey || !canCreate) return;
-    setState({ kind: "creating" });
+    setState({ kind: "creating", step: "preparing" });
     try {
       const secret = generateSecret();
       const codeHash = await hashSecret(secret);
@@ -130,6 +181,9 @@ export function CreateEvent() {
         code_hash: codeHash,
         policy: { tag: policy, values: undefined } as ForfeitPolicy,
       });
+      // Everything above was a simulation against the RPC. From here the wallet
+      // opens and the ledger has to close, which is where the time goes.
+      setState({ kind: "creating", step: "submitting" });
       const sent = await tx.signAndSend();
       const eventId = sent.result.unwrap();
 
@@ -155,91 +209,156 @@ export function CreateEvent() {
         Set the deposit and how many people can reserve a spot.
       </p>
 
-      <form onSubmit={submit} className="mt-5 flex flex-col gap-4">
-        <Field
-          label="Event name"
-          error={titleError}
-          // Only show the counter as it gets close. A number that sits there
-          // from the first keystroke reads as a warning about nothing.
-          hint={titleBytes > MAX_TITLE_BYTES - 20 ? `${titleBytes} / ${MAX_TITLE_BYTES}` : undefined}
-        >
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Thursday football at Kadıköy"
-            autoFocus
-          />
-        </Field>
+      <form onSubmit={submit} className="mt-5">
+        {/* Disabled as a group while the transaction is in flight. The fields
+            used to stay editable through a 30-second wait, so anything typed
+            into them was silently not what was being created. */}
+        <fieldset disabled={busy} className="flex flex-col gap-4">
+          <Field
+            label="Event name"
+            error={shown("title", titleError)}
+            // Only show the counter as it gets close. A number that sits there
+            // from the first keystroke reads as a warning about nothing.
+            hint={
+              titleBytes > MAX_TITLE_BYTES - 20 ? `${titleBytes} / ${MAX_TITLE_BYTES}` : undefined
+            }
+          >
+            {/* `autoFocus` used to be here. On a phone it threw the keyboard up
+                the instant /create rendered, covering half the form before
+                anyone had chosen to type. */}
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={leave("title")}
+              placeholder="Thursday football at Kadıköy"
+            />
+          </Field>
 
-        <Field label="When" error={startsAtError}>
-          <Input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-          />
-        </Field>
+          <Field label="When" error={shown("startsAt", startsAtError)}>
+            <Input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              onBlur={leave("startsAt")}
+            />
+          </Field>
 
-        <Field label="Deposit per person (XLM)" error={depositError}>
-          <Input
-            value={deposit}
-            onChange={(e) => setDeposit(e.target.value)}
-            placeholder="10"
-            inputMode="decimal"
-          />
-        </Field>
-
-        <Field label="Maximum people" error={capacityError}>
-          <Input
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-            placeholder="10"
-            inputMode="numeric"
-          />
-        </Field>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-            If someone doesn&apos;t show
-          </legend>
-          {POLICIES.map((p) => (
-            <label
-              key={p.value}
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                policy === p.value
-                  ? "border-accent bg-surface-2"
-                  : "border-border-strong hover:border-muted"
-              }`}
-            >
-              <input
-                type="radio"
-                name="policy"
-                value={p.value}
-                checked={policy === p.value}
-                onChange={() => setPolicy(p.value)}
-                className="mt-1 accent-[var(--accent)]"
+          <Field label="Deposit per person (XLM)" error={shown("deposit", depositError)}>
+            <div className="flex flex-col gap-2">
+              <Input
+                value={deposit}
+                onChange={(e) => setDeposit(e.target.value)}
+                onBlur={leave("deposit")}
+                placeholder="10"
+                inputMode="decimal"
               />
-              <span>
-                <span className="block text-sm font-semibold text-foreground">{p.label}</span>
-                <span className="mt-0.5 block text-xs text-muted">{p.hint}</span>
-              </span>
-            </label>
-          ))}
+              {/* Most organizers never need to type an amount, and typing one
+                  on a phone means the decimal keypad. */}
+              <div className="flex flex-wrap gap-2">
+                {DEPOSIT_PRESETS.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => {
+                      setDeposit(amount);
+                      setTouched((t) => ({ ...t, deposit: true }));
+                    }}
+                    aria-pressed={deposit.trim() === amount}
+                    className={`h-11 min-w-14 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                      deposit.trim() === amount
+                        ? "border-accent bg-surface-2 text-accent"
+                        : "border-border-strong text-muted hover:border-muted hover:text-foreground"
+                    }`}
+                  >
+                    {amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Field>
+
+          <Field label="Maximum people" error={shown("capacity", capacityError)}>
+            <div className="flex items-center gap-2">
+              <Stepper
+                label="One fewer spot"
+                onClick={() => setCapacity(String(Math.max(1, capacityNum - 1)))}
+                disabled={capacityNum <= 1}
+              >
+                −
+              </Stepper>
+              <Input
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                onBlur={leave("capacity")}
+                placeholder="10"
+                inputMode="numeric"
+                className="min-w-0 flex-1 text-center font-semibold tabular-nums"
+              />
+              <Stepper
+                label="One more spot"
+                onClick={() => setCapacity(String((capacityNum || 0) + 1))}
+              >
+                +
+              </Stepper>
+            </div>
+          </Field>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+              If someone doesn&apos;t show
+            </legend>
+            {POLICIES.map((p) => (
+              <label
+                key={p.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                  policy === p.value
+                    ? "border-accent bg-surface-2"
+                    : "border-border-strong hover:border-muted"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="policy"
+                  value={p.value}
+                  checked={policy === p.value}
+                  onChange={() => setPolicy(p.value)}
+                  className="mt-1 accent-[var(--accent)]"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">{p.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{p.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface-2 p-3">
+            <Info className="mt-0.5 size-4 shrink-0 text-muted" />
+            <p className="text-xs text-muted">
+              You&apos;ll fund{" "}
+              <strong className="text-foreground">{fromStroops(poolStroops)} XLM</strong> now —{" "}
+              {fromStroops(FEE_ALLOWANCE_STROOPS)} XLM per spot — so nobody pays to attend:
+              each guest gets that back on top of their deposit when they check in. Whatever
+              isn&apos;t used comes back to you when you finalize.
+            </p>
+          </div>
+
+          <Button type="submit" size="lg" fullWidth disabled={!canCreate} loading={busy}>
+            <CalendarPlus className="size-4" />
+            {busy ? "Creating…" : "Create event"}
+          </Button>
         </fieldset>
 
-        <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface-2 p-3">
-          <Info className="mt-0.5 size-4 shrink-0 text-muted" />
-          <p className="text-xs text-muted">
-            You&apos;ll fund <strong className="text-foreground">{fromStroops(poolStroops)} XLM</strong>{" "}
-            now — {fromStroops(FEE_ALLOWANCE_STROOPS)} XLM per spot — so nobody pays to
-            attend: each guest gets that back on top of their deposit when they check in.
-            Whatever isn&apos;t used comes back to you when you finalize.
+        {/* Said out loud, because this is 10–30 seconds of nothing visibly
+            happening and one of the two steps needs the organizer to go and do
+            something in another window. */}
+        {state.kind === "creating" && (
+          <p className="mt-2 text-center text-xs text-muted" role="status">
+            {state.step === "preparing"
+              ? "Working out what this will cost on Testnet…"
+              : "Approve it in your wallet. Deploying the contract then takes 10–30 seconds — leave this open."}
           </p>
-        </div>
-
-        <Button type="submit" size="lg" fullWidth disabled={!canCreate} loading={state.kind === "creating"}>
-          <CalendarPlus className="size-4" />
-          {state.kind === "creating" ? "Creating…" : "Create event"}
-        </Button>
+        )}
       </form>
 
       {state.kind === "error" && (
