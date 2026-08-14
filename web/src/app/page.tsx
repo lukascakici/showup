@@ -1,17 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { CalendarPlus, Users } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { useEventList, spotsLeft, type ListedEvent } from "@/lib/events";
+import { groupByDay } from "@/lib/schedule";
 import { fromStroops } from "@/lib/contracts";
-import { formatWhen, shortAddr } from "@/lib/format";
+import { formatTime, formatWhen, shortAddr } from "@/lib/format";
 import { Button, ButtonLink, Card, Skeleton } from "@/components/ui";
 
 export default function Home() {
   const { address } = useWallet();
   const { data: list, loading, error, refreshing, refresh } = useEventList();
   const events = list?.events;
+
+  // Recomputed only when the list changes, not on every poll tick — `Date.now()`
+  // inside means the labels ("Today") stay correct across a page left open for
+  // hours, since a new poll result is what a day boundary would have changed.
+  const groups = useMemo(() => (events ? groupByDay(events) : []), [events]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -41,26 +48,44 @@ export default function Home() {
           </div>
         )}
 
+        {/* The copy was already right and there was nothing to press. An empty
+            list is the one screen where the next step is unambiguous. */}
         {events && events.length === 0 && (
-          <Card className="mt-3">
+          <Card className="mt-3 flex flex-col items-start gap-4">
             <p className="text-sm text-muted">
               No events yet. Create the first one — it&apos;ll live at its own address on
               Testnet.
             </p>
+            <ButtonLink href="/create" variant="secondary" fullWidth>
+              <CalendarPlus className="size-4" />
+              Create an event
+            </ButtonLink>
           </Card>
         )}
 
         {events && events.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-3">
-            {events
-              .slice()
-              .reverse()
-              .map((e) => (
-                <li key={e.id}>
-                  <EventRow event={e} you={address} />
-                </li>
-              ))}
-          </ul>
+          <div className="mt-3 flex flex-col gap-6">
+            {groups.map((group) => {
+              // "Earlier" and "No date" span days; a dated group doesn't.
+              const dated = /^\d{4}-/.test(group.key);
+              return (
+                <section key={group.key}>
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {group.label}
+                  </h3>
+                  <ul className="mt-2 flex flex-col gap-3">
+                    {group.events.map((e) => (
+                      <li key={e.id}>
+                        {/* Under a heading that already says the day, the row
+                            only needs the clock. */}
+                        <EventRow event={e} you={address} timeOnly={dated} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         )}
 
         {list && list.unreadable.length > 0 && (
@@ -105,7 +130,15 @@ function since(ms: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
+function EventRow({
+  event,
+  you,
+  timeOnly = false,
+}: {
+  event: ListedEvent;
+  you: string | null;
+  timeOnly?: boolean;
+}) {
   const left = spotsLeft(event);
   const yours = !!you && event.organizer === you;
 
@@ -128,7 +161,8 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
             </p>
           )}
           <p className="mt-1 text-xs text-muted">
-            {event.startsAt > 0 && `${formatWhen(event.startsAt)} · `}
+            {event.startsAt > 0 &&
+              `${timeOnly ? formatTime(event.startsAt) : formatWhen(event.startsAt)} · `}
             {yours ? "Yours" : `by ${shortAddr(event.organizer)}`}
           </p>
         </div>

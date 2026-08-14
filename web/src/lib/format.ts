@@ -29,6 +29,20 @@ export function formatWhen(startsAt: number): string {
   });
 }
 
+/**
+ * Just the clock time, for a row that already sits under a day heading.
+ *
+ * "Thu, Aug 20, 10:00 PM" under a heading that says "Thursday, 20 August" is
+ * the same fact printed twice.
+ */
+export function formatTime(startsAt: number): string {
+  if (!startsAt) return "";
+  return new Date(startsAt * 1000).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Format an XLM balance string to a readable amount. */
 export function formatXlm(raw: string, decimals = 4): string {
   const n = Number(raw);
