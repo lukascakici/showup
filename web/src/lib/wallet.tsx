@@ -50,7 +50,11 @@ type WalletContextValue = {
   walletName: string | null;
   wallets: ISupportedWallet[];
   walletsLoading: boolean;
+  /** Ask every module again whether it is there — after installing one. */
+  refreshWallets: () => Promise<void>;
   network: NetworkState;
+  /** Ask the wallet again which network it is on — after switching it. */
+  refreshNetwork: () => Promise<void>;
   wrongNetwork: boolean;
   error: string | null;
   balance: AccountState | null;
@@ -215,6 +219,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refreshNetwork, readWalletName]);
 
+  // Separated from `openPicker` so it can be asked again without reopening
+  // anything: installing an extension doesn't notify the page it happened, so
+  // whoever just installed one needs a way to say "look again" that doesn't
+  // involve guessing that a reload is required.
+  const refreshWallets = useCallback(async () => {
+    setWalletsLoading(true);
+    try {
+      const { kit } = await getKit();
+      setWallets(await kit.refreshSupportedWallets());
+    } catch (e) {
+      setError(errMessage(e) || "Couldn't load the wallet list.");
+    } finally {
+      setWalletsLoading(false);
+    }
+  }, []);
+
   const openPicker = useCallback(() => {
     setError(null);
     setPickerOpen(true);
@@ -222,18 +242,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     // races every wallet's availability check against a one second timeout, and
     // spending that inside a click would cost the user's gesture — which xBull
     // and Albedo need in order to open their popup.
-    setWalletsLoading(true);
-    void (async () => {
-      try {
-        const { kit } = await getKit();
-        setWallets(await kit.refreshSupportedWallets());
-      } catch (e) {
-        setError(errMessage(e) || "Couldn't load the wallet list.");
-      } finally {
-        setWalletsLoading(false);
-      }
-    })();
-  }, []);
+    void refreshWallets();
+  }, [refreshWallets]);
 
   const closePicker = useCallback(() => {
     setPickerOpen(false);
@@ -292,7 +302,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       walletName,
       wallets,
       walletsLoading,
+      refreshWallets,
       network,
+      refreshNetwork,
       wrongNetwork,
       error,
       balance,
@@ -312,7 +324,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       walletName,
       wallets,
       walletsLoading,
+      refreshWallets,
       network,
+      refreshNetwork,
       wrongNetwork,
       error,
       balance,

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Dancing_Script } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet";
 import { TopBar } from "@/components/TopBar";
+import { NetworkBanner } from "@/components/NetworkBanner";
 import { GridTrail } from "@/components/GridTrail";
 import { WalletPicker } from "@/components/WalletPicker";
 
@@ -57,6 +58,7 @@ export default function RootLayout({
         <WalletProvider>
           <GridTrail />
           <TopBar />
+          <NetworkBanner />
           <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
             {children}
           </main>

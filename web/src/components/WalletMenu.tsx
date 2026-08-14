@@ -7,32 +7,13 @@ import {
   Check,
   RefreshCw,
   ExternalLink,
-  Droplets,
   LogOut,
 } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import {
-  fundWithFriendbot,
-  EXPLORER_ACCOUNT,
-  errMessage,
-} from "@/lib/stellar";
+import { EXPLORER_ACCOUNT } from "@/lib/stellar";
 import { formatXlm, shortAddr } from "@/lib/format";
 import { Button, Skeleton } from "./ui";
-
-/**
- * Three tones, because two collapsed a real failure into an FYI.
- *
- * "Already funded" and "the faucet is down" were both rendered in the same muted
- * grey, so an exception looked like a note. `info` is the benign one; `error` is
- * the one that means the next step won't work.
- */
-type FaucetMsg = { tone: "ok" | "info" | "error"; text: string } | null;
-
-const FAUCET_TONE = {
-  ok: "text-accent",
-  info: "text-muted",
-  error: "text-danger",
-} as const;
+import { FaucetButton } from "./Faucet";
 
 export function WalletMenu() {
   const {
@@ -47,8 +28,6 @@ export function WalletMenu() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const [funding, setFunding] = useState(false);
-  const [faucet, setFaucet] = useState<FaucetMsg>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,27 +57,6 @@ export function WalletMenu() {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopyFailed(true);
-    }
-  };
-
-  const requestFaucet = async () => {
-    setFunding(true);
-    setFaucet(null);
-    try {
-      const result = await fundWithFriendbot(address);
-      await refreshBalance();
-      setFaucet(
-        result === "funded"
-          ? { tone: "ok", text: "Funded — 10,000 test XLM added." }
-          : {
-              tone: "info",
-              text: "Already funded. Friendbot only funds a new account once.",
-            },
-      );
-    } catch (e) {
-      setFaucet({ tone: "error", text: errMessage(e) || "Faucet request failed." });
-    } finally {
-      setFunding(false);
     }
   };
 
@@ -228,19 +186,9 @@ export function WalletMenu() {
             <span className="text-xs font-medium uppercase tracking-wide text-muted">
               Test faucet
             </span>
-            <Button
-              variant="secondary"
-              className="mt-2"
-              fullWidth
-              onClick={requestFaucet}
-              loading={funding}
-            >
-              <Droplets className="size-4" />
-              Request test XLM
-            </Button>
-            {faucet && (
-              <p className={`mt-2 text-xs ${FAUCET_TONE[faucet.tone]}`}>{faucet.text}</p>
-            )}
+            <div className="mt-2">
+              <FaucetButton />
+            </div>
           </div>
 
           <div className="my-4 h-px bg-border" />

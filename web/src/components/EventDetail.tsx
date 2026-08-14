@@ -6,11 +6,14 @@ import {
   DoorOpen,
   ExternalLink,
   Flag,
+  Info,
   Link2,
   Lock,
   Send,
+  TriangleAlert,
   Undo2,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   event as eventClient,
@@ -31,17 +34,25 @@ import {
   useEvent,
   type EventState,
 } from "@/lib/events";
+import {
+  BASE_RESERVE_STROOPS,
+  FEE_HEADROOM_STROOPS,
+  blocksReservation,
+  fundingFor,
+  type Funding,
+} from "@/lib/funding";
 import { formatWhen, shortAddr } from "@/lib/format";
 import { checkInUrl, inviteUrl } from "@/lib/links";
 import { Button, Card, Field, Input, Skeleton } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
+import { FaucetButton } from "./Faucet";
 import { QrCode } from "./QrCode";
 
 type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
 export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string | null }) {
-  const { address, refreshBalance } = useWallet();
+  const { address, status, balance, openPicker, refreshBalance } = useWallet();
   const signer = useSigner();
   const { data: event, error, loading, refreshing, refresh } = useEvent(id);
   const {
@@ -150,6 +161,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const mine = attendanceOf(event, address);
   const left = spotsLeft(event);
   const refund = event.deposit + event.feeAllowance;
+  const funding = fundingFor(balance, event.deposit);
   const reserving = event.phase === "Reserving";
   const checkingIn = event.phase === "CheckingIn";
   const finalized = event.phase === "Finalized";
@@ -243,11 +255,42 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         </dl>
       </Card>
 
-      {!address && (
-        <Card>
-          <p className="text-sm text-muted">Connect your wallet to reserve a spot.</p>
-        </Card>
-      )}
+      {/* The explainer promises three steps starting with "reserve", so it is
+          only true while reserving is possible. On a finalized event the card
+          above already says the event is closed and there is nothing to add; on
+          a full or checking-in event the reason to connect is different, and
+          saying the wrong one is worse than the one line this replaced. */}
+      {!address &&
+        !finalized &&
+        (status === "restoring" ? (
+          <Card>
+            <div className="flex flex-col gap-3" role="status" aria-label="Checking your wallet">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="mt-1 h-14 w-full" />
+            </div>
+          </Card>
+        ) : reserving && left > 0 ? (
+          <ColdStart
+            deposit={event.deposit}
+            refund={refund}
+            feeAllowance={event.feeAllowance}
+            onConnect={openPicker}
+            connecting={status === "connecting"}
+          />
+        ) : (
+          <Card className="flex flex-col items-start gap-4">
+            <p className="text-sm text-muted">
+              {checkingIn
+                ? `Check-in is open. Connect the wallet you reserved with to take your ${fromStroops(refund)} XLM back.`
+                : "This event is full, so no new spots can be taken. Connect your wallet if you already reserved one."}
+            </p>
+            <Button onClick={openPicker} size="lg" fullWidth loading={status === "connecting"}>
+              <Wallet className="size-4" />
+              Connect a wallet
+            </Button>
+          </Card>
+        ))}
 
       {address && reserving && mine === "none" && (
         <Card>
@@ -258,12 +301,18 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             deposit plus {fromStroops(event.feeAllowance)} XLM the organizer put up to
             cover your fees.
           </p>
+
+          {/* Asked before the wallet prompt, not after the transaction. An
+              account that can't cover this fails on a contract error, which
+              reads as a broken site to someone who has never used Stellar. */}
+          {blocksReservation(funding) && <FundingNotice funding={funding} />}
+
           <Button
             onClick={rsvp}
             size="lg"
             fullWidth
             className="mt-4"
-            disabled={left <= 0 || action.kind === "busy"}
+            disabled={left <= 0 || blocksReservation(funding) || action.kind === "busy"}
             loading={action.kind === "busy"}
           >
             <Lock className="size-4" />
@@ -367,6 +416,111 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         truncated={activityResult?.truncated ?? false}
         onRetry={() => void refreshActivity()}
       />
+    </div>
+  );
+}
+
+/**
+ * The first thing a stranger sees, and until now it was one sentence.
+ *
+ * Everyone arriving next week gets here from a link in a group chat. They have
+ * no wallet, no Testnet account, no XLM and no reason to believe that "put down
+ * a deposit" means anything other than losing money. The old card said "Connect
+ * your wallet to reserve a spot" and did not even carry a button to do it —
+ * the only one was a chip in the top bar.
+ *
+ * So: what happens, in order; that the money isn't real; and the button.
+ */
+function ColdStart({
+  deposit,
+  refund,
+  feeAllowance,
+  onConnect,
+  connecting,
+}: {
+  deposit: bigint;
+  refund: bigint;
+  feeAllowance: bigint;
+  onConnect: () => void;
+  connecting: boolean;
+}) {
+  const steps = [
+    `Reserve. ${fromStroops(deposit)} XLM leaves your wallet and is locked in this event's own contract. Nobody can take it — not the organizer, not us.`,
+    "Show up. The organizer opens check-in and shares a code or a link at the event.",
+    `Check in. You get ${fromStroops(refund)} XLM back: your deposit plus ${fromStroops(feeAllowance)} XLM the organizer put up so attending costs you nothing.`,
+  ];
+
+  return (
+    <Card>
+      <h3 className="text-base font-bold tracking-tight">How this works</h3>
+      <ol className="mt-4 flex flex-col gap-3">
+        {steps.map((text, i) => (
+          <li key={i} className="flex items-start gap-3">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border-strong bg-surface-2 text-xs font-semibold tabular-nums text-muted">
+              {i + 1}
+            </span>
+            <span className="text-sm text-muted">{text}</span>
+          </li>
+        ))}
+      </ol>
+
+      {/* The single most reassuring fact available, and it was nowhere on this
+          page: none of this is real money. */}
+      <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-border bg-surface-2 p-3">
+        <Info className="mt-0.5 size-4 shrink-0 text-muted" />
+        <p className="text-xs text-muted">
+          Showup runs on <strong className="text-foreground">Stellar Testnet</strong>. The
+          XLM here is test money — it can&apos;t be bought, sold or spent anywhere, and
+          the faucet hands out as much as you need for free. Don&apos;t flake anyway.
+        </p>
+      </div>
+
+      <Button onClick={onConnect} size="lg" fullWidth className="mt-4" loading={connecting}>
+        <Wallet className="size-4" />
+        Connect a wallet
+      </Button>
+      <p className="mt-2 text-center text-xs text-muted-2">
+        No wallet yet? The next screen lists the ones that work on this device,
+        including one that needs nothing installed.
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * Why the reserve button is off, and the way out of it, in the same card.
+ *
+ * The faucet has always existed — inside the wallet menu, behind a chip in the
+ * top bar. Someone who has just learned their account is empty has no reason to
+ * look there, so it comes to them instead.
+ */
+function FundingNotice({ funding }: { funding: Funding }) {
+  if (funding.kind !== "unfunded" && funding.kind !== "short") return null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-danger/40 bg-surface-2 p-3">
+      <div className="flex items-start gap-2.5">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">
+            {funding.kind === "unfunded"
+              ? "Your account isn't on Testnet yet"
+              : "Not enough test XLM"}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {funding.kind === "unfunded"
+              ? "A Stellar account only exists once something funds it. The faucet creates yours and hands you 10,000 test XLM."
+              : `Reserving needs about ${fromStroops(funding.need)} XLM — the ${fromStroops(
+                  funding.need - BASE_RESERVE_STROOPS - FEE_HEADROOM_STROOPS,
+                )} deposit, the 1 XLM Stellar locks in every account, and a little for fees. You hold ${fromStroops(
+                  funding.have,
+                )}.`}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3">
+        <FaucetButton />
+      </div>
     </div>
   );
 }

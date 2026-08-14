@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Loader2, X } from "lucide-react";
+import { ArrowUpRight, Loader2, RotateCw, X } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
+import { Button } from "./ui";
 import {
   DETECTS_INSTALL,
   WALLET_DISPLAY,
@@ -26,9 +27,10 @@ export function WalletPicker() {
 }
 
 function Picker() {
-  const { closePicker, wallets, walletsLoading, select, error } = useWallet();
+  const { closePicker, wallets, walletsLoading, refreshWallets, select, error } = useWallet();
   const [pending, setPending] = useState<string | null>(null);
   const [inFreighterApp, setInFreighterApp] = useState(false);
+  const [touch, setTouch] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const firstItem = useRef<HTMLButtonElement>(null);
 
@@ -37,6 +39,10 @@ function Picker() {
     // mount — reading it during render would disagree with the prerender.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInFreighterApp(insideFreighterMobile());
+    // Which advice is true depends on whether browser extensions exist here at
+    // all, and on a phone they don't. Same reason as above: this can only be
+    // read after mount, and the disable on the first call covers the effect.
+    setTouch(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
   useEffect(() => {
@@ -138,8 +144,11 @@ function Picker() {
               Checking which wallets you have…
             </p>
           ) : wallets.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-muted">
-              No Stellar wallet found. Install one to continue.
+            // Was "No Stellar wallet found. Install one to continue." and then
+            // nothing — a full stop in the one place where somebody with no
+            // wallet was always going to end up. The way out is below it now.
+            <p className="px-5 pb-2 pt-8 text-center text-sm text-muted">
+              Couldn&apos;t list any wallets just now.
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border">
@@ -158,6 +167,8 @@ function Picker() {
               ))}
             </ul>
           )}
+
+          <NoWalletHelp touch={touch} onRecheck={refreshWallets} busy={walletsLoading} />
         </div>
 
         {error && (
@@ -170,6 +181,65 @@ function Picker() {
           Showup runs on Stellar Testnet. Your wallet must be on Testnet too.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The way out for someone who has never held a Stellar wallet.
+ *
+ * Every row above assumes you already know which of these names means anything.
+ * Ten people next week won't, and the fastest true answer — a wallet that needs
+ * nothing installed — is invisible because it is spelled "Albedo" and sits in a
+ * list next to four things that are not it.
+ *
+ * The advice splits on whether browser extensions exist here at all, because on
+ * a phone "install Freighter" means an app plus WalletConnect, and on a desktop
+ * it means an extension plus a re-check. Getting that backwards sends somebody
+ * to an extension store on iOS, which is a dead end with a link on it.
+ */
+function NoWalletHelp({
+  touch,
+  onRecheck,
+  busy,
+}: {
+  touch: boolean;
+  onRecheck: () => Promise<void>;
+  busy: boolean;
+}) {
+  return (
+    <div className="border-t border-border px-5 py-4">
+      <h3 className="text-sm font-semibold text-foreground">Don&apos;t have any of these?</h3>
+      <p className="mt-1.5 text-sm text-muted">
+        <strong className="font-semibold text-foreground">Albedo</strong> needs nothing
+        installed — pick it above and approve in the {touch ? "tab" : "window"} it opens.
+        It takes about a minute, and it works on Testnet out of the box.
+      </p>
+      <p className="mt-2 text-sm text-muted">
+        {touch ? (
+          <>
+            If you&apos;d rather use an app, install Freighter from your app store
+            {walletConnectConfigured
+              ? ", then come back and pick WalletConnect — that is the row Freighter answers on a phone."
+              : ". This deploy can't reach it on a phone, so Albedo is the way here."}
+          </>
+        ) : (
+          <>
+            Freighter and Hana are browser extensions — install one from its row above,
+            then use Check again.
+          </>
+        )}
+      </p>
+      <Button
+        variant="secondary"
+        className="mt-3"
+        fullWidth
+        onClick={() => void onRecheck()}
+        loading={busy}
+      >
+        <RotateCw className="size-4" />
+        Check again
+      </Button>
     </div>
   );
 }

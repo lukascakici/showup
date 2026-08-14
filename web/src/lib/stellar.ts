@@ -13,6 +13,23 @@ export const EXPLORER_CONTRACT = (id: string) =>
 
 export const horizon = new Horizon.Server(HORIZON_URL);
 
+/**
+ * A network's name, for telling someone which one their wallet is on.
+ *
+ * The passphrase is what a wallet actually reports, and it is a sentence — the
+ * public network's is "Public Global Stellar Network ; September 2015". Showing
+ * that verbatim to someone whose wallet is simply on the wrong setting explains
+ * nothing about which setting to change.
+ */
+export function networkName(passphrase: string | null): string {
+  if (!passphrase) return "another network";
+  if (passphrase === Networks.PUBLIC) return "Mainnet";
+  if (passphrase === Networks.TESTNET) return "Testnet";
+  if (passphrase === Networks.FUTURENET) return "Futurenet";
+  if (passphrase === Networks.STANDALONE) return "a local network";
+  return "another network";
+}
+
 export type AccountState = {
   funded: boolean;
   xlm: string; // human string, e.g. "9999.9999900"
