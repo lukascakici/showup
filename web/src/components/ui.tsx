@@ -107,19 +107,34 @@ export function Label({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A labelled control.
+ *
+ * `group` exists because a `<label>` forwards clicks to the **first** labelable
+ * control inside it, and a field whose first control isn't the input is a trap:
+ * the spots row starts with a "−" button, so tapping the words "Maximum people"
+ * decremented the count. Found by a component test, on a phone-sized control
+ * nobody had thought to tap.
+ *
+ * With `group` the wrapper is a plain `div` and there is nothing to forward, so
+ * the control inside must carry its own `aria-label`.
+ */
 export function Field({
   label,
   hint,
   error,
+  group = false,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string | null;
+  group?: boolean;
   children: ReactNode;
 }) {
+  const Wrapper = group ? "div" : "label";
   return (
-    <label className="flex flex-col gap-2">
+    <Wrapper className="flex flex-col gap-2">
       <Label>{label}</Label>
       {children}
       {error ? (
@@ -127,7 +142,7 @@ export function Field({
       ) : hint ? (
         <span className="text-xs text-muted-2">{hint}</span>
       ) : null}
-    </label>
+    </Wrapper>
   );
 }
 

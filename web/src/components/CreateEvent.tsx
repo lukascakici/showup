@@ -277,7 +277,9 @@ export function CreateEvent() {
             </div>
           </Field>
 
-          <Field label="Maximum people" error={shown("capacity", capacityError)}>
+          {/* `group`, so the words above aren't a label pointing at the "−"
+              button — see the note on `Field`. */}
+          <Field label="Maximum people" group error={shown("capacity", capacityError)}>
             <div className="flex items-center gap-2">
               <Stepper
                 label="One fewer spot"
@@ -287,6 +289,7 @@ export function CreateEvent() {
                 −
               </Stepper>
               <Input
+                aria-label="Maximum people"
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
                 onBlur={leave("capacity")}
