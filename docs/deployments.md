@@ -14,9 +14,17 @@ proof.
 | :-- | :-- |
 | Event factory | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | Reputation ledger | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| Event wasm hash | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
+| Event wasm hash — **current** | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
+| Event wasm hash — at v2 bring-up | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
+
+Two wasm hashes because the factory was pointed at a new event revision on
+08.08.2026 — see *Upgraded in place* below, which records the transaction that
+did it. The **current** one is the value `scripts/check-wasm-hash.mjs` asks the
+live factory for on every push; the bring-up one is kept because the transactions
+recorded under *Bringing it up* uploaded exactly that code, and deleting it would
+make that record unverifiable.
 
 ### Why a new factory address
 
