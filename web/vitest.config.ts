@@ -9,8 +9,10 @@ export default defineConfig({
   },
   test: {
     // jsdom rather than node: some of what we test reads localStorage, and the
-    // component tests coming later need a DOM anyway.
+    // component tests need a DOM anyway.
     environment: "jsdom",
-    include: ["src/**/*.test.ts"],
+    // `.tsx` as well as `.ts` — the component tests are the ones that render.
+    include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 });
