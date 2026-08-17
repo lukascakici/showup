@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Dancing_Script } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet";
+import { SITE_URL } from "@/lib/links";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/og";
 import { TopBar } from "@/components/TopBar";
 import { NetworkBanner } from "@/components/NetworkBanner";
 import { GridTrail } from "@/components/GridTrail";
@@ -23,10 +25,28 @@ const handwriting = Dancing_Script({
   weight: ["700"],
 });
 
+/**
+ * `metadataBase` is what turns `opengraph-image.tsx` into the absolute URL a
+ * chat client can actually fetch; without it Next emits a relative path and
+ * warns at build time. It is also the reason the OG image declared once here
+ * cascades onto every route, including `/e/[id]`.
+ */
 export const metadata: Metadata = {
-  title: "Showup — on-chain anti-flake deposits",
-  description:
-    "Put a refundable deposit on showing up. Reserve, check in, reclaim — on Stellar Testnet.",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: SITE_URL,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 /**
