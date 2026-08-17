@@ -301,6 +301,11 @@ Everything in Deliverable 1's "getting a stranger from a link to a reservation"
 exists for this: each person who gives up is a missing row in the table below,
 and there is only one attempt.
 
+Because there is only one attempt, the whole night is planned in advance —
+[`docs/week4.md`](docs/week4.md) holds the invitation, the run of show, the
+evidence tables below in blank, the demo-video shot list, and what to do when
+something goes wrong in front of people.
+
 ### Evidence
 
 This section fills in as the event runs. SOW §6.1 asks for:
