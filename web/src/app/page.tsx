@@ -49,8 +49,13 @@ export default function Home() {
         )}
 
         {/* The copy was already right and there was nothing to press. An empty
-            list is the one screen where the next step is unambiguous. */}
-        {events && events.length === 0 && (
+            list is the one screen where the next step is unambiguous.
+
+            Keyed on the groups rather than on `events`, because `groupByDay`
+            leaves undated events off: a list holding nothing but those would
+            otherwise render neither the empty card nor a row, and a blank gap
+            is the one thing worse than either. */}
+        {events && groups.length === 0 && (
           <Card className="mt-3 flex flex-col items-start gap-4">
             <p className="text-sm text-muted">
               No events yet. Create the first one — it&apos;ll live at its own address on
@@ -63,10 +68,10 @@ export default function Home() {
           </Card>
         )}
 
-        {events && events.length > 0 && (
+        {groups.length > 0 && (
           <div className="mt-3 flex flex-col gap-6">
             {groups.map((group) => {
-              // "Earlier" and "No date" span days; a dated group doesn't.
+              // "Earlier" spans days; a dated group doesn't.
               const dated = /^\d{4}-/.test(group.key);
               return (
                 <section key={group.key}>

@@ -45,36 +45,42 @@ describe("groupByDay", () => {
     expect(ids(groups[0].events)).toEqual(["yesterday", "last-week"]);
   });
 
-  it("orders the buckets: upcoming, then earlier, then undated", () => {
+  it("orders the buckets: upcoming, then earlier", () => {
     const groups = groupByDay(
-      [ev("old", at(2026, 8, 1)), ev("none", 0), ev("soon", at(2026, 8, 21))],
+      [ev("old", at(2026, 8, 1)), ev("soon", at(2026, 8, 21))],
       NOW,
     );
-    expect(groups.map((g) => g.key)).toEqual(["2026-08-21", "earlier", "undated"]);
+    expect(groups.map((g) => g.key)).toEqual(["2026-08-21", "earlier"]);
   });
 
   // Events from before start times existed on-chain store 0. That is "no date",
-  // not 1 January 1970 — filing them under Earlier would bury them forever.
-  it("keeps undated events out of the date buckets", () => {
-    const groups = groupByDay([ev("legacy", 0)], NOW);
-    expect(groups).toEqual([{ key: "undated", label: "No date", events: [expect.anything()] }]);
+  // not 1 January 1970 — filing them under Earlier would date them to 1970 and
+  // bury them forever. They are left off the list instead.
+  it("leaves an undated event off the list entirely", () => {
+    expect(groupByDay([ev("legacy", 0)], NOW)).toEqual([]);
+  });
+
+  // The one that matters: an undated event must not take a dated one down with
+  // it, since dropping the list's only real row would read as an outage.
+  it("drops only the undated event, never its neighbours", () => {
+    const groups = groupByDay([ev("legacy", 0), ev("real", at(2026, 8, 21))], NOW);
+    expect(groups.flatMap((g) => ids(g.events))).toEqual(["real"]);
   });
 
   it("returns nothing for an empty list", () => {
     expect(groupByDay([], NOW)).toEqual([]);
   });
 
-  it("never drops or duplicates an event", () => {
+  it("never drops or duplicates a dated event", () => {
     const all = [
       ev("a", at(2026, 8, 21)),
       ev("b", at(2026, 8, 21, 8)),
       ev("c", at(2026, 8, 25)),
       ev("d", at(2026, 8, 2)),
-      ev("e", 0),
       ev("f", at(2026, 8, 20, 23)),
     ];
     const seen = groupByDay(all, NOW).flatMap((g) => g.events);
-    expect(ids(seen).sort()).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(ids(seen).sort()).toEqual(["a", "b", "c", "d", "f"]);
   });
 });
 

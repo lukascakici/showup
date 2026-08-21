@@ -13,7 +13,7 @@ import type { ListedEvent } from "./events";
  * recent first.
  */
 export type EventGroup = {
-  /** Stable across renders: a date key, or one of the two fixed buckets. */
+  /** Stable across renders: a date key, or the fixed `earlier` bucket. */
   key: string;
   label: string;
   events: ListedEvent[];
@@ -56,15 +56,19 @@ export function groupByDay(events: ListedEvent[], now: number = Date.now()): Eve
   const today = dayKey(now);
   const byDay = new Map<string, ListedEvent[]>();
   const past: ListedEvent[] = [];
-  const undated: ListedEvent[] = [];
 
   for (const event of events) {
-    // 0 means the event predates start times existing on-chain. It has no date
-    // to show, which is not the same as a date at the epoch.
-    if (!event.startsAt) {
-      undated.push(event);
-      continue;
-    }
+    // 0 means the event predates `starts_at` existing on-chain, so it has no
+    // date and no title either — the only one is the bring-up event Deliverable
+    // 2's evidence points at. It is left off the list rather than shown under a
+    // "No date" heading: a listing is a thing you can join, and a nameless
+    // undated row is noise to everyone except the one reviewer who reaches it
+    // through the README's link, which still works.
+    //
+    // Nothing new can land here: the create form refuses to submit without a
+    // date (`CreateEvent.tsx`, `startsAtSeconds > 0`), so this set is closed at
+    // exactly one event, forever.
+    if (!event.startsAt) continue;
     const key = dayKey(event.startsAt * 1000);
     // Compared by calendar day, so an event that started two hours ago is still
     // under "Today" rather than filed away as history while people are at it.
@@ -92,9 +96,6 @@ export function groupByDay(events: ListedEvent[], now: number = Date.now()): Eve
       label: "Earlier",
       events: [...past].sort((a, b) => b.startsAt - a.startsAt),
     });
-  }
-  if (undated.length > 0) {
-    groups.push({ key: "undated", label: "No date", events: undated });
   }
   return groups;
 }
