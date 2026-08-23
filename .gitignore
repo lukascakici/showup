@@ -39,6 +39,9 @@ contracts/*/test_snapshots/
 # Internal planning docs — kept locally, never published to the public repo
 /PLAN.md
 /CLAUDE.md
+# Week 4's run sheet. Weeks 1-3 were planned in PLAN.md and never published;
+# this one was committed on 17.08 by mistake and pulled back out on 23.08.
+/docs/week4.md
 /DEMO-SCRIPT.md
 /IDEA-ESSAY.txt
 /IDEA-SUBMISSION.md
