@@ -28,12 +28,14 @@ const server = new rpc.Server(RPC_URL);
 const short = (s, head = 8, tail = 6) =>
   s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
 
-// Full values, not abbreviated ones. These tables are the evidence a reviewer
-// checks, and an elided hash cannot be copied, pasted or compared — only clicked,
-// which assumes the link goes where the text claims. The tables come out wide;
-// GitHub scrolls them, and being able to verify beats being able to skim.
-const txLink = (hash) => (hash ? `[\`${hash}\`](${EXPLORER}/tx/${hash})` : "—");
-const accountLink = (address) => `[\`${address}\`](${EXPLORER}/account/${address})`;
+// Tables carry abbreviated text, and the full values follow underneath as plain
+// text. A wallet address and two hashes side by side is ~190 characters, which no
+// font size rescues — the table stops being readable and the page scrolls
+// sideways. Splitting them keeps the table scannable while every value stays
+// present, complete and selectable: the appendix is a code block, so it can be
+// copied and compared rather than only clicked.
+const txLink = (hash) => (hash ? `[\`${short(hash)}\`](${EXPLORER}/tx/${hash})` : "—");
+const accountLink = (address) => `[\`${short(address, 6, 6)}\`](${EXPLORER}/account/${address})`;
 
 const xlm = (stroops) => (Number(stroops) / 1e7).toFixed(2);
 
@@ -158,6 +160,18 @@ function report(eventId, decoded) {
       `| ${i} | ${accountLink(address)} | ${txLink(row.rsvp)} | ${txLink(row.checkIn)} | ${row.checkIn ? "yes" : "no"} |`,
     );
   }
+
+  // Every value again, in full, where nothing has to fit a column.
+  lines.push("", "<details>", "<summary>Full addresses and hashes, to copy</summary>", "");
+  lines.push("```");
+  i = 0;
+  for (const [address, row] of guests) {
+    i += 1;
+    lines.push(`${i}. ${address}`);
+    lines.push(`   rsvp     ${row.rsvp ?? "—"}`);
+    lines.push(`   check_in ${row.checkIn ?? "—"}`);
+  }
+  lines.push("```", "", "</details>");
 
   return { markdown: lines.join("\n"), guests: guests.size, showed, finalized: Boolean(finalized) };
 }
