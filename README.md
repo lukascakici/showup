@@ -29,6 +29,10 @@ disappears from it.
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
 | **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | run complete · video pending |
 
+Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** has one short page per
+deliverable, written against SOW §6.1 and readable without a technical
+background. The sections below are the same record with the engineering in it.
+
 ---
 
 ## Deliverable 1 — a deployed multi-wallet dApp, with CI
