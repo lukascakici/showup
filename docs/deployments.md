@@ -269,6 +269,83 @@ measured rather than assumed:
 Week 4's real event runs around 26–29.08. Every one of these outlives it by more
 than two months, and each write extends its own lease again on the way past.
 
+## Deliverable 3 evidence — one real run, 12 wallets, 11 check-ins
+
+Run on **23.08.2026**, remotely: no venue, every participant on their own phone
+from wherever they were. Invitations went out in a group chat; twelve people
+reserved within about an hour, eleven checked in, one did not.
+
+The whole table below was read off the chain by
+[`web/scripts/collect-evidence.mjs`](../web/scripts/collect-evidence.mjs)
+(`npm run evidence -- <event>`), which walks the RPC's retained ledger range and
+prints every `reserved`, `checked_in`, `phase_changed` and `finalized` event it
+finds. Nothing here was typed by hand, and re-running it reproduces this section.
+
+Every row comes from a contract event, never from a contract read. A guest listed
+by `get_reserved` would have no transaction behind them; a hash is the only part
+a reviewer can independently check, so a person with no hash does not get a row.
+
+**Event**
+
+| | |
+| --- | --- |
+| Event contract | [`CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL`](https://stellar.expert/explorer/testnet/contract/CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL) |
+| Title | coffee time |
+| Organizer | [`GBQRAW…E2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) |
+| `create_event` tx | [`740f54dc…5cfc75`](https://stellar.expert/explorer/testnet/tx/740f54dce873103569473f19520a0392099d7cfe1afc9eb7717890f44d5cfc75) |
+| → `CheckingIn` tx | [`dfed9632…1d3337`](https://stellar.expert/explorer/testnet/tx/dfed9632e7a48b09413c1eb715d4957a11678c9103a4e93a02440e00d31d3337) |
+| `finalize` tx | [`d9cd8c8f…7699dd`](https://stellar.expert/explorer/testnet/tx/d9cd8c8f078c3582dc7f0b343a3fcaa64468c71ae9df6db5a7ac5161aa7699dd) |
+| Reserved / showed | 12 / 11 |
+| Forfeited and split | 5.00 XLM |
+
+**Attendees**
+
+| # | Wallet address | `rsvp` tx | `check_in` tx | Showed |
+| --- | --- | --- | --- | --- |
+| 1 | [`GC5DKL…332MIH`](https://stellar.expert/explorer/testnet/account/GC5DKLTLWPTOQXHDVCCZLKUN54Y5LBNYWQHEESJI76ETCCSKBS332MIH) | [`60c62187…fda259`](https://stellar.expert/explorer/testnet/tx/60c621871d0c2b29746d4b797d627fd81e7690b909fa82a624b4aa8ccdfda259) | — | no |
+| 2 | [`GBAW4G…CUFQXF`](https://stellar.expert/explorer/testnet/account/GBAW4G42254EEXDLUQ5X5GSZ6H7E46PM5AL364H2EVKRMMANDQCUFQXF) | [`bbbcc73b…17f177`](https://stellar.expert/explorer/testnet/tx/bbbcc73bf903cf7c2aa52bcf9d884589d51fcda3e0c1881bbfb31df13217f177) | [`7e0f0c95…7b5361`](https://stellar.expert/explorer/testnet/tx/7e0f0c95e935f217571b7ec28fc4329f137ee59774fd2609b396e05b727b5361) | yes |
+| 3 | [`GBBHPJ…FCIDTL`](https://stellar.expert/explorer/testnet/account/GBBHPJYHGFN5UEFQCSQBS6J5FAL2UG4RAKJY545ESHSGBKMIKMFCIDTL) | [`da1361f4…54c7c5`](https://stellar.expert/explorer/testnet/tx/da1361f4b538dad0a67a3c2574fa107169477f97a009b8fb9953c8667054c7c5) | [`ac9589f7…77005e`](https://stellar.expert/explorer/testnet/tx/ac9589f73780fe5e59f094e4204f187434c4c333d675d00c4632812e5c77005e) | yes |
+| 4 | [`GAESJS…HVURD7`](https://stellar.expert/explorer/testnet/account/GAESJSOUVOV4CIRKCWU6PXWILLO2VQN5RMFWHQVDISVUMWSBHHHVURD7) | [`18938881…517266`](https://stellar.expert/explorer/testnet/tx/189388810f91c661927daa2a5f7696bc5604fab1df7541dc581422a2ed517266) | [`21bd8dbc…2c4769`](https://stellar.expert/explorer/testnet/tx/21bd8dbcf0a6e5d97bdcc3391e66ded2d87fa06f5cf4c664fb50dd059f2c4769) | yes |
+| 5 | [`GBTM4B…YDVVWQ`](https://stellar.expert/explorer/testnet/account/GBTM4BY6ABARXTZSVED6NZEHCFFHHNAO64WGTBIUPXAUIMRHBUYDVVWQ) | [`d8a161ab…079a5f`](https://stellar.expert/explorer/testnet/tx/d8a161ab9a841bfc1fa924b99d3f23f04c68f519083cc7e7dbc50947dc079a5f) | [`01524039…9925cd`](https://stellar.expert/explorer/testnet/tx/0152403930698e09ee69152b8761c958d29376e620e5dabc0d0995cc419925cd) | yes |
+| 6 | [`GBQRAW…E2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) | [`0479f8b0…720a2e`](https://stellar.expert/explorer/testnet/tx/0479f8b0e60177a9a4135d0ef6af6d9fbcbec8145f349f3784f36c37e3720a2e) | [`e91eb97f…83b45a`](https://stellar.expert/explorer/testnet/tx/e91eb97fda09eac349c0cb0c656b3673f61d419807cc89bcdf7571611783b45a) | yes |
+| 7 | [`GBZTYV…ZEJP6Z`](https://stellar.expert/explorer/testnet/account/GBZTYVPNXDCDWXVOT6Y36TTC7DRQGSKCZF25OXVZYBGRONTJDPZEJP6Z) | [`c2beefc7…1f43bf`](https://stellar.expert/explorer/testnet/tx/c2beefc749d926d88041cb2ea5af09616c11c8f7dce27972f57cce3e591f43bf) | [`24e4ba5e…f24eaf`](https://stellar.expert/explorer/testnet/tx/24e4ba5e6f6bb646c3425733721ba0265c6c826efa3748e6a8921f0b7bf24eaf) | yes |
+| 8 | [`GBCCJX…N7HESQ`](https://stellar.expert/explorer/testnet/account/GBCCJXEN2ZAAKAW4MOO4GJI7FMTISSYI3ZMS2QC5FGUA4WKYWHN7HESQ) | [`5ea3cc39…360a31`](https://stellar.expert/explorer/testnet/tx/5ea3cc39455eea3a1a51909539b545def4f08988b821412f9ea1c2bd90360a31) | [`c0d11d90…d45bc7`](https://stellar.expert/explorer/testnet/tx/c0d11d906c88cb34b92a5cedc8d3a64832bd356401e683a1a73f9c6687d45bc7) | yes |
+| 9 | [`GBMQXT…LKRY2H`](https://stellar.expert/explorer/testnet/account/GBMQXTV2SJTKDFI2SHEZS35JBUFS2V5L4T7YJTR2ASGOS65LEGLKRY2H) | [`8614f36a…d9398c`](https://stellar.expert/explorer/testnet/tx/8614f36acbab7da76bb5c84177fe711efa20982a4887c67cbcb1bbe770d9398c) | [`0077a182…d3a643`](https://stellar.expert/explorer/testnet/tx/0077a18260bacaedd4c20834a7f57211dd33f4ef71231403880840f4d7d3a643) | yes |
+| 10 | [`GCFCDF…FTWDUW`](https://stellar.expert/explorer/testnet/account/GCFCDFPTUGCHH4VQO3DQ3BQVBTCUA7W3U7NYPAYWMSH3GXWF46FTWDUW) | [`e038765e…defb9a`](https://stellar.expert/explorer/testnet/tx/e038765e2d8c929279ceefcfeff5d5eee559950d563baab602893c8cbcdefb9a) | [`c10cd448…3d12f9`](https://stellar.expert/explorer/testnet/tx/c10cd44896ae26d7df330b0e7a565f0636b5dd28866058e895e705ff393d12f9) | yes |
+| 11 | [`GCAZMR…A6IFNO`](https://stellar.expert/explorer/testnet/account/GCAZMRVBGJUQ6O7MO22LLVOIPKRH2GM4G4JOJUXXRNR4PPCLF2A6IFNO) | [`38b74e91…9a1ad7`](https://stellar.expert/explorer/testnet/tx/38b74e916f7f9db6be696132b32426d079b1b32a4e19b5ef4ae2e2b3329a1ad7) | [`3ecf832a…b66417`](https://stellar.expert/explorer/testnet/tx/3ecf832a29e62abcfa5746c5458c3d66fbcb680ba07b2d13b8a5e84b84b66417) | yes |
+| 12 | [`GAPUTD…KX7FMO`](https://stellar.expert/explorer/testnet/account/GAPUTDS2QTBWFP3XVTZSSXL22RZFUTHLZPISJIHSQM6SGVNFDCKX7FMO) | [`8aa3803d…2851ab`](https://stellar.expert/explorer/testnet/tx/8aa3803d449c55c2cf5b1af679ef1155c5ebbef5b62e20f5f42ae4e0f12851ab) | [`55c52b4e…c17758`](https://stellar.expert/explorer/testnet/tx/55c52b4e6566f6f30258281d1581580a75c68a1f997f7fb6939e4541e4c17758) | yes |
+
+### What the money did
+
+| | |
+| :-- | --: |
+| Deposit per person | 5.00 XLM |
+| Returned on check-in | **5.10 XLM** — the deposit plus the fee allowance |
+| Forfeited by the one no-show | 5.00 XLM, split among the eleven who showed |
+| Left in the event contract | **0** |
+
+The contract holding zero is the claim worth checking: every deposit either went
+back to the person who showed up or was split among the people who did. Nothing
+is stranded, and the organizer cannot take it.
+
+### The reputation ledger, read back after the run
+
+| Address | Score | |
+| :-- | :-- | :-- |
+| `GC5DKL…332MIH` | `{shows: 0, no_shows: 1}` | reserved, never checked in |
+| `GBAW4G…CUFQXF` | `{shows: 1, no_shows: 0}` | checked in |
+| `GBQRAW…E2O4PW` | `{shows: 1, no_shows: 1}` | **checked in here, flaked on an earlier event** |
+
+That third row is the one no unit test can produce: a score that accumulated
+across two separate events, written by two different event contracts, both gated
+to the same factory. `reputation.is_registered(CAOK5LME…)` answers `true`, so the
+writes came through the gate rather than around it.
+
+Every score above moved inside the same transaction as the money — the
+`check_in` hashes in the table carry both the token transfer and the
+`score_changed` event, so there is no second transaction anyone has to be asked
+to trust.
+
 ## Contracts — v1 (superseded, still verifiable)
 
 The original deployment, kept intact. Its events are still readable on Stellar

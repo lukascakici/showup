@@ -27,7 +27,7 @@ disappears from it.
 | :-- | :-- | :-- |
 | **[1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)** | A deployed multi-wallet dApp, with CI on every push | shipped |
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
-| **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | in progress |
+| **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | run complete · video pending |
 
 ---
 
@@ -294,25 +294,54 @@ live chain are all in **[docs/deployments.md](docs/deployments.md)**.
 
 ## Deliverable 3 — one real event, 10+ real attendees, a demo video
 
-**In progress — week 4.** Real people, invited through the live site, reserving
-real Testnet deposits from their own wallets and checking in on their own phones.
+**The run is done; the video is not.** Real people, invited through the live
+site, reserving real Testnet deposits from their own wallets and checking in on
+their own phones.
 
 Everything in Deliverable 1's "getting a stranger from a link to a reservation"
-exists for this: each person who gives up is a missing row in the table below,
-and there is only one attempt.
+exists for this: each person who gave up would have been a missing row in the
+table below, and there was only one attempt.
 
-It runs remotely — there is no venue. People take part from wherever they are:
-they open a link, reserve, and at an agreed time check in on their phone.
+It ran remotely — there is no venue. People took part from wherever they were:
+they opened a link, reserved, and checked in on their phone.
 
 ### Evidence
 
-This section fills in as the event runs. SOW §6.1 asks for:
+Run on **23.08.2026**. Twelve people reserved within about an hour of the
+invitation, **eleven checked in**, one did not — and that one no-show is what
+makes the forfeit split and the reputation ledger visible rather than theoretical.
 
-- [ ] **10+ distinct attendee wallet addresses**, each with its `rsvp` and
-      `check_in` transaction hashes
-- [ ] **The finalised event's contract address**, openable on Stellar Expert
+- [x] **10+ distinct attendee wallet addresses**, each with its `rsvp` and
+      `check_in` transaction hashes — **12 reserved, 11 checked in**, every hash
+      in [docs/deployments.md](docs/deployments.md#deliverable-3-evidence--one-real-run-12-wallets-11-check-ins)
+- [x] **The finalised event's contract address**, openable on Stellar Expert —
+      [`CAOK5LME…EWMUTLJL`](https://stellar.expert/explorer/testnet/contract/CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL)
 - [ ] **A demo video** of the full flow: create → invite → reserve → check in →
       finalize → reclaim
+
+| | |
+| :-- | :-- |
+| Event | *"coffee time"* · `CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL` |
+| `create_event` | [`740f54dc…5cfc75`](https://stellar.expert/explorer/testnet/tx/740f54dce873103569473f19520a0392099d7cfe1afc9eb7717890f44d5cfc75) |
+| Check-in opened | [`dfed9632…1d3337`](https://stellar.expert/explorer/testnet/tx/dfed9632e7a48b09413c1eb715d4957a11678c9103a4e93a02440e00d31d3337) |
+| `finalize` | [`d9cd8c8f…7699dd`](https://stellar.expert/explorer/testnet/tx/d9cd8c8f078c3582dc7f0b343a3fcaa64468c71ae9df6db5a7ac5161aa7699dd) |
+| Reserved / checked in | 12 / 11 |
+| Returned to each attendee | **5.10 XLM** against a 5.00 deposit |
+| Forfeited and split | 5.00 XLM among the eleven who showed |
+| Left in the contract | **0** |
+
+It ran remotely, which is the part worth being precise about: there was no room
+and no gathering. Twelve people opened a link in a group chat, installed a wallet
+themselves, funded it from the faucet, locked a real Testnet deposit, and checked
+in from their own phones — unattended, with nobody standing next to them. That is
+the flow [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)
+was built for, and this is the first time it was asked to survive strangers.
+
+**None of the table above was typed by hand.**
+[`web/scripts/collect-evidence.mjs`](web/scripts/collect-evidence.mjs) reads
+every `reserved`, `checked_in`, `phase_changed` and `finalized` event straight
+off the chain and prints it as markdown — `npm run evidence -- <event>` from
+`web/` reproduces this section, and disagrees with it if anyone edits a hash.
 
 ---
 
@@ -440,7 +469,9 @@ shipped ever disappears from the record.
       pass, the whole path from a link to a reservation for someone with no wallet,
       a sorted event list, component tests, and these docs
 - [ ] **Week 4** · one real event with 10+ real attendees, every transaction hash
-      recorded, and a demo video of the full flow
+      recorded, and a demo video of the full flow — the run is done (12 reserved,
+      11 checked in, every hash [recorded](#deliverable-3--one-real-event-10-real-attendees-a-demo-video));
+      the video is the last thing outstanding
 
 ---
 
