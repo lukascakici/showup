@@ -28,8 +28,12 @@ const server = new rpc.Server(RPC_URL);
 const short = (s, head = 8, tail = 6) =>
   s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
 
-const txLink = (hash) => (hash ? `[\`${short(hash)}\`](${EXPLORER}/tx/${hash})` : "—");
-const accountLink = (address) => `[\`${short(address, 6, 6)}\`](${EXPLORER}/account/${address})`;
+// Full values, not abbreviated ones. These tables are the evidence a reviewer
+// checks, and an elided hash cannot be copied, pasted or compared — only clicked,
+// which assumes the link goes where the text claims. The tables come out wide;
+// GitHub scrolls them, and being able to verify beats being able to skim.
+const txLink = (hash) => (hash ? `[\`${hash}\`](${EXPLORER}/tx/${hash})` : "—");
+const accountLink = (address) => `[\`${address}\`](${EXPLORER}/account/${address})`;
 
 const xlm = (stroops) => (Number(stroops) / 1e7).toFixed(2);
 

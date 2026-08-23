@@ -48,12 +48,12 @@ below is a real transaction on Testnet.
 
 | Step | Transaction |
 | :-- | :-- |
-| upload event wasm | [`265deb11…72da35`](https://stellar.expert/explorer/testnet/tx/265deb114c7bed1021e49e6b5784d73ac3f38de0f5ce224b60130345b372da35) |
-| deploy factory v2 | [`ca327ecd…aed99c`](https://stellar.expert/explorer/testnet/tx/ca327ecd5bf18e23a92e2eedbb85c0511ad85ab995c18fe6ec3f3461a2aed99c) |
-| `factory.initialize(admin, event_wasm_hash)` | [`fcecf709…37bbea`](https://stellar.expert/explorer/testnet/tx/fcecf709b6e3cb22343a209e372272a690c69dd975633aad339bfb84a637bbea) |
-| deploy reputation | [`b80ec972…8f336c`](https://stellar.expert/explorer/testnet/tx/b80ec972cf9689fe69f97093ce7ff771c04cf2a7ab0dd0ab55130173708f336c) |
-| `reputation.initialize(admin, factory)` | [`137b0150…1a6fae`](https://stellar.expert/explorer/testnet/tx/137b0150ae7f86afc548e6de53fc0a06183796df149b73cc7571c9f5301a6fae) |
-| `factory.set_reputation(reputation)` | [`79b70065…2645bc`](https://stellar.expert/explorer/testnet/tx/79b70065d3fac0d84dd41f32cd77b2cdab8666a20514e3d74949591c292645bc) |
+| upload event wasm | [`265deb114c7bed1021e49e6b5784d73ac3f38de0f5ce224b60130345b372da35`](https://stellar.expert/explorer/testnet/tx/265deb114c7bed1021e49e6b5784d73ac3f38de0f5ce224b60130345b372da35) |
+| deploy factory v2 | [`ca327ecd5bf18e23a92e2eedbb85c0511ad85ab995c18fe6ec3f3461a2aed99c`](https://stellar.expert/explorer/testnet/tx/ca327ecd5bf18e23a92e2eedbb85c0511ad85ab995c18fe6ec3f3461a2aed99c) |
+| `factory.initialize(admin, event_wasm_hash)` | [`fcecf709b6e3cb22343a209e372272a690c69dd975633aad339bfb84a637bbea`](https://stellar.expert/explorer/testnet/tx/fcecf709b6e3cb22343a209e372272a690c69dd975633aad339bfb84a637bbea) |
+| deploy reputation | [`b80ec972cf9689fe69f97093ce7ff771c04cf2a7ab0dd0ab55130173708f336c`](https://stellar.expert/explorer/testnet/tx/b80ec972cf9689fe69f97093ce7ff771c04cf2a7ab0dd0ab55130173708f336c) |
+| `reputation.initialize(admin, factory)` | [`137b0150ae7f86afc548e6de53fc0a06183796df149b73cc7571c9f5301a6fae`](https://stellar.expert/explorer/testnet/tx/137b0150ae7f86afc548e6de53fc0a06183796df149b73cc7571c9f5301a6fae) |
+| `factory.set_reputation(reputation)` | [`79b70065d3fac0d84dd41f32cd77b2cdab8666a20514e3d74949591c292645bc`](https://stellar.expert/explorer/testnet/tx/79b70065d3fac0d84dd41f32cd77b2cdab8666a20514e3d74949591c292645bc) |
 
 Verified afterwards by reading both contracts back, rather than by assuming the
 calls did what they said:
@@ -73,10 +73,10 @@ the admin setters added on day two.
 
 | Step | Transaction |
 | :-- | :-- |
-| `factory.set_event_wasm_hash` → new event revision | [`84c4088b…ac8aee`](https://stellar.expert/explorer/testnet/tx/84c4088ba46c0ba3632176c123ca3e2008c3634ad0ee4d369695296558ac8aee) |
-| `factory.upgrade` → new factory code | [`4b81178d…1d2115`](https://stellar.expert/explorer/testnet/tx/4b81178d10794af68b9f510490f9414d04c5b9ee04aa9e312a7fb095781d2115) |
-| `reputation.upgrade` → new ledger code | [`a3cc5193…983588`](https://stellar.expert/explorer/testnet/tx/a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588) |
-| extend the D2 event's lease from outside | [`30f4193f…69eb44`](https://stellar.expert/explorer/testnet/tx/30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44) |
+| `factory.set_event_wasm_hash` → new event revision | [`84c4088ba46c0ba3632176c123ca3e2008c3634ad0ee4d369695296558ac8aee`](https://stellar.expert/explorer/testnet/tx/84c4088ba46c0ba3632176c123ca3e2008c3634ad0ee4d369695296558ac8aee) |
+| `factory.upgrade` → new factory code | [`4b81178d10794af68b9f510490f9414d04c5b9ee04aa9e312a7fb095781d2115`](https://stellar.expert/explorer/testnet/tx/4b81178d10794af68b9f510490f9414d04c5b9ee04aa9e312a7fb095781d2115) |
+| `reputation.upgrade` → new ledger code | [`a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588`](https://stellar.expert/explorer/testnet/tx/a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588) |
+| extend the D2 event's lease from outside | [`30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44`](https://stellar.expert/explorer/testnet/tx/30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44) |
 
 Current event wasm hash: `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949`
 
@@ -109,7 +109,7 @@ UTC, informational — the phase machine remains the only authority on what is
 allowed when). The first titled event, created through the upgraded factory:
 
 [`CCWYYTY5…OMST6FL7C`](https://stellar.expert/explorer/testnet/contract/CCWYYTY5XCJY7KFPUWKMP4MELJG3G3FIYW2O3WJSMEIZTDKOMST6FL7C) — *"Perşembe halı saha, Kadıköy"*, created in
-[`fa17c710…592c1a`](https://stellar.expert/explorer/testnet/tx/fa17c71042ca4ce3a2133504c5eb9c0421f953943891378d090b148c18592c1a)
+[`fa17c71042ca4ce3a2133504c5eb9c0421f953943891378d090b148c18592c1a`](https://stellar.expert/explorer/testnet/tx/fa17c71042ca4ce3a2133504c5eb9c0421f953943891378d090b148c18592c1a)
 
 The limit is bytes rather than characters because that is what storage costs.
 "Perşembe halı saha, Kadıköy" is 27 characters and 31 bytes; a form that counted
@@ -134,8 +134,8 @@ CLI — which is the part a screenshot alone cannot prove:
 
 | Action | Ledger | Transaction |
 | :-- | --: | :-- |
-| `create_event` | 4,056,609 | [`ca6c5474…f5104ffe`](https://stellar.expert/explorer/testnet/tx/ca6c547481a3704198f027157acba1bfd4f3b45f14210039daa06c97f5104ffe) |
-| `rsvp` — the row visible in the screenshot | 4,056,613 | [`03d15919…416de3c8`](https://stellar.expert/explorer/testnet/tx/03d159194db4242e884c2b85d00fb4ea7c729e0b4684ec5e7e8ee35a416de3c8) |
+| `create_event` | 4,056,609 | [`ca6c547481a3704198f027157acba1bfd4f3b45f14210039daa06c97f5104ffe`](https://stellar.expert/explorer/testnet/tx/ca6c547481a3704198f027157acba1bfd4f3b45f14210039daa06c97f5104ffe) |
+| `rsvp` — the row visible in the screenshot | 4,056,613 | [`03d159194db4242e884c2b85d00fb4ea7c729e0b4684ec5e7e8ee35a416de3c8`](https://stellar.expert/explorer/testnet/tx/03d159194db4242e884c2b85d00fb4ea7c729e0b4684ec5e7e8ee35a416de3c8) |
 
 Getting this screenshot took two attempts and changed the product, which is worth
 recording rather than tidying away. The first one showed `ledger 4056613` where
@@ -162,10 +162,10 @@ Event contract: [`CA6GPBTW…NO3GW2NQU`](https://stellar.expert/explorer/testnet
 
 | Step | Transaction | What the chain shows |
 | :-- | :-- | :-- |
-| `create_event` | [`5feeec69…946240`](https://stellar.expert/explorer/testnet/tx/5feeec693c7f674e4c41457714ade03904f2846663606f98fac8b8b845946240) | event deployed, fee pool funded, **and `event_registered` published by the reputation ledger in the same transaction** |
-| `rsvp` (showed) | [`64ebd04c…d5fffa`](https://stellar.expert/explorer/testnet/tx/64ebd04cec719183e6fe0a0d594b302f9a97c3ff632dc0891e057fa0c1d5fffa) | 10 XLM locked, `spots_left: 1` |
-| `rsvp` (flaked) | [`6714a855…d5da56`](https://stellar.expert/explorer/testnet/tx/6714a8553fd6760b612d69aa7c59edfd7088d3a867dc5c22000a082db3d5da56) | 10 XLM locked, `spots_left: 0` |
-| `open_checkin` | [`5f84bc62…b428aa`](https://stellar.expert/explorer/testnet/tx/5f84bc626a59da7e37abee0c01526273a9b1947b7311a6279b62a2392fb428aa) | `PhaseChanged { phase: CheckingIn }` |
+| `create_event` | [`5feeec693c7f674e4c41457714ade03904f2846663606f98fac8b8b845946240`](https://stellar.expert/explorer/testnet/tx/5feeec693c7f674e4c41457714ade03904f2846663606f98fac8b8b845946240) | event deployed, fee pool funded, **and `event_registered` published by the reputation ledger in the same transaction** |
+| `rsvp` (showed) | [`64ebd04cec719183e6fe0a0d594b302f9a97c3ff632dc0891e057fa0c1d5fffa`](https://stellar.expert/explorer/testnet/tx/64ebd04cec719183e6fe0a0d594b302f9a97c3ff632dc0891e057fa0c1d5fffa) | 10 XLM locked, `spots_left: 1` |
+| `rsvp` (flaked) | [`6714a8553fd6760b612d69aa7c59edfd7088d3a867dc5c22000a082db3d5da56`](https://stellar.expert/explorer/testnet/tx/6714a8553fd6760b612d69aa7c59edfd7088d3a867dc5c22000a082db3d5da56) | 10 XLM locked, `spots_left: 0` |
+| `open_checkin` | [`5f84bc626a59da7e37abee0c01526273a9b1947b7311a6279b62a2392fb428aa`](https://stellar.expert/explorer/testnet/tx/5f84bc626a59da7e37abee0c01526273a9b1947b7311a6279b62a2392fb428aa) | `PhaseChanged { phase: CheckingIn }` |
 | **`check_in` — the score rises** | [**`c76cd351…fd9357`**](https://stellar.expert/explorer/testnet/tx/c76cd351f2645c2aec78f1e7b9687ada167790fbb9d8151af9a9dae0cefd9357) | 10.1 XLM returned **and** `score_changed { shows: 1, no_shows: 0 }` |
 | **`finalize` — the score falls** | [**`5d394178…7019dc`**](https://stellar.expert/explorer/testnet/tx/5d394178e5a9d58933ffa58b93ed1ce853c39ff3749f307c8b615e638f7019dc) | forfeited 10 XLM to the guest who showed, 0.1 XLM unspent pool back to the organizer, **and `score_changed { shows: 0, no_shows: 1 }`** |
 
@@ -291,10 +291,10 @@ a reviewer can independently check, so a person with no hash does not get a row.
 | --- | --- |
 | Event contract | [`CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL`](https://stellar.expert/explorer/testnet/contract/CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL) |
 | Title | coffee time |
-| Organizer | [`GBQRAW…E2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) |
-| `create_event` tx | [`740f54dc…5cfc75`](https://stellar.expert/explorer/testnet/tx/740f54dce873103569473f19520a0392099d7cfe1afc9eb7717890f44d5cfc75) |
-| → `CheckingIn` tx | [`dfed9632…1d3337`](https://stellar.expert/explorer/testnet/tx/dfed9632e7a48b09413c1eb715d4957a11678c9103a4e93a02440e00d31d3337) |
-| `finalize` tx | [`d9cd8c8f…7699dd`](https://stellar.expert/explorer/testnet/tx/d9cd8c8f078c3582dc7f0b343a3fcaa64468c71ae9df6db5a7ac5161aa7699dd) |
+| Organizer | [`GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) |
+| `create_event` tx | [`740f54dce873103569473f19520a0392099d7cfe1afc9eb7717890f44d5cfc75`](https://stellar.expert/explorer/testnet/tx/740f54dce873103569473f19520a0392099d7cfe1afc9eb7717890f44d5cfc75) |
+| → `CheckingIn` tx | [`dfed9632e7a48b09413c1eb715d4957a11678c9103a4e93a02440e00d31d3337`](https://stellar.expert/explorer/testnet/tx/dfed9632e7a48b09413c1eb715d4957a11678c9103a4e93a02440e00d31d3337) |
+| `finalize` tx | [`d9cd8c8f078c3582dc7f0b343a3fcaa64468c71ae9df6db5a7ac5161aa7699dd`](https://stellar.expert/explorer/testnet/tx/d9cd8c8f078c3582dc7f0b343a3fcaa64468c71ae9df6db5a7ac5161aa7699dd) |
 | Reserved / showed | 12 / 11 |
 | Forfeited and split | 5.00 XLM |
 
@@ -302,18 +302,18 @@ a reviewer can independently check, so a person with no hash does not get a row.
 
 | # | Wallet address | `rsvp` tx | `check_in` tx | Showed |
 | --- | --- | --- | --- | --- |
-| 1 | [`GC5DKL…332MIH`](https://stellar.expert/explorer/testnet/account/GC5DKLTLWPTOQXHDVCCZLKUN54Y5LBNYWQHEESJI76ETCCSKBS332MIH) | [`60c62187…fda259`](https://stellar.expert/explorer/testnet/tx/60c621871d0c2b29746d4b797d627fd81e7690b909fa82a624b4aa8ccdfda259) | — | no |
-| 2 | [`GBAW4G…CUFQXF`](https://stellar.expert/explorer/testnet/account/GBAW4G42254EEXDLUQ5X5GSZ6H7E46PM5AL364H2EVKRMMANDQCUFQXF) | [`bbbcc73b…17f177`](https://stellar.expert/explorer/testnet/tx/bbbcc73bf903cf7c2aa52bcf9d884589d51fcda3e0c1881bbfb31df13217f177) | [`7e0f0c95…7b5361`](https://stellar.expert/explorer/testnet/tx/7e0f0c95e935f217571b7ec28fc4329f137ee59774fd2609b396e05b727b5361) | yes |
-| 3 | [`GBBHPJ…FCIDTL`](https://stellar.expert/explorer/testnet/account/GBBHPJYHGFN5UEFQCSQBS6J5FAL2UG4RAKJY545ESHSGBKMIKMFCIDTL) | [`da1361f4…54c7c5`](https://stellar.expert/explorer/testnet/tx/da1361f4b538dad0a67a3c2574fa107169477f97a009b8fb9953c8667054c7c5) | [`ac9589f7…77005e`](https://stellar.expert/explorer/testnet/tx/ac9589f73780fe5e59f094e4204f187434c4c333d675d00c4632812e5c77005e) | yes |
-| 4 | [`GAESJS…HVURD7`](https://stellar.expert/explorer/testnet/account/GAESJSOUVOV4CIRKCWU6PXWILLO2VQN5RMFWHQVDISVUMWSBHHHVURD7) | [`18938881…517266`](https://stellar.expert/explorer/testnet/tx/189388810f91c661927daa2a5f7696bc5604fab1df7541dc581422a2ed517266) | [`21bd8dbc…2c4769`](https://stellar.expert/explorer/testnet/tx/21bd8dbcf0a6e5d97bdcc3391e66ded2d87fa06f5cf4c664fb50dd059f2c4769) | yes |
-| 5 | [`GBTM4B…YDVVWQ`](https://stellar.expert/explorer/testnet/account/GBTM4BY6ABARXTZSVED6NZEHCFFHHNAO64WGTBIUPXAUIMRHBUYDVVWQ) | [`d8a161ab…079a5f`](https://stellar.expert/explorer/testnet/tx/d8a161ab9a841bfc1fa924b99d3f23f04c68f519083cc7e7dbc50947dc079a5f) | [`01524039…9925cd`](https://stellar.expert/explorer/testnet/tx/0152403930698e09ee69152b8761c958d29376e620e5dabc0d0995cc419925cd) | yes |
-| 6 | [`GBQRAW…E2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) | [`0479f8b0…720a2e`](https://stellar.expert/explorer/testnet/tx/0479f8b0e60177a9a4135d0ef6af6d9fbcbec8145f349f3784f36c37e3720a2e) | [`e91eb97f…83b45a`](https://stellar.expert/explorer/testnet/tx/e91eb97fda09eac349c0cb0c656b3673f61d419807cc89bcdf7571611783b45a) | yes |
-| 7 | [`GBZTYV…ZEJP6Z`](https://stellar.expert/explorer/testnet/account/GBZTYVPNXDCDWXVOT6Y36TTC7DRQGSKCZF25OXVZYBGRONTJDPZEJP6Z) | [`c2beefc7…1f43bf`](https://stellar.expert/explorer/testnet/tx/c2beefc749d926d88041cb2ea5af09616c11c8f7dce27972f57cce3e591f43bf) | [`24e4ba5e…f24eaf`](https://stellar.expert/explorer/testnet/tx/24e4ba5e6f6bb646c3425733721ba0265c6c826efa3748e6a8921f0b7bf24eaf) | yes |
-| 8 | [`GBCCJX…N7HESQ`](https://stellar.expert/explorer/testnet/account/GBCCJXEN2ZAAKAW4MOO4GJI7FMTISSYI3ZMS2QC5FGUA4WKYWHN7HESQ) | [`5ea3cc39…360a31`](https://stellar.expert/explorer/testnet/tx/5ea3cc39455eea3a1a51909539b545def4f08988b821412f9ea1c2bd90360a31) | [`c0d11d90…d45bc7`](https://stellar.expert/explorer/testnet/tx/c0d11d906c88cb34b92a5cedc8d3a64832bd356401e683a1a73f9c6687d45bc7) | yes |
-| 9 | [`GBMQXT…LKRY2H`](https://stellar.expert/explorer/testnet/account/GBMQXTV2SJTKDFI2SHEZS35JBUFS2V5L4T7YJTR2ASGOS65LEGLKRY2H) | [`8614f36a…d9398c`](https://stellar.expert/explorer/testnet/tx/8614f36acbab7da76bb5c84177fe711efa20982a4887c67cbcb1bbe770d9398c) | [`0077a182…d3a643`](https://stellar.expert/explorer/testnet/tx/0077a18260bacaedd4c20834a7f57211dd33f4ef71231403880840f4d7d3a643) | yes |
-| 10 | [`GCFCDF…FTWDUW`](https://stellar.expert/explorer/testnet/account/GCFCDFPTUGCHH4VQO3DQ3BQVBTCUA7W3U7NYPAYWMSH3GXWF46FTWDUW) | [`e038765e…defb9a`](https://stellar.expert/explorer/testnet/tx/e038765e2d8c929279ceefcfeff5d5eee559950d563baab602893c8cbcdefb9a) | [`c10cd448…3d12f9`](https://stellar.expert/explorer/testnet/tx/c10cd44896ae26d7df330b0e7a565f0636b5dd28866058e895e705ff393d12f9) | yes |
-| 11 | [`GCAZMR…A6IFNO`](https://stellar.expert/explorer/testnet/account/GCAZMRVBGJUQ6O7MO22LLVOIPKRH2GM4G4JOJUXXRNR4PPCLF2A6IFNO) | [`38b74e91…9a1ad7`](https://stellar.expert/explorer/testnet/tx/38b74e916f7f9db6be696132b32426d079b1b32a4e19b5ef4ae2e2b3329a1ad7) | [`3ecf832a…b66417`](https://stellar.expert/explorer/testnet/tx/3ecf832a29e62abcfa5746c5458c3d66fbcb680ba07b2d13b8a5e84b84b66417) | yes |
-| 12 | [`GAPUTD…KX7FMO`](https://stellar.expert/explorer/testnet/account/GAPUTDS2QTBWFP3XVTZSSXL22RZFUTHLZPISJIHSQM6SGVNFDCKX7FMO) | [`8aa3803d…2851ab`](https://stellar.expert/explorer/testnet/tx/8aa3803d449c55c2cf5b1af679ef1155c5ebbef5b62e20f5f42ae4e0f12851ab) | [`55c52b4e…c17758`](https://stellar.expert/explorer/testnet/tx/55c52b4e6566f6f30258281d1581580a75c68a1f997f7fb6939e4541e4c17758) | yes |
+| 1 | [`GC5DKLTLWPTOQXHDVCCZLKUN54Y5LBNYWQHEESJI76ETCCSKBS332MIH`](https://stellar.expert/explorer/testnet/account/GC5DKLTLWPTOQXHDVCCZLKUN54Y5LBNYWQHEESJI76ETCCSKBS332MIH) | [`60c621871d0c2b29746d4b797d627fd81e7690b909fa82a624b4aa8ccdfda259`](https://stellar.expert/explorer/testnet/tx/60c621871d0c2b29746d4b797d627fd81e7690b909fa82a624b4aa8ccdfda259) | — | no |
+| 2 | [`GBAW4G42254EEXDLUQ5X5GSZ6H7E46PM5AL364H2EVKRMMANDQCUFQXF`](https://stellar.expert/explorer/testnet/account/GBAW4G42254EEXDLUQ5X5GSZ6H7E46PM5AL364H2EVKRMMANDQCUFQXF) | [`bbbcc73bf903cf7c2aa52bcf9d884589d51fcda3e0c1881bbfb31df13217f177`](https://stellar.expert/explorer/testnet/tx/bbbcc73bf903cf7c2aa52bcf9d884589d51fcda3e0c1881bbfb31df13217f177) | [`7e0f0c95e935f217571b7ec28fc4329f137ee59774fd2609b396e05b727b5361`](https://stellar.expert/explorer/testnet/tx/7e0f0c95e935f217571b7ec28fc4329f137ee59774fd2609b396e05b727b5361) | yes |
+| 3 | [`GBBHPJYHGFN5UEFQCSQBS6J5FAL2UG4RAKJY545ESHSGBKMIKMFCIDTL`](https://stellar.expert/explorer/testnet/account/GBBHPJYHGFN5UEFQCSQBS6J5FAL2UG4RAKJY545ESHSGBKMIKMFCIDTL) | [`da1361f4b538dad0a67a3c2574fa107169477f97a009b8fb9953c8667054c7c5`](https://stellar.expert/explorer/testnet/tx/da1361f4b538dad0a67a3c2574fa107169477f97a009b8fb9953c8667054c7c5) | [`ac9589f73780fe5e59f094e4204f187434c4c333d675d00c4632812e5c77005e`](https://stellar.expert/explorer/testnet/tx/ac9589f73780fe5e59f094e4204f187434c4c333d675d00c4632812e5c77005e) | yes |
+| 4 | [`GAESJSOUVOV4CIRKCWU6PXWILLO2VQN5RMFWHQVDISVUMWSBHHHVURD7`](https://stellar.expert/explorer/testnet/account/GAESJSOUVOV4CIRKCWU6PXWILLO2VQN5RMFWHQVDISVUMWSBHHHVURD7) | [`189388810f91c661927daa2a5f7696bc5604fab1df7541dc581422a2ed517266`](https://stellar.expert/explorer/testnet/tx/189388810f91c661927daa2a5f7696bc5604fab1df7541dc581422a2ed517266) | [`21bd8dbcf0a6e5d97bdcc3391e66ded2d87fa06f5cf4c664fb50dd059f2c4769`](https://stellar.expert/explorer/testnet/tx/21bd8dbcf0a6e5d97bdcc3391e66ded2d87fa06f5cf4c664fb50dd059f2c4769) | yes |
+| 5 | [`GBTM4BY6ABARXTZSVED6NZEHCFFHHNAO64WGTBIUPXAUIMRHBUYDVVWQ`](https://stellar.expert/explorer/testnet/account/GBTM4BY6ABARXTZSVED6NZEHCFFHHNAO64WGTBIUPXAUIMRHBUYDVVWQ) | [`d8a161ab9a841bfc1fa924b99d3f23f04c68f519083cc7e7dbc50947dc079a5f`](https://stellar.expert/explorer/testnet/tx/d8a161ab9a841bfc1fa924b99d3f23f04c68f519083cc7e7dbc50947dc079a5f) | [`0152403930698e09ee69152b8761c958d29376e620e5dabc0d0995cc419925cd`](https://stellar.expert/explorer/testnet/tx/0152403930698e09ee69152b8761c958d29376e620e5dabc0d0995cc419925cd) | yes |
+| 6 | [`GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) | [`0479f8b0e60177a9a4135d0ef6af6d9fbcbec8145f349f3784f36c37e3720a2e`](https://stellar.expert/explorer/testnet/tx/0479f8b0e60177a9a4135d0ef6af6d9fbcbec8145f349f3784f36c37e3720a2e) | [`e91eb97fda09eac349c0cb0c656b3673f61d419807cc89bcdf7571611783b45a`](https://stellar.expert/explorer/testnet/tx/e91eb97fda09eac349c0cb0c656b3673f61d419807cc89bcdf7571611783b45a) | yes |
+| 7 | [`GBZTYVPNXDCDWXVOT6Y36TTC7DRQGSKCZF25OXVZYBGRONTJDPZEJP6Z`](https://stellar.expert/explorer/testnet/account/GBZTYVPNXDCDWXVOT6Y36TTC7DRQGSKCZF25OXVZYBGRONTJDPZEJP6Z) | [`c2beefc749d926d88041cb2ea5af09616c11c8f7dce27972f57cce3e591f43bf`](https://stellar.expert/explorer/testnet/tx/c2beefc749d926d88041cb2ea5af09616c11c8f7dce27972f57cce3e591f43bf) | [`24e4ba5e6f6bb646c3425733721ba0265c6c826efa3748e6a8921f0b7bf24eaf`](https://stellar.expert/explorer/testnet/tx/24e4ba5e6f6bb646c3425733721ba0265c6c826efa3748e6a8921f0b7bf24eaf) | yes |
+| 8 | [`GBCCJXEN2ZAAKAW4MOO4GJI7FMTISSYI3ZMS2QC5FGUA4WKYWHN7HESQ`](https://stellar.expert/explorer/testnet/account/GBCCJXEN2ZAAKAW4MOO4GJI7FMTISSYI3ZMS2QC5FGUA4WKYWHN7HESQ) | [`5ea3cc39455eea3a1a51909539b545def4f08988b821412f9ea1c2bd90360a31`](https://stellar.expert/explorer/testnet/tx/5ea3cc39455eea3a1a51909539b545def4f08988b821412f9ea1c2bd90360a31) | [`c0d11d906c88cb34b92a5cedc8d3a64832bd356401e683a1a73f9c6687d45bc7`](https://stellar.expert/explorer/testnet/tx/c0d11d906c88cb34b92a5cedc8d3a64832bd356401e683a1a73f9c6687d45bc7) | yes |
+| 9 | [`GBMQXTV2SJTKDFI2SHEZS35JBUFS2V5L4T7YJTR2ASGOS65LEGLKRY2H`](https://stellar.expert/explorer/testnet/account/GBMQXTV2SJTKDFI2SHEZS35JBUFS2V5L4T7YJTR2ASGOS65LEGLKRY2H) | [`8614f36acbab7da76bb5c84177fe711efa20982a4887c67cbcb1bbe770d9398c`](https://stellar.expert/explorer/testnet/tx/8614f36acbab7da76bb5c84177fe711efa20982a4887c67cbcb1bbe770d9398c) | [`0077a18260bacaedd4c20834a7f57211dd33f4ef71231403880840f4d7d3a643`](https://stellar.expert/explorer/testnet/tx/0077a18260bacaedd4c20834a7f57211dd33f4ef71231403880840f4d7d3a643) | yes |
+| 10 | [`GCFCDFPTUGCHH4VQO3DQ3BQVBTCUA7W3U7NYPAYWMSH3GXWF46FTWDUW`](https://stellar.expert/explorer/testnet/account/GCFCDFPTUGCHH4VQO3DQ3BQVBTCUA7W3U7NYPAYWMSH3GXWF46FTWDUW) | [`e038765e2d8c929279ceefcfeff5d5eee559950d563baab602893c8cbcdefb9a`](https://stellar.expert/explorer/testnet/tx/e038765e2d8c929279ceefcfeff5d5eee559950d563baab602893c8cbcdefb9a) | [`c10cd44896ae26d7df330b0e7a565f0636b5dd28866058e895e705ff393d12f9`](https://stellar.expert/explorer/testnet/tx/c10cd44896ae26d7df330b0e7a565f0636b5dd28866058e895e705ff393d12f9) | yes |
+| 11 | [`GCAZMRVBGJUQ6O7MO22LLVOIPKRH2GM4G4JOJUXXRNR4PPCLF2A6IFNO`](https://stellar.expert/explorer/testnet/account/GCAZMRVBGJUQ6O7MO22LLVOIPKRH2GM4G4JOJUXXRNR4PPCLF2A6IFNO) | [`38b74e916f7f9db6be696132b32426d079b1b32a4e19b5ef4ae2e2b3329a1ad7`](https://stellar.expert/explorer/testnet/tx/38b74e916f7f9db6be696132b32426d079b1b32a4e19b5ef4ae2e2b3329a1ad7) | [`3ecf832a29e62abcfa5746c5458c3d66fbcb680ba07b2d13b8a5e84b84b66417`](https://stellar.expert/explorer/testnet/tx/3ecf832a29e62abcfa5746c5458c3d66fbcb680ba07b2d13b8a5e84b84b66417) | yes |
+| 12 | [`GAPUTDS2QTBWFP3XVTZSSXL22RZFUTHLZPISJIHSQM6SGVNFDCKX7FMO`](https://stellar.expert/explorer/testnet/account/GAPUTDS2QTBWFP3XVTZSSXL22RZFUTHLZPISJIHSQM6SGVNFDCKX7FMO) | [`8aa3803d449c55c2cf5b1af679ef1155c5ebbef5b62e20f5f42ae4e0f12851ab`](https://stellar.expert/explorer/testnet/tx/8aa3803d449c55c2cf5b1af679ef1155c5ebbef5b62e20f5f42ae4e0f12851ab) | [`55c52b4e6566f6f30258281d1581580a75c68a1f997f7fb6939e4541e4c17758`](https://stellar.expert/explorer/testnet/tx/55c52b4e6566f6f30258281d1581580a75c68a1f997f7fb6939e4541e4c17758) | yes |
 
 ### What the money did
 
