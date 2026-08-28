@@ -15,7 +15,7 @@ can be copied and checked, not just clicked.
 | Deposit / returned on check-in | 5.00 XLM / **5.10 XLM** |
 | The no-show's 5.00 XLM | split among the eleven who showed |
 | Left in the contract | **0** |
-| Demo video | *coming* |
+| Demo video | **[youtu.be/QaT61imDXkk](https://youtu.be/QaT61imDXkk)** |
 
 ## The event
 

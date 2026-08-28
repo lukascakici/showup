@@ -8,7 +8,9 @@ start 30.07.2026, Stellar Türkiye chapter). One page each, written against
 | :-- | :-- | :-- | :-- |
 | 1 | Deployed multi-wallet dApp, with CI | [deliverable-1.md](deliverable-1.md) | complete |
 | 2 | On-chain `reputation` contract | [deliverable-2.md](deliverable-2.md) | complete |
-| 3 | One real event, 10+ attendees, demo video | [deliverable-3.md](deliverable-3.md) | run complete · video coming |
+| 3 | One real event, 10+ attendees, demo video | [deliverable-3.md](deliverable-3.md) | complete |
 
-Live app: **[showup.click](https://showup.click)**. The full technical record is
-in the [README](../../README.md) and [deployments.md](../deployments.md).
+Live app: **[showup.click](https://showup.click)**. Demo video:
+**[youtu.be/QaT61imDXkk](https://youtu.be/QaT61imDXkk)** — the whole flow, create
+to reclaim. The full technical record is in the [README](../../README.md) and
+[deployments.md](../deployments.md).

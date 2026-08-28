@@ -13,7 +13,7 @@ a "skin in the game" layer that a group chat can never enforce.
 [![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
 
 - **Live demo:** **[showup.click](https://showup.click)**
-- **Demo video:** _coming with the real event run_
+- **Demo video:** **[the full flow, start to finish](https://youtu.be/QaT61imDXkk)**
 
 <p align="center">
   <img src="docs/screenshots/home.png" alt="Showup landing page" width="720" />
@@ -27,7 +27,7 @@ disappears from it.
 | :-- | :-- | :-- |
 | **[1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)** | A deployed multi-wallet dApp, with CI on every push | shipped |
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
-| **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | run complete · video pending |
+| **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | shipped |
 
 Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** has one short page per
 deliverable, written against SOW §6.1 and readable without a technical
@@ -298,9 +298,9 @@ live chain are all in **[docs/deployments.md](docs/deployments.md)**.
 
 ## Deliverable 3 — one real event, 10+ real attendees, a demo video
 
-**The run is done; the video is not.** Real people, invited through the live
-site, reserving real Testnet deposits from their own wallets and checking in on
-their own phones.
+**A real run, and a video of the whole thing.** Real people, invited through the
+live site, reserving real Testnet deposits from their own wallets and checking in
+on their own phones.
 
 Everything in Deliverable 1's "getting a stranger from a link to a reservation"
 exists for this: each person who gave up would have been a missing row in the
@@ -320,8 +320,9 @@ makes the forfeit split and the reputation ledger visible rather than theoretica
       in [docs/deployments.md](docs/deployments.md#deliverable-3-evidence--one-real-run-12-wallets-11-check-ins)
 - [x] **The finalised event's contract address**, openable on Stellar Expert —
       [`CAOK5LME…EWMUTLJL`](https://stellar.expert/explorer/testnet/contract/CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL)
-- [ ] **A demo video** of the full flow: create → invite → reserve → check in →
-      finalize → reclaim
+- [x] **A demo video** of the full flow: create → invite → reserve → check in →
+      finalize → reclaim — **[watch it](https://youtu.be/QaT61imDXkk)**, filmed on
+      the live site with a guest who had no wallet installed
 
 | | |
 | :-- | :-- |
@@ -472,10 +473,10 @@ shipped ever disappears from the record.
       links and QR codes, honest loading/empty/error states, a measured mobile
       pass, the whole path from a link to a reservation for someone with no wallet,
       a sorted event list, component tests, and these docs
-- [ ] **Week 4** · one real event with 10+ real attendees, every transaction hash
-      recorded, and a demo video of the full flow — the run is done (12 reserved,
-      11 checked in, every hash [recorded](#deliverable-3--one-real-event-10-real-attendees-a-demo-video));
-      the video is the last thing outstanding
+- [x] **Week 4** · one real event with 10+ real attendees, every transaction hash
+      recorded, and a demo video of the full flow — 12 reserved, 11 checked in,
+      every hash [recorded](#deliverable-3--one-real-event-10-real-attendees-a-demo-video),
+      and the flow [on video](https://youtu.be/QaT61imDXkk)
 
 ---
 
