@@ -27,6 +27,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The activity archive: the contract's own events, copied here while Soroban
+    // RPC still had them. Rules do not cascade into subcollections, so without
+    // this the catch-all below would deny the read and every archived feed would
+    // come back empty.
+    //
+    // Same policy, for the same reason: every row was published on a public
+    // ledger, and the only thing that writes them is the sync route. Note what
+    // is *not* here — the check-in secret is not a contract event and must never
+    // become one, so there is nothing in this collection that a reader holding
+    // it could use to check in without turning up.
+    match /events/{eventId}/activity/{activityId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Anything not named above is denied outright, so a new collection cannot
     // be created by a client and quietly become writable.
     match /{document=**} {

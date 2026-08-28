@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { fetchActivity, listEventIds, loadEvent, type EventState } from "./chain";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  fetchActivity,
+  listEventIds,
+  loadEvent,
+  type Activity,
+  type ActivityFeedResult,
+  type EventState,
+} from "./chain";
 import { readIndexedEvents, toEventState } from "./event-index";
+import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
 
 /**
  * The React side of reading events: polling hooks, and nothing else.
@@ -12,6 +20,7 @@ import { readIndexedEvents, toEventState } from "./event-index";
  * Re-exported here so every existing call site keeps importing from one place.
  */
 export {
+  activityId,
   attendanceOf,
   fetchActivity,
   forfeitPool,
@@ -162,7 +171,55 @@ export function useEvent(id: string, intervalMs = 5_000) {
   return usePolled(load, intervalMs);
 }
 
+/**
+ * The feed: the last day off the chain, on top of everything ever archived.
+ *
+ * The two are fetched on completely different rhythms because they change on
+ * completely different rhythms. The chain feed is polled, since a reservation
+ * made ten seconds ago has to appear; the archive is read once per event, since
+ * a row can only enter it after `/api/events/sync` has copied it — by which
+ * point the live feed already has it anyway.
+ *
+ * Everything the archive adds is therefore *older* than everything the poll
+ * returns, which is the whole point: this is how an event from three months ago
+ * still shows the twelve reservations and eleven check-ins that a reviewer is
+ * being asked to go and verify, long after Soroban RPC dropped the ledgers.
+ */
 export function useActivity(id: string, intervalMs = 5_000) {
   const load = useCallback(() => fetchActivity(id), [id]);
-  return usePolled(load, intervalMs);
+  const live = usePolled(load, intervalMs);
+
+  // Stamped with the event it was read for, rather than cleared when `id`
+  // changes: clearing means a setState in the effect body, and one event's
+  // history appearing under another's is exactly what that clear was guarding
+  // against. Carrying the id makes the guard a comparison instead.
+  const [archived, setArchived] = useState<{ id: string; rows: Activity[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    readArchivedActivity(id)
+      .then((rows) => {
+        if (!cancelled) setArchived({ id, rows });
+      })
+      // Silent: the archive is an accelerator. Failing to read it leaves the
+      // feed exactly as it was before the archive existed, which is a working
+      // feed, and there is nothing the reader could do about it anyway.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const data = useMemo<ActivityFeedResult>(() => {
+    const rows = archived?.id === id ? archived.rows : [];
+    const activity = mergeActivity(live.data?.activity ?? [], rows);
+    return {
+      activity,
+      // A feed holding the event's own creation has nothing missing below it,
+      // whatever the live sweep managed to reach.
+      truncated: (live.data?.truncated ?? false) && !reachesCreation(activity),
+    };
+  }, [live.data, archived, id]);
+
+  return { ...live, data };
 }

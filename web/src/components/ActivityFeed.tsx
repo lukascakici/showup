@@ -1,10 +1,10 @@
 "use client";
 
-import { CheckCircle2, DoorOpen, ExternalLink, Flag, Lock } from "lucide-react";
-import type { Activity } from "@/lib/events";
+import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Lock } from "lucide-react";
+import { activityId, type Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
-import { shortAddr, shortHash } from "@/lib/format";
+import { formatMoment, shortAddr, shortHash } from "@/lib/format";
 import { Button, Card, Skeleton } from "./ui";
 
 /**
@@ -60,7 +60,7 @@ export function ActivityFeed({
       ) : (
         <ul className="mt-4 flex flex-col divide-y divide-border">
           {activity.map((a) => (
-            <li key={`${a.txHash}-${a.kind}`} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+            <li key={activityId(a)} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
               <Icon kind={a.kind} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-foreground">{describe(a)}</p>
@@ -70,16 +70,22 @@ export function ActivityFeed({
                     them looking through a whole ledger for which transaction
                     was theirs. `title` carries the full 64 characters for
                     copying; the link carries them for opening. */}
-                <a
-                  href={EXPLORER_TX(a.txHash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={a.txHash}
-                  className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted transition-colors hover:text-accent"
-                >
-                  {shortHash(a.txHash)}
-                  <ExternalLink className="size-3" />
-                </a>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <a
+                    href={EXPLORER_TX(a.txHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={a.txHash}
+                    className="inline-flex items-center gap-1 font-mono text-xs text-muted transition-colors hover:text-accent"
+                  >
+                    {shortHash(a.txHash)}
+                    <ExternalLink className="size-3" />
+                  </a>
+                  {/* Rows outlive the day they happened on now that the archive
+                      keeps them, and an undated one reads as though it just
+                      happened. */}
+                  {!!a.at && <span className="text-xs text-muted-2">{formatMoment(a.at)}</span>}
+                </div>
               </div>
             </li>
           ))}
@@ -107,6 +113,7 @@ export function ActivityFeed({
 
 function Icon({ kind }: { kind: Activity["kind"] }) {
   const className = "mt-0.5 size-4 shrink-0";
+  if (kind === "created") return <CalendarPlus className={`${className} text-muted`} />;
   if (kind === "reserved") return <Lock className={`${className} text-muted`} />;
   if (kind === "checked_in") return <CheckCircle2 className={`${className} text-accent`} />;
   if (kind === "phase_changed") return <DoorOpen className={`${className} text-muted`} />;
@@ -114,6 +121,11 @@ function Icon({ kind }: { kind: Activity["kind"] }) {
 }
 
 function describe(a: Activity): string {
+  // The factory's own event, and the only row that is not the event contract
+  // talking about itself. It is the bottom of any complete feed.
+  if (a.kind === "created") {
+    return `${shortAddr(a.organizer)} created this event`;
+  }
   if (a.kind === "phase_changed") {
     return a.phase === "CheckingIn"
       ? "Check-in opened — reservations are closed"

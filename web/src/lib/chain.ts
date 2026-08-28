@@ -111,18 +111,42 @@ export function forfeitPool(e: EventState): bigint {
   return e.deposit * noShows;
 }
 
-export type Activity =
-  | { kind: "phase_changed"; phase: Phase["tag"]; ledger: number; txHash: string }
-  | { kind: "reserved"; guest: string; spotsLeft: number; ledger: number; txHash: string }
-  | { kind: "checked_in"; guest: string; refunded: bigint; ledger: number; txHash: string }
-  | {
-      kind: "finalized";
-      showed: number;
-      noShows: number;
-      forfeited: bigint;
-      ledger: number;
-      txHash: string;
-    };
+/**
+ * Where and when something happened, carried by every row in the feed.
+ *
+ * `at` is the ledger's close time rather than anything this process observed.
+ * The feed used to be read seconds after the fact, so "now" was close enough to
+ * the truth to leave out; an archived feed is read months later, and a history
+ * that cannot say when is not a history.
+ */
+type Occurred = {
+  ledger: number;
+  txHash: string;
+  /** ms since epoch, from the ledger's close time. */
+  at: number;
+};
+
+export type Activity = Occurred &
+  (
+    | { kind: "created"; organizer: string; title: string }
+    | { kind: "phase_changed"; phase: Phase["tag"] }
+    | { kind: "reserved"; guest: string; spotsLeft: number }
+    | { kind: "checked_in"; guest: string; refunded: bigint }
+    | { kind: "finalized"; showed: number; noShows: number; forfeited: bigint }
+  );
+
+/**
+ * Identity of a row, stable across every source it can arrive from.
+ *
+ * One transaction publishes at most one event of a given kind — `finalize`
+ * emits `finalized` and `phase_changed` together, and they are two rows — so
+ * the pair is unique. It is the React key, the Firestore document id and the
+ * dedupe key when the live feed and the archive overlap, deliberately: three
+ * places that must agree on when two rows are the same row.
+ */
+export function activityId(a: Pick<Activity, "kind" | "txHash">): string {
+  return `${a.txHash}-${a.kind}`;
+}
 
 /** A getEvents cursor is "<toid>-<index>"; the ledger is the toid's high bits. */
 function cursorLedger(cursor: string): number {
@@ -135,19 +159,6 @@ function cursorLedger(cursor: string): number {
 }
 
 /**
- * Read the contract's own events off the ledger.
- *
- * getEvents scans a bounded slice of ledgers per call — roughly 10k, regardless
- * of `limit` — and hands back a cursor to continue from. A single call starting
- * a day back therefore returns *zero* events and no error, because the slice it
- * scanned ends long before anything happened. So page forward until the scan
- * reaches the present.
- *
- * The lookback is also bounded: Soroban RPC only retains recent history (see
- * getHealth's oldestLedger), so this feed is recent activity, not the whole
- * story. Contract state is what the UI trusts for who's reserved and who showed.
- */
-/**
  * Activity, plus whether this is all of it.
  *
  * `truncated` is the honest half. Paging stops early on a failed request or on
@@ -157,18 +168,28 @@ function cursorLedger(cursor: string): number {
  */
 export type ActivityFeedResult = { activity: Activity[]; truncated: boolean };
 
-export async function fetchActivity(
-  contractId: string,
-  lookback = 17_280, // ~24h at ~5s/ledger
-  maxPages = 6,
-): Promise<ActivityFeedResult> {
-  const filters = [{ type: "contract" as const, contractIds: [contractId] }];
-  const [latest, health] = await Promise.all([server.getLatestLedger(), server.getHealth()]);
-  const startLedger = Math.max(health.oldestLedger, latest.sequence - lookback, 1);
+/**
+ * Page `getEvents` forward from a ledger until the scan catches the head.
+ *
+ * getEvents scans a bounded slice of ledgers per call — roughly 10k, regardless
+ * of `limit` — and hands back a cursor to continue from. A single call starting
+ * a day back therefore returns *zero* events and no error, because the slice it
+ * scanned ends long before anything happened. An empty page is not the end of
+ * the results; only a cursor that has caught up with the head is.
+ */
+async function sweep(
+  contractIds: string[],
+  startLedger: number,
+  maxPages: number,
+  deadline = Infinity,
+): Promise<{ raw: rpc.Api.EventResponse[]; truncated: boolean; sweptTo: number }> {
+  const filters = [{ type: "contract" as const, contractIds }];
+  const latest = await server.getLatestLedger();
 
   const raw: rpc.Api.EventResponse[] = [];
   let cursor: string | undefined;
   let truncated = false;
+  let sweptTo = startLedger;
 
   for (let page = 0; page < maxPages; page++) {
     let res: rpc.Api.GetEventsResponse;
@@ -183,42 +204,67 @@ export async function fetchActivity(
       break;
     }
     raw.push(...res.events);
-    if (!res.cursor) break;
+    if (!res.cursor) {
+      sweptTo = latest.sequence;
+      break;
+    }
     cursor = res.cursor;
-    if (cursorLedger(res.cursor) >= latest.sequence) break;
-    // Ran out of pages before reaching the present: there is more up there.
-    if (page === maxPages - 1) truncated = true;
+    sweptTo = cursorLedger(res.cursor);
+    if (sweptTo >= latest.sequence) break;
+    // Ran out of pages, or out of time, before reaching the present: there is
+    // more up there. `sweptTo` says exactly where to resume.
+    if (page === maxPages - 1 || Date.now() > deadline) {
+      truncated = true;
+      break;
+    }
   }
 
+  return { raw, truncated, sweptTo };
+}
+
+/**
+ * Turn raw contract events into feed rows, newest last.
+ *
+ * `eventId` is what makes the factory's `event_created` belong here: the sweep
+ * that wants it has to ask the factory, which answers for every event it has
+ * ever deployed, so the one row about *this* event is picked out by hand.
+ */
+function decodeActivity(raw: rpc.Api.EventResponse[], eventId: string): Activity[] {
   const out: Activity[] = [];
+
   for (const e of raw) {
     const topic = e.topic.map((t) => scValToNative(t));
     const name = String(topic[0] ?? "");
     const data = scValToNative(e.value) as Record<string, unknown>;
-    const ledger = e.ledger;
-    const txHash = e.txHash;
+    const where = { ledger: e.ledger, txHash: e.txHash, at: Date.parse(e.ledgerClosedAt) || 0 };
 
-    if (name === "phase_changed") {
+    if (name === "event_created") {
+      if (String(data.event) !== eventId) continue;
+      out.push({
+        kind: "created",
+        organizer: String(data.organizer),
+        title: String(data.title ?? ""),
+        ...where,
+      });
+    } else if (name === "phase_changed") {
       // A unit enum variant comes back as a single-element array, e.g.
       // { phase: ["CheckingIn"] } — not a bare string and not { tag }.
       const raw = data.phase;
       const tag = Array.isArray(raw) ? String(raw[0]) : String(raw);
-      out.push({ kind: "phase_changed", phase: tag as Phase["tag"], ledger, txHash });
+      out.push({ kind: "phase_changed", phase: tag as Phase["tag"], ...where });
     } else if (name === "reserved") {
       out.push({
         kind: "reserved",
         guest: String(data.guest),
         spotsLeft: Number(data.spots_left ?? 0),
-        ledger,
-        txHash,
+        ...where,
       });
     } else if (name === "checked_in") {
       out.push({
         kind: "checked_in",
         guest: String(data.guest),
         refunded: BigInt(String(data.refunded ?? 0)),
-        ledger,
-        txHash,
+        ...where,
       });
     } else if (name === "finalized") {
       out.push({
@@ -226,10 +272,64 @@ export async function fetchActivity(
         showed: Number(data.showed ?? 0),
         noShows: Number(data.no_shows ?? 0),
         forfeited: BigInt(String(data.forfeited ?? 0)),
-        ledger,
-        txHash,
+        ...where,
       });
     }
   }
-  return { activity: out.reverse(), truncated };
+
+  return out;
+}
+
+/**
+ * The live feed: what this contract has done lately.
+ *
+ * Bounded on purpose, twice over. Soroban RPC only retains recent history (see
+ * getHealth's oldestLedger), and this only looks a day into it, because it runs
+ * on a five-second poll in a browser. Everything older comes out of the archive
+ * (`activity-archive.ts`), which is written from the sweep below.
+ */
+export async function fetchActivity(
+  contractId: string,
+  lookback = 17_280, // ~24h at ~5s/ledger
+  maxPages = 6,
+): Promise<ActivityFeedResult> {
+  const [latest, health] = await Promise.all([server.getLatestLedger(), server.getHealth()]);
+  const startLedger = Math.max(health.oldestLedger, latest.sequence - lookback, 1);
+
+  const { raw, truncated } = await sweep([contractId], startLedger, maxPages);
+  return { activity: decodeActivity(raw, contractId).reverse(), truncated };
+}
+
+/**
+ * Everything the RPC still holds about one event, for archiving.
+ *
+ * The counterpart to `fetchActivity`, and the reason the archive can be written
+ * at all: it reaches back to the oldest ledger the node has rather than a day,
+ * and it asks the factory as well as the event, so a first sweep picks up the
+ * `event_created` that proves the archive starts at the beginning.
+ *
+ * Deliberately not called from the browser. It is minutes of RPC paging in the
+ * worst case, which is fine on a server once and unacceptable on a poll.
+ */
+export async function sweepEventActivity(
+  eventId: string,
+  factoryId: string,
+  {
+    from,
+    maxPages = 24,
+    deadline = Infinity,
+  }: { from?: number; maxPages?: number; deadline?: number } = {},
+): Promise<{ activity: Activity[]; truncated: boolean; sweptFrom: number; sweptTo: number }> {
+  const health = await server.getHealth();
+  // The retained range moves while it is being read, so the floor comes from the
+  // server rather than from arithmetic on the head.
+  const sweptFrom = Math.max(health.oldestLedger, from ?? 0, 1);
+
+  const { raw, truncated, sweptTo } = await sweep(
+    [eventId, factoryId],
+    sweptFrom,
+    maxPages,
+    deadline,
+  );
+  return { activity: decodeActivity(raw, eventId), truncated, sweptFrom, sweptTo };
 }

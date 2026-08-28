@@ -17,6 +17,7 @@ const RESERVED: Activity = {
   kind: "reserved",
   txHash: "a".repeat(64),
   ledger: 1,
+  at: Date.parse("2026-08-23T18:14:00Z"),
   guest: "GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJK",
   spotsLeft: 4,
 };

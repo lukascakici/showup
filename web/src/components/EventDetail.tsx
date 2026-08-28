@@ -25,6 +25,7 @@ import { EXPLORER_CONTRACT, EXPLORER_TX } from "@/lib/stellar";
 import { useSigner } from "@/lib/signer";
 import { useWallet } from "@/lib/wallet";
 import { recallSecret, rememberSecret } from "@/lib/secrets";
+import { requestSync } from "@/lib/event-index";
 import {
   attendanceOf,
   forfeitPool,
@@ -89,8 +90,27 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // top bar quietly wrong until someone thought to refresh it.
   const after = useCallback(async () => {
     await Promise.all([refresh(), refreshActivity(), refreshBalance()]);
+    // Something just happened on chain, so the archive is one row behind. Not
+    // awaited: the sync re-reads everything from the contract itself, so it can
+    // arrive whenever it arrives.
+    void requestSync(id);
     setAction({ kind: "idle" });
-  }, [refresh, refreshActivity, refreshBalance]);
+  }, [id, refresh, refreshActivity, refreshBalance]);
+
+  /**
+   * Archive this event's history while the chain still has it.
+   *
+   * Soroban RPC drops ledgers after about a week, and the transaction hashes in
+   * the feed only exist in contract events — so an event nobody syncs inside
+   * that window loses its history permanently, while its state sits there
+   * looking complete. Asking on every page view is the cheapest possible
+   * guarantee: it costs one request against an endpoint that stops sweeping
+   * deeply once the archive reaches the event's creation, and it means an event
+   * anyone still visits can never fall off the back.
+   */
+  useEffect(() => {
+    void requestSync(id);
+  }, [id]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setAction({ kind: "busy" });

@@ -43,6 +43,24 @@ export function formatTime(startsAt: number): string {
   });
 }
 
+/**
+ * When something happened, in the reader's own timezone.
+ *
+ * For the activity feed, whose rows can now be months old: "took 5.1 XLM back"
+ * with no date reads as though it just happened, and on a finished event that is
+ * the one thing it definitely didn't do. Zero means the row predates the archive
+ * storing close times, which shows nothing rather than the epoch.
+ */
+export function formatMoment(at: number): string {
+  if (!at) return "";
+  return new Date(at).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Format an XLM balance string to a readable amount. */
 export function formatXlm(raw: string, decimals = 4): string {
   const n = Number(raw);

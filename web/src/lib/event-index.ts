@@ -38,6 +38,20 @@ export type IndexedEvent = {
   /** ms since epoch, so the UI can say how old this snapshot is and mean it. */
   syncedAt: number;
   syncedLedger: number;
+
+  /**
+   * How far the activity archive has been swept, and whether it reaches back to
+   * the event's creation. Absent until the event has been synced by id at least
+   * once — a sweep of the whole factory indexes state only, because paging every
+   * event's full history in one request is minutes of RPC calls.
+   *
+   * `activityComplete` is what turns the next sweep incremental: until the
+   * `event_created` row has been seen there may be history below what the
+   * archive holds, so every sync goes back as far as the RPC will allow.
+   */
+  activitySweptTo?: number;
+  activityComplete?: boolean;
+  activitySyncedAt?: number;
 };
 
 export const EVENTS_COLLECTION = "events";
