@@ -58,13 +58,31 @@ export async function isKnownEvent(id: string): Promise<boolean> {
   return (await listEventIds()).includes(id);
 }
 
+/**
+ * The admission mode and host list, or `null` for an event too old to have them.
+ *
+ * `get_terms` does not exist on the revision every event on the live factory was
+ * deployed from, so this failing is an ordinary answer rather than an error: it
+ * means an open event with a single host, and the caller fills that in. The one
+ * thing it must not do is take the whole page down with it, which is why it is
+ * caught here instead of riding in the `Promise.all` below.
+ */
+async function loadTerms(client: ReturnType<typeof eventClient>) {
+  try {
+    return (await client.get_terms()).result.unwrap();
+  } catch {
+    return null;
+  }
+}
+
 export async function loadEvent(id: string): Promise<EventState> {
   const client = eventClient(id);
-  const [config, reserved, checkedIn, phase] = await Promise.all([
+  const [config, reserved, checkedIn, phase, terms] = await Promise.all([
     client.get_config(),
     client.get_reserved(),
     client.get_checked_in(),
     client.get_phase(),
+    loadTerms(client),
   ]);
   const c = config.result.unwrap();
   return {
@@ -80,10 +98,9 @@ export async function loadEvent(id: string): Promise<EventState> {
     // stored value that every later comparison silently gets wrong.
     startsAt: Number.isFinite(Number(c.starts_at)) ? Number(c.starts_at) : 0,
     organizer: c.organizer,
-    // Same absent-field problem as `title`, and the fallback is the truth for
-    // those events rather than a guess: an event created before co-hosting
-    // existed has exactly one host, and it is whoever created it.
-    hosts: c.hosts ?? [c.organizer],
+    // Not a guess: an event created before co-hosting existed has exactly one
+    // host, and it is whoever created it.
+    hosts: terms?.hosts ?? [c.organizer],
     deposit: c.deposit,
     feeAllowance: c.fee_allowance,
     capacity: c.capacity,

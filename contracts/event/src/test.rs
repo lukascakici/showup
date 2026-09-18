@@ -1267,7 +1267,7 @@ fn adding_a_host_twice_changes_nothing() {
 
     // Idempotent on purpose: a retried transaction must not become an error
     // somebody has to interpret.
-    assert_eq!(f.client.get_config().hosts.len(), 2);
+    assert_eq!(f.client.get_terms().hosts.len(), 2);
 }
 
 #[test]
@@ -1318,9 +1318,9 @@ fn forfeits_still_land_with_the_creator() {
 #[test]
 fn the_creator_is_the_first_host() {
     let f = setup(ForfeitPolicy::ToOrganizer);
-    let config = f.client.get_config();
+    let terms = f.client.get_terms();
 
-    assert_eq!(config.hosts.len(), 1);
-    assert_eq!(config.hosts.get(0), Some(f.organizer.clone()));
+    assert_eq!(terms.hosts.len(), 1);
+    assert_eq!(terms.hosts.get(0), Some(f.organizer.clone()));
     assert!(f.client.is_host(&f.organizer));
 }

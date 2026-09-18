@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FACTORY_ID,
   REPUTATION_ID,
+  event,
   friendlyContractError,
   fromStroops,
   toStroops,
@@ -123,5 +124,58 @@ describe("friendlyContractError", () => {
   it("passes an unmapped failure through rather than inventing a reason", () => {
     expect(friendlyContractError(new Error("simulation failed"))).toBe("simulation failed");
     expect(friendlyContractError(new Error(""))).toBe("The transaction failed. Please try again.");
+  });
+});
+
+describe("the committed event binding against a live, pre-SOW2 event", () => {
+  // Captured from CAOK5LME…EWMUTLJL ("coffee time") on Testnet, which was
+  // deployed from the first event revision and holds a ten-field Config.
+  //
+  // This is the regression test for a real outage: adding `admission` and
+  // `hosts` to `Config` made `get_config` throw `vec not set` against every
+  // event on the live factory, because those events will never have the fields —
+  // they run the wasm they were deployed from, and a stored struct does not
+  // gain members when a newer revision ships. The page could not load at all.
+  //
+  // So `Config` is frozen. Anything added to an event after the first revision
+  // is keyed separately and read through `get_terms`, which an old event simply
+  // does not answer. If a future field lands in `Config` instead, this fails
+  // offline and immediately, rather than on somebody's phone.
+  const LIVE_CONFIG_XDR =
+    "AAAAEQAAAAEAAAAKAAAADwAAAAhjYXBhY2l0eQAAAAMAAAAUAAAADwAAAAljb2RlX2hhc2gAAAAAAAANAAAAIN8ChZhKx7iC8Og8KZ00ysLUMEQaZ5BYOD61SVRDFxKiAAAADwAAAAdkZXBvc2l0AAAAAAoAAAAAAAAAAAAAAAAC+vCAAAAADwAAAA1mZWVfYWxsb3dhbmNlAAAAAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAPAAAACW9yZ2FuaXplcgAAAAAAABIAAAAAAAAAAGEQWACxpS0bpuBsBu7pCYxL4GlnvS/n030WZZBi/EmnAAAADwAAAAZwb2xpY3kAAAAAABAAAAABAAAAAQAAAA8AAAATU3BsaXRBbW9uZ0F0dGVuZGVlcwAAAAAPAAAACnJlcHV0YXRpb24AAAAAABIAAAABymqRCRtFMzdF9VvPwKO0zTUlgWhISYLGz2NfmHh5HLAAAAAPAAAACXN0YXJ0c19hdAAAAAAAAAUAAAAAapB7IAAAAA8AAAAFdGl0bGUAAAAAAAAOAAAAC2NvZmZlZSB0aW1lAAAAAA8AAAAFdG9rZW4AAAAAAAASAAAAAdeSi3LCcDzP6vfrn/TvTVBKVai5efybRQ6iyEK00c5h";
+
+  it("still decodes a Config written by the first revision", () => {
+    const client = event("CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL");
+    // `get_config` returns a Result, so the spec hands back a wrapper.
+    const decoded = (
+      client.spec.funcResToNative("get_config", LIVE_CONFIG_XDR) as {
+        unwrap: () => { title: string; capacity: number; organizer: string };
+      }
+    ).unwrap();
+
+    expect(decoded.title).toBe("coffee time");
+    expect(decoded.capacity).toBe(20);
+    expect(decoded.organizer).toBe("GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW");
+  });
+
+  it("has no field in Config that a pre-SOW2 event could not have written", () => {
+    const client = event("CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL");
+    const struct = client.spec.findEntry("Config").value() as {
+      fields: () => { name: () => Buffer | string }[];
+    };
+    const fields = struct.fields().map((f) => f.name().toString());
+
+    expect([...fields].sort()).toEqual([
+      "capacity",
+      "code_hash",
+      "deposit",
+      "fee_allowance",
+      "organizer",
+      "policy",
+      "reputation",
+      "starts_at",
+      "title",
+      "token",
+    ]);
   });
 });

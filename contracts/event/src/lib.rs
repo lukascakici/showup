@@ -122,17 +122,8 @@ pub enum Attendance {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
     /// Whoever created the event. Permanent, and the only address forfeited
-    /// deposits are ever paid to — see `hosts` for why it is kept separate.
+    /// deposits are ever paid to — see `Terms::hosts` for who may *act*.
     pub organizer: Address,
-    /// Everyone who may run the event: open check-in, reopen reservations,
-    /// answer applications, finalize, and change this list.
-    ///
-    /// The organizer is always `hosts[0]` and cannot be removed, so the two
-    /// fields overlap by exactly one address on purpose. `organizer` answers
-    /// "whose event is this, and where does forfeited money go" — a question
-    /// that must have one unambiguous answer no matter who else is helping —
-    /// and `hosts` answers "who may act", which is a list.
-    pub hosts: Vec<Address>,
     /// What the event is called. Up to `MAX_TITLE_BYTES` of UTF-8.
     ///
     /// On-chain rather than in the off-chain index, and that is the whole reason
@@ -165,10 +156,36 @@ pub struct Config {
     /// underneath them, and `None` has to keep working because events created
     /// before reputation existed still run.
     pub reputation: Option<Address>,
+}
+
+/// Everything about an event that arrived after the first revision.
+///
+/// This exists because `Config` cannot grow. It is a **stored** struct, and
+/// every event already deployed holds one written by an older wasm — so adding
+/// a field to it does not give those events the field, it gives every client
+/// generated from the new spec a value it cannot decode. `get_config` on a live
+/// event failed with `vec not set` the moment `admission` was added to it.
+///
+/// `Terms` is assembled at read time from separately keyed entries instead, so
+/// it can keep growing: a client that asks an old event for its terms gets a
+/// missing-function error it can recognise and answer for itself, which is a
+/// far better failure than a config that will not decode at all.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Terms {
     /// Who may reserve a spot. Fixed at creation, like the deposit and the
     /// capacity: the terms somebody agreed to when they locked their money must
     /// not be editable by the person holding it.
     pub admission: Admission,
+    /// Everyone who may run the event: open check-in, reopen reservations,
+    /// answer applications, finalize, and change this list.
+    ///
+    /// The creator is always `hosts[0]` and cannot be removed, so this overlaps
+    /// `Config::organizer` by exactly one address on purpose. `organizer`
+    /// answers "whose event is this, and where does forfeited money go" — which
+    /// must have one unambiguous answer no matter who else is helping — and
+    /// `hosts` answers "who may act", which is a list.
+    pub hosts: Vec<Address>,
 }
 
 #[contracttype]
@@ -178,6 +195,11 @@ pub enum DataKey {
     Reserved,
     CheckedIn,
     Attendance(Address),
+    /// Added after the first revision, and keyed separately for that reason —
+    /// see `Terms`. An event that predates them has neither key, which is why
+    /// both readers below have a default rather than an `unwrap`.
+    Admission,
+    Hosts,
 }
 
 #[contractevent]
@@ -304,10 +326,13 @@ impl EventContract {
 
         let mut hosts = Vec::new(&env);
         hosts.push_back(organizer.clone());
+        env.storage().instance().set(&DataKey::Hosts, &hosts);
+        env.storage()
+            .instance()
+            .set(&DataKey::Admission, &admission);
 
         let config = Config {
             organizer,
-            hosts,
             title,
             starts_at,
             token,
@@ -317,7 +342,6 @@ impl EventContract {
             code_hash,
             policy,
             reputation,
-            admission,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage()
@@ -397,13 +421,15 @@ impl EventContract {
     /// to be the applicant's own transaction. An approval that could pull
     /// somebody's deposit would mean anyone could be charged for being liked.
     pub fn apply(env: Env, guest: Address) -> Result<(), Error> {
-        let config = Self::config(&env)?;
+        // Discarded: this only has to establish that the event exists at all,
+        // and nothing about an application depends on its terms.
+        Self::config(&env)?;
         match Self::phase(&env) {
             Phase::Reserving => {}
             Phase::CheckingIn => return Err(Error::ReservationsClosed),
             Phase::Finalized => return Err(Error::AlreadyFinalized),
         }
-        if config.admission != Admission::Approval {
+        if Self::admission(&env) != Admission::Approval {
             return Err(Error::WrongAdmissionMode);
         }
         guest.require_auth();
@@ -436,13 +462,16 @@ impl EventContract {
     /// Idempotent: adding an existing host changes nothing and succeeds, so a
     /// retried transaction never turns into an error somebody has to read.
     pub fn add_host(env: Env, host: Address, new_host: Address) -> Result<(), Error> {
-        let mut config = Self::require_host(&env, &host)?;
-        if config.hosts.contains(&new_host) {
+        let config = Self::require_host(&env, &host)?;
+        host.require_auth();
+
+        let mut hosts = Self::hosts(&env, &config);
+        if hosts.contains(&new_host) {
             return Ok(());
         }
 
-        config.hosts.push_back(new_host.clone());
-        env.storage().instance().set(&DataKey::Config, &config);
+        hosts.push_back(new_host.clone());
+        env.storage().instance().set(&DataKey::Hosts, &hosts);
         Self::bump_instance(&env);
 
         HostAdded { host: new_host }.publish(&env);
@@ -457,17 +486,16 @@ impl EventContract {
     /// creator may remove) leaves an event stuck the moment they are
     /// unreachable, which is the exact situation co-hosting exists for.
     pub fn remove_host(env: Env, host: Address, target: Address) -> Result<(), Error> {
-        let mut config = Self::require_host(&env, &host)?;
+        let config = Self::require_host(&env, &host)?;
         if target == config.organizer {
             return Err(Error::CannotRemoveCreator);
         }
+        host.require_auth();
 
-        let index = config
-            .hosts
-            .first_index_of(&target)
-            .ok_or(Error::NotAHost)?;
-        config.hosts.remove(index);
-        env.storage().instance().set(&DataKey::Config, &config);
+        let mut hosts = Self::hosts(&env, &config);
+        let index = hosts.first_index_of(&target).ok_or(Error::NotAHost)?;
+        hosts.remove(index);
+        env.storage().instance().set(&DataKey::Hosts, &hosts);
         Self::bump_instance(&env);
 
         HostRemoved { host: target }.publish(&env);
@@ -653,10 +681,26 @@ impl EventContract {
         Self::checked_in_list(&env)
     }
 
+    /// The admission mode and the host list, in one read.
+    ///
+    /// One call rather than two getters because a page needs both and every
+    /// extra RPC read is latency in front of somebody deciding whether to lock
+    /// a deposit. Absent on events deployed before this revision — a caller
+    /// that gets "function not found" back is looking at an open event with one
+    /// host, and can say so without asking anything else.
+    pub fn get_terms(env: Env) -> Result<Terms, Error> {
+        let config = Self::config(&env)?;
+        Ok(Terms {
+            admission: Self::admission(&env),
+            hosts: Self::hosts(&env, &config),
+        })
+    }
+
     /// Whether `who` may run this event. Everything host-gated is behind the
     /// same check, so a screen can hide the controls it would refuse.
     pub fn is_host(env: Env, who: Address) -> Result<bool, Error> {
-        Ok(Self::config(&env)?.hosts.contains(&who))
+        let config = Self::config(&env)?;
+        Ok(Self::hosts(&env, &config).contains(&who))
     }
 
     pub fn get_attendance(env: Env, guest: Address) -> Option<Attendance> {
@@ -689,7 +733,7 @@ impl EventContract {
         );
     }
 
-    /// Load the config and refuse unless `host` is on it.
+    /// Refuse unless `host` may run this event.
     ///
     /// Soroban has no caller address, so every host-gated entry point names the
     /// host it is acting as and this checks the claim. Membership is checked
@@ -697,11 +741,32 @@ impl EventContract {
     /// error instead of an authorization failure a wallet cannot explain.
     fn require_host(env: &Env, host: &Address) -> Result<Config, Error> {
         let config = Self::config(env)?;
-        if config.hosts.contains(host) {
+        if Self::hosts(env, &config).contains(host) {
             Ok(config)
         } else {
             Err(Error::NotAHost)
         }
+    }
+
+    /// Who may run the event. Defaults to the creator alone.
+    fn hosts(env: &Env, config: &Config) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Hosts)
+            .unwrap_or_else(|| {
+                let mut only = Vec::new(env);
+                only.push_back(config.organizer.clone());
+                only
+            })
+    }
+
+    /// Who may reserve. Defaults to open, which is what every event that has no
+    /// stored mode was created as.
+    fn admission(env: &Env) -> Admission {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admission)
+            .unwrap_or(Admission::Open)
     }
 
     /// Answer one application, yes or no.
@@ -712,11 +777,11 @@ impl EventContract {
     /// decline they could take back is an inbox a declined applicant can keep
     /// reopening.
     fn answer(env: &Env, host: Address, applicant: Address, approved: bool) -> Result<(), Error> {
-        let config = Self::config(env)?;
+        Self::config(env)?;
         if Self::phase(env) == Phase::Finalized {
             return Err(Error::AlreadyFinalized);
         }
-        if config.admission != Admission::Approval {
+        if Self::admission(env) != Admission::Approval {
             return Err(Error::WrongAdmissionMode);
         }
         Self::require_host(env, &host)?;
@@ -756,7 +821,7 @@ impl EventContract {
         guest: &Address,
         standing: Option<Attendance>,
     ) -> Result<(), Error> {
-        match config.admission {
+        match Self::admission(env) {
             Admission::Open => Ok(()),
             Admission::Score(min) => {
                 let reputation = config.reputation.as_ref().ok_or(Error::NoReputation)?;
