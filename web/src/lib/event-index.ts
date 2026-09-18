@@ -27,6 +27,12 @@ export type IndexedEvent = {
   /** Which factory deployed it, so a migration is visible instead of confusing. */
   factory: string;
   organizer: string;
+  /**
+   * Everyone who may run the event. Optional because documents written before
+   * co-hosting existed have no such field, and they are still perfectly good
+   * snapshots of events that genuinely had one host.
+   */
+  hosts?: string[];
   deposit: string;
   feeAllowance: string;
   capacity: number;
@@ -62,6 +68,7 @@ export function toEventState(doc: IndexedEvent): EventState {
     title: doc.title,
     startsAt: doc.startsAt,
     organizer: doc.organizer,
+    hosts: doc.hosts ?? [doc.organizer],
     deposit: BigInt(doc.deposit),
     feeAllowance: BigInt(doc.feeAllowance),
     capacity: doc.capacity,

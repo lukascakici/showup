@@ -245,6 +245,7 @@ async function indexState(db: Firestore, id?: string) {
       startsAt: e.startsAt,
       factory: FACTORY_ID,
       organizer: e.organizer,
+      hosts: e.hosts,
       deposit: e.deposit.toString(),
       feeAllowance: e.feeAllowance.toString(),
       capacity: e.capacity,

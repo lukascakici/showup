@@ -82,6 +82,8 @@ pub enum Error {
     WrongAdmissionMode = 21,
     /// A gate that needs a reputation ledger on an event created without one.
     NoReputation = 22,
+    /// `remove_host` aimed at the creator, who is permanent.
+    CannotRemoveCreator = 23,
 }
 
 #[contracttype]
@@ -119,7 +121,18 @@ pub enum Attendance {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
+    /// Whoever created the event. Permanent, and the only address forfeited
+    /// deposits are ever paid to — see `hosts` for why it is kept separate.
     pub organizer: Address,
+    /// Everyone who may run the event: open check-in, reopen reservations,
+    /// answer applications, finalize, and change this list.
+    ///
+    /// The organizer is always `hosts[0]` and cannot be removed, so the two
+    /// fields overlap by exactly one address on purpose. `organizer` answers
+    /// "whose event is this, and where does forfeited money go" — a question
+    /// that must have one unambiguous answer no matter who else is helping —
+    /// and `hosts` answers "who may act", which is a list.
+    pub hosts: Vec<Address>,
     /// What the event is called. Up to `MAX_TITLE_BYTES` of UTF-8.
     ///
     /// On-chain rather than in the off-chain index, and that is the whole reason
@@ -192,6 +205,16 @@ pub struct Finalized {
 #[contractevent]
 pub struct PhaseChanged {
     pub phase: Phase,
+}
+
+#[contractevent]
+pub struct HostAdded {
+    pub host: Address,
+}
+
+#[contractevent]
+pub struct HostRemoved {
+    pub host: Address,
 }
 
 #[contractevent]
@@ -279,8 +302,12 @@ impl EventContract {
             token::Client::new(&env, &token).transfer(&organizer, &this, &pool);
         }
 
+        let mut hosts = Vec::new(&env);
+        hosts.push_back(organizer.clone());
+
         let config = Config {
             organizer,
+            hosts,
             title,
             starts_at,
             token,
@@ -394,14 +421,57 @@ impl EventContract {
         Ok(())
     }
 
-    /// Let an applicant reserve. Organizer only.
-    pub fn approve(env: Env, applicant: Address) -> Result<(), Error> {
-        Self::answer(&env, applicant, true)
+    /// Let an applicant reserve. Any host.
+    pub fn approve(env: Env, host: Address, applicant: Address) -> Result<(), Error> {
+        Self::answer(&env, host, applicant, true)
     }
 
-    /// Turn an applicant down. Organizer only.
-    pub fn decline(env: Env, applicant: Address) -> Result<(), Error> {
-        Self::answer(&env, applicant, false)
+    /// Turn an applicant down. Any host.
+    pub fn decline(env: Env, host: Address, applicant: Address) -> Result<(), Error> {
+        Self::answer(&env, host, applicant, false)
+    }
+
+    /// Add someone who can run this event alongside the creator. Any host.
+    ///
+    /// Idempotent: adding an existing host changes nothing and succeeds, so a
+    /// retried transaction never turns into an error somebody has to read.
+    pub fn add_host(env: Env, host: Address, new_host: Address) -> Result<(), Error> {
+        let mut config = Self::require_host(&env, &host)?;
+        if config.hosts.contains(&new_host) {
+            return Ok(());
+        }
+
+        config.hosts.push_back(new_host.clone());
+        env.storage().instance().set(&DataKey::Config, &config);
+        Self::bump_instance(&env);
+
+        HostAdded { host: new_host }.publish(&env);
+        Ok(())
+    }
+
+    /// Take someone's hosting rights away. Any host, except the creator's.
+    ///
+    /// Any host may remove any other, which means co-hosts can remove each
+    /// other — deliberately. The creator is permanent, so the worst case is a
+    /// mess only they can be asked to clean up, and the alternative (only the
+    /// creator may remove) leaves an event stuck the moment they are
+    /// unreachable, which is the exact situation co-hosting exists for.
+    pub fn remove_host(env: Env, host: Address, target: Address) -> Result<(), Error> {
+        let mut config = Self::require_host(&env, &host)?;
+        if target == config.organizer {
+            return Err(Error::CannotRemoveCreator);
+        }
+
+        let index = config
+            .hosts
+            .first_index_of(&target)
+            .ok_or(Error::NotAHost)?;
+        config.hosts.remove(index);
+        env.storage().instance().set(&DataKey::Config, &config);
+        Self::bump_instance(&env);
+
+        HostRemoved { host: target }.publish(&env);
+        Ok(())
     }
 
     /// Prove attendance with the organizer's secret and take the deposit back.
@@ -464,26 +534,26 @@ impl EventContract {
         Ok(())
     }
 
-    /// Start check-in, closing reservations. Organizer only.
-    pub fn open_checkin(env: Env) -> Result<(), Error> {
-        Self::set_phase(&env, Phase::Reserving, Phase::CheckingIn)
+    /// Start check-in, closing reservations. Any host.
+    pub fn open_checkin(env: Env, host: Address) -> Result<(), Error> {
+        Self::set_phase(&env, host, Phase::Reserving, Phase::CheckingIn)
     }
 
-    /// Go back to taking reservations, e.g. to let a latecomer in. Organizer only.
+    /// Go back to taking reservations, e.g. to let a latecomer in. Any host.
     ///
     /// Guests who already checked in keep their refund and stay on the list; this
     /// only reopens the door.
-    pub fn reopen_rsvp(env: Env) -> Result<(), Error> {
-        Self::set_phase(&env, Phase::CheckingIn, Phase::Reserving)
+    pub fn reopen_rsvp(env: Env, host: Address) -> Result<(), Error> {
+        Self::set_phase(&env, host, Phase::CheckingIn, Phase::Reserving)
     }
 
-    /// Close the event and settle the no-shows' deposits.
-    pub fn finalize(env: Env) -> Result<(), Error> {
-        let config = Self::config(&env)?;
+    /// Close the event and settle the no-shows' deposits. Any host.
+    pub fn finalize(env: Env, host: Address) -> Result<(), Error> {
         if Self::phase(&env) == Phase::Finalized {
             return Err(Error::AlreadyFinalized);
         }
-        config.organizer.require_auth();
+        let config = Self::require_host(&env, &host)?;
+        host.require_auth();
 
         let reserved = Self::reserved_list(&env);
         let checked_in = Self::checked_in_list(&env);
@@ -497,6 +567,11 @@ impl EventContract {
 
         let client = token::Client::new(&env, &config.token);
         let contract = env.current_contract_address();
+
+        // Every payout below goes to `config.organizer`, never to whichever
+        // host happened to call this. A co-host can run the event; they cannot
+        // redirect its money, and adding one is therefore not a decision about
+        // funds.
 
         match config.policy {
             ForfeitPolicy::ToOrganizer => {
@@ -578,6 +653,12 @@ impl EventContract {
         Self::checked_in_list(&env)
     }
 
+    /// Whether `who` may run this event. Everything host-gated is behind the
+    /// same check, so a screen can hide the controls it would refuse.
+    pub fn is_host(env: Env, who: Address) -> Result<bool, Error> {
+        Ok(Self::config(&env)?.hosts.contains(&who))
+    }
+
     pub fn get_attendance(env: Env, guest: Address) -> Option<Attendance> {
         env.storage().persistent().get(&DataKey::Attendance(guest))
     }
@@ -608,6 +689,21 @@ impl EventContract {
         );
     }
 
+    /// Load the config and refuse unless `host` is on it.
+    ///
+    /// Soroban has no caller address, so every host-gated entry point names the
+    /// host it is acting as and this checks the claim. Membership is checked
+    /// *before* `require_auth`, which is what makes "not a host" a readable
+    /// error instead of an authorization failure a wallet cannot explain.
+    fn require_host(env: &Env, host: &Address) -> Result<Config, Error> {
+        let config = Self::config(env)?;
+        if config.hosts.contains(host) {
+            Ok(config)
+        } else {
+            Err(Error::NotAHost)
+        }
+    }
+
     /// Answer one application, yes or no.
     ///
     /// Only an application in `Applied` can be answered, which makes a decision
@@ -615,7 +711,7 @@ impl EventContract {
     /// the organizer could take back is one a guest cannot plan around, and a
     /// decline they could take back is an inbox a declined applicant can keep
     /// reopening.
-    fn answer(env: &Env, applicant: Address, approved: bool) -> Result<(), Error> {
+    fn answer(env: &Env, host: Address, applicant: Address, approved: bool) -> Result<(), Error> {
         let config = Self::config(env)?;
         if Self::phase(env) == Phase::Finalized {
             return Err(Error::AlreadyFinalized);
@@ -623,7 +719,8 @@ impl EventContract {
         if config.admission != Admission::Approval {
             return Err(Error::WrongAdmissionMode);
         }
-        config.organizer.require_auth();
+        Self::require_host(env, &host)?;
+        host.require_auth();
 
         let key = DataKey::Attendance(applicant.clone());
         match env.storage().persistent().get::<_, Attendance>(&key) {
@@ -742,8 +839,7 @@ impl EventContract {
     ///
     /// Finalized is terminal, so it is rejected before anything else — an event
     /// that has paid out must never accept guests again.
-    fn set_phase(env: &Env, from: Phase, to: Phase) -> Result<(), Error> {
-        let config = Self::config(env)?;
+    fn set_phase(env: &Env, host: Address, from: Phase, to: Phase) -> Result<(), Error> {
         let current = Self::phase(env);
         if current == Phase::Finalized {
             return Err(Error::AlreadyFinalized);
@@ -751,7 +847,8 @@ impl EventContract {
         if current != from {
             return Err(Error::WrongPhase);
         }
-        config.organizer.require_auth();
+        Self::require_host(env, &host)?;
+        host.require_auth();
 
         env.storage().instance().set(&DataKey::Phase, &to);
         Self::bump_instance(env);

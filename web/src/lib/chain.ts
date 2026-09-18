@@ -25,6 +25,8 @@ export type EventState = {
   /** Unix seconds, UTC. Informational — the phase machine decides what is allowed. */
   startsAt: number;
   organizer: string;
+  /** Everyone who may run the event. Always contains `organizer`. */
+  hosts: string[];
   deposit: bigint;
   feeAllowance: bigint;
   capacity: number;
@@ -78,6 +80,10 @@ export async function loadEvent(id: string): Promise<EventState> {
     // stored value that every later comparison silently gets wrong.
     startsAt: Number.isFinite(Number(c.starts_at)) ? Number(c.starts_at) : 0,
     organizer: c.organizer,
+    // Same absent-field problem as `title`, and the fallback is the truth for
+    // those events rather than a guess: an event created before co-hosting
+    // existed has exactly one host, and it is whoever created it.
+    hosts: c.hosts ?? [c.organizer],
     deposit: c.deposit,
     feeAllowance: c.fee_allowance,
     capacity: c.capacity,

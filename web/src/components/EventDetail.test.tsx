@@ -81,6 +81,7 @@ function anEvent(over: Partial<EventState> = {}): EventState {
     title: "Perşembe halı saha",
     startsAt: 1_787_000_000,
     organizer: ORGANIZER,
+    hosts: [ORGANIZER],
     deposit: 10n * XLM,
     feeAllowance: XLM / 10n,
     capacity: 10,

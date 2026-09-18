@@ -177,7 +177,10 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     );
   }
 
-  const isOrganizer = !!address && address === event.organizer;
+  // A host, not only the creator: the contract gates these controls on host
+  // membership now, so showing them to the creator alone would hide a button
+  // the chain would have accepted.
+  const isHost = !!address && event.hosts.includes(address);
   const mine = attendanceOf(event, address);
   const left = spotsLeft(event);
   const refund = event.deposit + event.feeAllowance;
@@ -199,24 +202,24 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         secret: secretToBuffer(code.trim()),
       });
       await tx.signAndSend();
-      if (isOrganizer) rememberSecret(id, code.trim());
+      if (isHost) rememberSecret(id, code.trim());
     });
 
   const finalize = () =>
     run(async () => {
-      const tx = await eventClient(id, signer).finalize();
+      const tx = await eventClient(id, signer).finalize({ host: signer.publicKey! });
       await tx.signAndSend();
     });
 
   const openCheckin = () =>
     run(async () => {
-      const tx = await eventClient(id, signer).open_checkin();
+      const tx = await eventClient(id, signer).open_checkin({ host: signer.publicKey! });
       await tx.signAndSend();
     });
 
   const reopenRsvp = () =>
     run(async () => {
-      const tx = await eventClient(id, signer).reopen_rsvp();
+      const tx = await eventClient(id, signer).reopen_rsvp({ host: signer.publicKey! });
       await tx.signAndSend();
     });
 
@@ -409,7 +412,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         </Card>
       )}
 
-      {isOrganizer && (
+      {isHost && (
         <OrganizerPanel
           id={id}
           phase={event.phase}

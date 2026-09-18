@@ -14,6 +14,7 @@ const base: EventState = {
   title: "Perşembe halı saha",
   startsAt: 1_755_000_000,
   organizer: "GORGANIZER",
+  hosts: ["GORGANIZER"],
   deposit: 100_000_000n, // 10 XLM
   feeAllowance: 1_000_000n,
   capacity: 10,

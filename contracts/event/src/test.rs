@@ -382,7 +382,7 @@ fn approved_applicant_can_reserve() {
     let applicant = f.guest(DEPOSIT);
 
     f.client.apply(&applicant);
-    f.client.approve(&applicant);
+    f.client.approve(&f.organizer, &applicant);
     f.client.rsvp(&applicant);
 
     // Two transactions, and the deposit moved in the second one — the
@@ -401,7 +401,7 @@ fn declined_applicant_cannot_reserve() {
     let applicant = f.guest(DEPOSIT);
 
     f.client.apply(&applicant);
-    f.client.decline(&applicant);
+    f.client.decline(&f.organizer, &applicant);
 
     assert_eq!(
         f.client.get_attendance(&applicant),
@@ -417,7 +417,7 @@ fn a_declined_applicant_cannot_ask_again() {
     let applicant = f.guest(DEPOSIT);
 
     f.client.apply(&applicant);
-    f.client.decline(&applicant);
+    f.client.decline(&f.organizer, &applicant);
 
     // Declining is terminal in both directions: the organizer's inbox is not
     // something a rejected applicant can reopen at will.
@@ -432,8 +432,14 @@ fn approving_someone_who_never_applied_is_refused() {
     let f = by_approval();
     let stranger = f.guest(DEPOSIT);
 
-    assert_eq!(f.client.try_approve(&stranger), Err(Ok(Error::NotApplied)));
-    assert_eq!(f.client.try_decline(&stranger), Err(Ok(Error::NotApplied)));
+    assert_eq!(
+        f.client.try_approve(&f.organizer, &stranger),
+        Err(Ok(Error::NotApplied))
+    );
+    assert_eq!(
+        f.client.try_decline(&f.organizer, &stranger),
+        Err(Ok(Error::NotApplied))
+    );
     assert_eq!(f.client.get_attendance(&stranger), None);
 }
 
@@ -462,7 +468,7 @@ fn applying_to_an_open_event_is_wrong_mode() {
         Err(Ok(Error::WrongAdmissionMode))
     );
     assert_eq!(
-        f.client.try_approve(&guest),
+        f.client.try_approve(&f.organizer, &guest),
         Err(Ok(Error::WrongAdmissionMode))
     );
 }
@@ -495,7 +501,7 @@ fn applications_do_not_consume_capacity() {
     // in it — that is a denial of service the organizer cannot clear.
     let approved = f.guest(DEPOSIT);
     f.client.apply(&approved);
-    f.client.approve(&approved);
+    f.client.approve(&f.organizer, &approved);
     f.client.rsvp(&approved);
 
     assert_eq!(f.client.get_reserved().len(), 1);
@@ -506,8 +512,8 @@ fn an_approved_applicant_who_never_reserved_cannot_check_in() {
     let f = by_approval();
     let applicant = f.guest(DEPOSIT);
     f.client.apply(&applicant);
-    f.client.approve(&applicant);
-    f.client.open_checkin();
+    f.client.approve(&f.organizer, &applicant);
+    f.client.open_checkin(&f.organizer);
 
     // Approval is permission to lock a deposit, not a spot. Skipping the
     // reservation would mean walking out with the fee allowance for an event
@@ -522,7 +528,7 @@ fn an_approved_applicant_who_never_reserved_cannot_check_in() {
 fn applications_close_when_check_in_opens() {
     let f = by_approval();
     let applicant = f.guest(DEPOSIT);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     assert_eq!(
         f.client.try_apply(&applicant),
@@ -535,7 +541,7 @@ fn check_in_returns_the_deposit_and_the_fee_allowance() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     f.client.check_in(&guest, &f.secret);
 
@@ -551,7 +557,7 @@ fn check_in_with_the_wrong_secret_is_rejected() {
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
 
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     let wrong = Bytes::from_slice(&f.env, b"guess");
     assert_eq!(
@@ -565,7 +571,7 @@ fn check_in_with_the_wrong_secret_is_rejected() {
 fn check_in_without_an_rsvp_is_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let stranger = f.guest(0);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     assert_eq!(
         f.client.try_check_in(&stranger, &f.secret),
@@ -578,7 +584,7 @@ fn check_in_twice_is_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&guest, &f.secret);
 
     assert_eq!(
@@ -599,10 +605,10 @@ fn finalize_sends_forfeits_and_the_unspent_pool_to_the_organizer() {
     let no_show = f.guest(DEPOSIT);
     f.client.rsvp(&shower);
     f.client.rsvp(&no_show);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&shower, &f.secret);
 
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     // One deposit forfeited, and the pool minus the single reimbursement.
     let expected = opening + DEPOSIT + (pool - FEE_ALLOWANCE);
@@ -623,11 +629,11 @@ fn finalize_splits_forfeits_among_the_people_who_showed() {
     f.client.rsvp(&a);
     f.client.rsvp(&b);
     f.client.rsvp(&ghost);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&a, &f.secret);
     f.client.check_in(&b, &f.secret);
 
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     // The ghost's deposit splits evenly between the two who showed.
     let share = DEPOSIT / 2;
@@ -646,7 +652,7 @@ fn finalize_with_nobody_showing_returns_everything_to_the_organizer() {
     let ghost = f.guest(DEPOSIT);
     f.client.rsvp(&ghost);
 
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     // No attendees to split among: the forfeited deposit must not be stranded.
     assert_eq!(f.balance(&f.organizer), opening + DEPOSIT + pool);
@@ -658,13 +664,16 @@ fn actions_after_finalize_are_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     assert_eq!(
         f.client.try_check_in(&guest, &f.secret),
         Err(Ok(Error::AlreadyFinalized))
     );
-    assert_eq!(f.client.try_finalize(), Err(Ok(Error::AlreadyFinalized)));
+    assert_eq!(
+        f.client.try_finalize(&f.organizer),
+        Err(Ok(Error::AlreadyFinalized))
+    );
 
     // Finalized is terminal: no phase call may resurrect a settled event.
     let latecomer = f.guest(DEPOSIT);
@@ -673,10 +682,13 @@ fn actions_after_finalize_are_rejected() {
         Err(Ok(Error::AlreadyFinalized))
     );
     assert_eq!(
-        f.client.try_open_checkin(),
+        f.client.try_open_checkin(&f.organizer),
         Err(Ok(Error::AlreadyFinalized))
     );
-    assert_eq!(f.client.try_reopen_rsvp(), Err(Ok(Error::AlreadyFinalized)));
+    assert_eq!(
+        f.client.try_reopen_rsvp(&f.organizer),
+        Err(Ok(Error::AlreadyFinalized))
+    );
 }
 
 #[test]
@@ -766,7 +778,7 @@ fn check_in_before_the_organizer_opens_it_is_rejected() {
 #[test]
 fn reserving_after_check_in_opens_is_rejected() {
     let f = setup(ForfeitPolicy::ToOrganizer);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     // This is the hole the phases exist to close: someone forwarded the link
     // can no longer reserve on the spot and immediately check in, pocketing the
@@ -785,10 +797,10 @@ fn the_organizer_can_reopen_reservations_for_a_latecomer() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let early = f.guest(DEPOSIT);
     f.client.rsvp(&early);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&early, &f.secret);
 
-    f.client.reopen_rsvp();
+    f.client.reopen_rsvp(&f.organizer);
     assert_eq!(f.client.get_phase(), Phase::Reserving);
 
     let latecomer = f.guest(DEPOSIT);
@@ -798,7 +810,7 @@ fn the_organizer_can_reopen_reservations_for_a_latecomer() {
     assert_eq!(f.balance(&early), DEPOSIT + FEE_ALLOWANCE);
     assert_eq!(f.client.get_checked_in().len(), 1);
 
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&latecomer, &f.secret);
     assert_eq!(f.balance(&latecomer), DEPOSIT + FEE_ALLOWANCE);
 }
@@ -808,10 +820,16 @@ fn phase_moves_are_rejected_from_the_wrong_phase() {
     let f = setup(ForfeitPolicy::ToOrganizer);
 
     // Already Reserving.
-    assert_eq!(f.client.try_reopen_rsvp(), Err(Ok(Error::WrongPhase)));
-    f.client.open_checkin();
+    assert_eq!(
+        f.client.try_reopen_rsvp(&f.organizer),
+        Err(Ok(Error::WrongPhase))
+    );
+    f.client.open_checkin(&f.organizer);
     // Already CheckingIn.
-    assert_eq!(f.client.try_open_checkin(), Err(Ok(Error::WrongPhase)));
+    assert_eq!(
+        f.client.try_open_checkin(&f.organizer),
+        Err(Ok(Error::WrongPhase))
+    );
 }
 
 #[test]
@@ -830,7 +848,7 @@ fn phase_changes_need_the_organizer() {
             sub_invokes: &[],
         },
     }]);
-    assert!(f.client.try_open_checkin().is_err());
+    assert!(f.client.try_open_checkin(&f.organizer).is_err());
     assert_eq!(f.client.get_phase(), Phase::Reserving);
 }
 
@@ -976,7 +994,7 @@ fn a_check_in_raises_exactly_one_score_by_one() {
     let bystander = f.guest(DEPOSIT);
     f.client.rsvp(&shower);
     f.client.rsvp(&bystander);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     assert_eq!(f.score(&shower), (0, 0));
 
@@ -999,10 +1017,10 @@ fn finalize_lowers_exactly_the_guests_who_never_showed() {
     f.client.rsvp(&shower);
     f.client.rsvp(&ghost);
     f.client.rsvp(&other_ghost);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&shower, &f.secret);
 
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     assert_eq!(f.score(&ghost), (0, 1));
     assert_eq!(f.score(&other_ghost), (0, 1));
@@ -1017,15 +1035,15 @@ fn reopening_does_not_turn_an_attendee_into_a_no_show() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let early = f.guest(DEPOSIT);
     f.client.rsvp(&early);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&early, &f.secret);
 
     // `early` is still on the reserved list after this, so finalize walks
     // straight over them. Attendance, not list membership, is what decides.
-    f.client.reopen_rsvp();
+    f.client.reopen_rsvp(&f.organizer);
     let latecomer = f.guest(DEPOSIT);
     f.client.rsvp(&latecomer);
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     assert_eq!(f.score(&early), (1, 0));
     assert_eq!(f.score(&latecomer), (0, 1));
@@ -1036,7 +1054,7 @@ fn a_broken_ledger_cannot_cost_a_guest_their_deposit() {
     let f = setup_with(ForfeitPolicy::ToOrganizer, Ledger::Panicking);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
 
     // Guard against this passing for the wrong reason: if the config held
     // `None`, `record_score` would return before ever touching the ledger and
@@ -1065,7 +1083,7 @@ fn a_dropped_score_write_is_published_rather_than_silently_lost() {
     for f in [&broken, &live] {
         let guest = f.guest(DEPOSIT);
         f.client.rsvp(&guest);
-        f.client.open_checkin();
+        f.client.open_checkin(&f.organizer);
         f.client.check_in(&guest, &f.secret);
     }
 
@@ -1086,10 +1104,10 @@ fn a_broken_ledger_cannot_stop_a_finalize() {
     let ghost = f.guest(DEPOSIT);
     f.client.rsvp(&shower);
     f.client.rsvp(&ghost);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&shower, &f.secret);
 
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     // The forfeit still reaches the person who turned up, and nothing is left
     // stranded in the contract.
@@ -1110,9 +1128,9 @@ fn an_event_with_no_ledger_runs_the_whole_flow() {
     let ghost = f.guest(DEPOSIT);
     f.client.rsvp(&shower);
     f.client.rsvp(&ghost);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&shower, &f.secret);
-    f.client.finalize();
+    f.client.finalize(&f.organizer);
 
     // Byte for byte the pre-reputation behaviour. Events created by the v1
     // factory still on Testnet have `None` here and must keep settling.
@@ -1130,7 +1148,7 @@ fn the_event_writes_its_scores_as_itself() {
     let f = setup(ForfeitPolicy::ToOrganizer);
     let guest = f.guest(DEPOSIT);
     f.client.rsvp(&guest);
-    f.client.open_checkin();
+    f.client.open_checkin(&f.organizer);
     f.client.check_in(&guest, &f.secret);
 
     let reputation = f.reputation.as_ref().unwrap();
@@ -1139,4 +1157,170 @@ fn the_event_writes_its_scores_as_itself() {
     // same thing the factory registered, not something the event chose.
     assert!(reputation.is_registered(&f.client.address));
     assert_eq!(f.score(&guest), (1, 0));
+}
+
+#[test]
+fn a_co_host_can_run_the_event() {
+    let f = by_approval();
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+
+    let applicant = f.guest(DEPOSIT);
+    f.client.apply(&applicant);
+
+    // Every one of the five gates, exercised by somebody who did not create the
+    // event. Missing one call site is how a co-host ends up half a host.
+    f.client.approve(&cohost, &applicant);
+    f.client.rsvp(&applicant);
+    f.client.open_checkin(&cohost);
+    f.client.reopen_rsvp(&cohost);
+    f.client.open_checkin(&cohost);
+    f.client.check_in(&applicant, &f.secret);
+    f.client.finalize(&cohost);
+
+    assert!(f.client.is_finalized());
+    assert!(f.client.is_host(&cohost));
+}
+
+#[test]
+fn a_co_host_can_turn_an_applicant_down() {
+    let f = by_approval();
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+    let applicant = f.guest(DEPOSIT);
+    f.client.apply(&applicant);
+
+    f.client.decline(&cohost, &applicant);
+
+    assert_eq!(
+        f.client.get_attendance(&applicant),
+        Some(Attendance::Declined)
+    );
+}
+
+#[test]
+fn non_host_is_refused() {
+    let f = by_approval();
+    let stranger = f.guest(DEPOSIT);
+    let applicant = f.guest(DEPOSIT);
+    f.client.apply(&applicant);
+
+    assert!(!f.client.is_host(&stranger));
+    assert_eq!(
+        f.client.try_open_checkin(&stranger),
+        Err(Ok(Error::NotAHost))
+    );
+    assert_eq!(f.client.try_finalize(&stranger), Err(Ok(Error::NotAHost)));
+    assert_eq!(
+        f.client.try_approve(&stranger, &applicant),
+        Err(Ok(Error::NotAHost))
+    );
+    assert_eq!(
+        f.client.try_decline(&stranger, &applicant),
+        Err(Ok(Error::NotAHost))
+    );
+    assert_eq!(
+        f.client.try_add_host(&stranger, &stranger),
+        Err(Ok(Error::NotAHost))
+    );
+}
+
+#[test]
+fn creator_cannot_be_removed() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+
+    // Not by a co-host, and not by themselves either. An event whose creator
+    // can be removed is an event whose forfeits can be orphaned.
+    assert_eq!(
+        f.client.try_remove_host(&cohost, &f.organizer),
+        Err(Ok(Error::CannotRemoveCreator))
+    );
+    assert_eq!(
+        f.client.try_remove_host(&f.organizer, &f.organizer),
+        Err(Ok(Error::CannotRemoveCreator))
+    );
+    assert!(f.client.is_host(&f.organizer));
+}
+
+#[test]
+fn removed_host_loses_powers_immediately() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+    assert!(f.client.is_host(&cohost));
+
+    f.client.remove_host(&f.organizer, &cohost);
+
+    assert!(!f.client.is_host(&cohost));
+    assert_eq!(f.client.try_open_checkin(&cohost), Err(Ok(Error::NotAHost)));
+}
+
+#[test]
+fn adding_a_host_twice_changes_nothing() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let cohost = f.guest(0);
+
+    f.client.add_host(&f.organizer, &cohost);
+    f.client.add_host(&f.organizer, &cohost);
+
+    // Idempotent on purpose: a retried transaction must not become an error
+    // somebody has to interpret.
+    assert_eq!(f.client.get_config().hosts.len(), 2);
+}
+
+#[test]
+fn removing_someone_who_was_never_a_host_is_refused() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let stranger = f.guest(0);
+
+    assert_eq!(
+        f.client.try_remove_host(&f.organizer, &stranger),
+        Err(Ok(Error::NotAHost))
+    );
+}
+
+#[test]
+fn a_co_host_can_add_another_co_host() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+    let third = f.guest(0);
+
+    f.client.add_host(&cohost, &third);
+
+    assert!(f.client.is_host(&third));
+}
+
+#[test]
+fn forfeits_still_land_with_the_creator() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let cohost = f.guest(0);
+    f.client.add_host(&f.organizer, &cohost);
+
+    let absentee = f.guest(DEPOSIT);
+    f.client.rsvp(&absentee);
+    let opening = f.balance(&f.organizer);
+
+    // Settled by the co-host, paid to the creator. Hosting an event is not a
+    // claim on its money.
+    f.client.open_checkin(&cohost);
+    f.client.finalize(&cohost);
+
+    assert_eq!(f.balance(&cohost), 0);
+    assert_eq!(
+        f.balance(&f.organizer),
+        opening + DEPOSIT + FEE_ALLOWANCE * i128::from(CAPACITY)
+    );
+}
+
+#[test]
+fn the_creator_is_the_first_host() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let config = f.client.get_config();
+
+    assert_eq!(config.hosts.len(), 1);
+    assert_eq!(config.hosts.get(0), Some(f.organizer.clone()));
+    assert!(f.client.is_host(&f.organizer));
 }
