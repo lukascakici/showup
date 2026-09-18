@@ -156,7 +156,18 @@ export type ScoreKind = {tag: "CheckIn", values: void} | {tag: "NoShow", values:
 
 
 
-export type Attendance = {tag: "Reserved", values: void} | {tag: "CheckedIn", values: void};
+/**
+ * Where somebody stands with one event.
+ * 
+ * The first three exist only under `Admission::Approval` and none of them has
+ * any money behind it — an application is a question, and asking it costs
+ * nothing. `Reserved` is the first state that means a deposit is locked, which
+ * is why it is also the first state the reserved list and the capacity count
+ * know about.
+ */
+export type Attendance = {tag: "Applied", values: void} | {tag: "Approved", values: void} | {tag: "Declined", values: void} | {tag: "Reserved", values: void} | {tag: "CheckedIn", values: void};
+
+
 
 
 
@@ -195,6 +206,30 @@ export interface Client {
    * Lock the deposit and reserve a spot. Only while the event is `Reserving`.
    */
   rsvp: ({guest}: {guest: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate a apply transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Ask to come. `Admission::Approval` only, and it moves no money.
+   * 
+   * The SOW's promise is that nothing is taken before the organizer says
+   * yes, so this is two transactions rather than one: `apply` here, then
+   * `rsvp` after approval, and the deposit moves in that second one. It has
+   * to be the applicant's own transaction. An approval that could pull
+   * somebody's deposit would mean anyone could be charged for being liked.
+   */
+  apply: ({guest}: {guest: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate a approve transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Let an applicant reserve. Organizer only.
+   */
+  approve: ({applicant}: {applicant: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate a decline transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Turn an applicant down. Organizer only.
+   */
+  decline: ({applicant}: {applicant: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
    * Construct and simulate a check_in transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -294,9 +329,12 @@ export class Client extends ContractClient {
         "AAAAAgAAAAAAAAAAAAAACVNjb3JlS2luZAAAAAAAAAIAAAAAAAAAAAAAAAdDaGVja0luAAAAAAAAAAAAAAAABk5vU2hvdwAA",
         "AAAABQAAAAAAAAAAAAAACUNoZWNrZWRJbgAAAAAAAAEAAAAKY2hlY2tlZF9pbgAAAAAAAgAAAAAAAAAFZ3Vlc3QAAAAAAAATAAAAAAAAADRkZXBvc2l0ICsgZmVlX2FsbG93YW5jZSwgcmV0dXJuZWQgaW4gdGhpcyBzYW1lIGNhbGwuAAAACHJlZnVuZGVkAAAACwAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAACUZpbmFsaXplZAAAAAAAAAEAAAAJZmluYWxpemVkAAAAAAAAAwAAAAAAAAAGc2hvd2VkAAAAAAAEAAAAAAAAAAAAAAAIbm9fc2hvd3MAAAAEAAAAAAAAACVUb3RhbCBkZXBvc2l0cyBmb3JmZWl0ZWQgYnkgbm8tc2hvd3MuAAAAAAAACWZvcmZlaXRlZAAAAAAAAAsAAAAAAAAAAg==",
-        "AAAAAgAAAAAAAAAAAAAACkF0dGVuZGFuY2UAAAAAAAIAAAAAAAAAAAAAAAhSZXNlcnZlZAAAAAAAAAAAAAAACUNoZWNrZWRJbgAAAA==",
+        "AAAAAgAAAWBXaGVyZSBzb21lYm9keSBzdGFuZHMgd2l0aCBvbmUgZXZlbnQuCgpUaGUgZmlyc3QgdGhyZWUgZXhpc3Qgb25seSB1bmRlciBgQWRtaXNzaW9uOjpBcHByb3ZhbGAgYW5kIG5vbmUgb2YgdGhlbSBoYXMKYW55IG1vbmV5IGJlaGluZCBpdCDigJQgYW4gYXBwbGljYXRpb24gaXMgYSBxdWVzdGlvbiwgYW5kIGFza2luZyBpdCBjb3N0cwpub3RoaW5nLiBgUmVzZXJ2ZWRgIGlzIHRoZSBmaXJzdCBzdGF0ZSB0aGF0IG1lYW5zIGEgZGVwb3NpdCBpcyBsb2NrZWQsIHdoaWNoCmlzIHdoeSBpdCBpcyBhbHNvIHRoZSBmaXJzdCBzdGF0ZSB0aGUgcmVzZXJ2ZWQgbGlzdCBhbmQgdGhlIGNhcGFjaXR5IGNvdW50Cmtub3cgYWJvdXQuAAAAAAAAAApBdHRlbmRhbmNlAAAAAAAFAAAAAAAAACBBc2tlZCB0byBjb21lLCBub3QgeWV0IGFuc3dlcmVkLgAAAAdBcHBsaWVkAAAAAAAAAABCQW5zd2VyZWQgeWVzLiBNYXkgbm93IHJlc2VydmUsIGFuZCB0aGF0IGlzIHdoZW4gdGhlIGRlcG9zaXQgbW92ZXMuAAAAAAAIQXBwcm92ZWQAAAAAAAAAaEFuc3dlcmVkIG5vLiBUZXJtaW5hbCwgc28gYSBkZWNsaW5lZCBhcHBsaWNhbnQgY2Fubm90IHJlLWFwcGx5IHRoZWlyIHdheQpiYWNrIGludG8gYW4gb3JnYW5pemVyJ3MgaW5ib3guAAAACERlY2xpbmVkAAAAAAAAAAAAAAAIUmVzZXJ2ZWQAAAAAAAAAAAAAAAlDaGVja2VkSW4AAAA=",
         "AAAAAAAAAElMb2NrIHRoZSBkZXBvc2l0IGFuZCByZXNlcnZlIGEgc3BvdC4gT25seSB3aGlsZSB0aGUgZXZlbnQgaXMgYFJlc2VydmluZ2AuAAAAAAAABHJzdnAAAAABAAAAAAAAAAVndWVzdAAAAAAAABMAAAABAAAD6QAAAAIAAAAD",
+        "AAAAAAAAAZxBc2sgdG8gY29tZS4gYEFkbWlzc2lvbjo6QXBwcm92YWxgIG9ubHksIGFuZCBpdCBtb3ZlcyBubyBtb25leS4KClRoZSBTT1cncyBwcm9taXNlIGlzIHRoYXQgbm90aGluZyBpcyB0YWtlbiBiZWZvcmUgdGhlIG9yZ2FuaXplciBzYXlzCnllcywgc28gdGhpcyBpcyB0d28gdHJhbnNhY3Rpb25zIHJhdGhlciB0aGFuIG9uZTogYGFwcGx5YCBoZXJlLCB0aGVuCmByc3ZwYCBhZnRlciBhcHByb3ZhbCwgYW5kIHRoZSBkZXBvc2l0IG1vdmVzIGluIHRoYXQgc2Vjb25kIG9uZS4gSXQgaGFzCnRvIGJlIHRoZSBhcHBsaWNhbnQncyBvd24gdHJhbnNhY3Rpb24uIEFuIGFwcHJvdmFsIHRoYXQgY291bGQgcHVsbApzb21lYm9keSdzIGRlcG9zaXQgd291bGQgbWVhbiBhbnlvbmUgY291bGQgYmUgY2hhcmdlZCBmb3IgYmVpbmcgbGlrZWQuAAAABWFwcGx5AAAAAAAAAQAAAAAAAAAFZ3Vlc3QAAAAAAAATAAAAAQAAA+kAAAACAAAAAw==",
         "AAAABQAAAAAAAAAAAAAADFBoYXNlQ2hhbmdlZAAAAAEAAAANcGhhc2VfY2hhbmdlZAAAAAAAAAEAAAAAAAAABXBoYXNlAAAAAAAH0AAAAAVQaGFzZQAAAAAAAAAAAAAC",
+        "AAAAAAAAAClMZXQgYW4gYXBwbGljYW50IHJlc2VydmUuIE9yZ2FuaXplciBvbmx5LgAAAAAAAAdhcHByb3ZlAAAAAAEAAAAAAAAACWFwcGxpY2FudAAAAAAAABMAAAABAAAD6QAAAAIAAAAD",
+        "AAAAAAAAACdUdXJuIGFuIGFwcGxpY2FudCBkb3duLiBPcmdhbml6ZXIgb25seS4AAAAAB2RlY2xpbmUAAAAAAQAAAAAAAAAJYXBwbGljYW50AAAAAAAAEwAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAAAAAPZQcm92ZSBhdHRlbmRhbmNlIHdpdGggdGhlIG9yZ2FuaXplcidzIHNlY3JldCBhbmQgdGFrZSB0aGUgZGVwb3NpdCBiYWNrLgoKVGhpcyBpcyB0aGUgb25seSBwbGFjZSBhIGd1ZXN0IGdldHMgcGFpZCBvbiB0aGUgaGFwcHkgcGF0aCDigJQgdGhlIGRlcG9zaXQKYW5kIHRoZSBmZWUgcmVpbWJ1cnNlbWVudCBsYW5kIGluIHRoZSBzYW1lIGNhbGwsIHNvIHRoZXJlIGlzIG5vdGhpbmcgdG8KY29tZSBiYWNrIGFuZCBjbGFpbSBsYXRlci4AAAAAAAhjaGVja19pbgAAAAIAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAAAAAAGc2VjcmV0AAAAAAAOAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAADJDbG9zZSB0aGUgZXZlbnQgYW5kIHNldHRsZSB0aGUgbm8tc2hvd3MnIGRlcG9zaXRzLgAAAAAACGZpbmFsaXplAAAAAAAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAAAAAAAAAAAJZ2V0X3BoYXNlAAAAAAAAAAAAAAEAAAfQAAAABVBoYXNlAAAA",
@@ -307,6 +345,8 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAMZ2V0X3Jlc2VydmVkAAAAAAAAAAEAAAPqAAAAEw==",
         "AAAAAAAAAAAAAAAMaXNfZmluYWxpemVkAAAAAAAAAAEAAAAB",
         "AAAAAAAAADVTdGFydCBjaGVjay1pbiwgY2xvc2luZyByZXNlcnZhdGlvbnMuIE9yZ2FuaXplciBvbmx5LgAAAAAAAAxvcGVuX2NoZWNraW4AAAAAAAAAAQAAA+kAAAACAAAAAw==",
+        "AAAABQAAAN5PbmUgZXZlbnQgZm9yIGJvdGggYW5zd2VycywgYmVjYXVzZSB0aGUgaW50ZXJlc3RpbmcgdGhpbmcgdG8gd2F0Y2ggaXMgdGhhdAphbiBhcHBsaWNhdGlvbiB3YXMgYW5zd2VyZWQgYXQgYWxsIOKAlCBhbiBvcmdhbml6ZXIgd2hvIGFwcHJvdmVzIGV2ZXJ5Ym9keSBhbmQKb25lIHdobyBpcyBhY3R1YWxseSBjaG9vc2luZyBsb29rIGlkZW50aWNhbCB1bnRpbCB5b3UgcmVhZCB0aGUgZmxhZy4AAAAAAAAAAAATQXBwbGljYXRpb25BbnN3ZXJlZAAAAAABAAAAFGFwcGxpY2F0aW9uX2Fuc3dlcmVkAAAAAgAAAAAAAAAJYXBwbGljYW50AAAAAAAAEwAAAAAAAAAAAAAACGFwcHJvdmVkAAAAAQAAAAAAAAAC",
+        "AAAABQAAAAAAAAAAAAAAE0FwcGxpY2F0aW9uUmVjZWl2ZWQAAAAAAQAAABRhcHBsaWNhdGlvbl9yZWNlaXZlZAAAAAEAAAAAAAAACWFwcGxpY2FudAAAAAAAABMAAAAAAAAAAg==",
         "AAAAAAAAAAAAAAAOZ2V0X2F0dGVuZGFuY2UAAAAAAAEAAAAAAAAABWd1ZXN0AAAAAAAAEwAAAAEAAAPoAAAH0AAAAApBdHRlbmRhbmNlAAA=",
         "AAAAAAAAAAAAAAAOZ2V0X2NoZWNrZWRfaW4AAAAAAAAAAAABAAAD6gAAABM=",
         "AAAAAQAAAatBIG1lbWJlcidzIGF0dGVuZGFuY2UgcmVjb3JkLCBhcyB0aGUgZXZlbnQgY29udHJhY3QgcmVhZHMgaXQuCgpNaXJyb3JzIHRoZSByZXB1dGF0aW9uIGNvbnRyYWN0J3Mgb3duIGBTY29yZWAgZmllbGQgZm9yIGZpZWxkLiBJdCBpcyBjb3BpZWQKcmF0aGVyIHRoYW4gc2hhcmVkIGJlY2F1c2UgdGhhdCBjb250cmFjdCBkZWxpYmVyYXRlbHkgZG9lcyBub3QgbGluayB0aGlzCmNyYXRlIOKAlCBkb2luZyBzbyB3b3VsZCBwdWJsaXNoIGEgYEZvcmZlaXRQb2xpY3lgIHR5cGUgb24gYSByZXB1dGF0aW9uCmxlZGdlcidzIHNwZWMg4oCUIGFuZCBhIGAjW2NvbnRyYWN0dHlwZV1gIHN0cnVjdCBlbmNvZGVzIGFzIGEgbWFwIGtleWVkIGJ5CmZpZWxkIG5hbWUsIHNvIHR3byBpZGVudGljYWwgZGVjbGFyYXRpb25zIGRlY29kZSBlYWNoIG90aGVyIGV4YWN0bHkuAAAAAAAAAAAFU2NvcmUAAAAAAAACAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAABXNob3dzAAAAAAAABA==",
@@ -317,6 +357,9 @@ export class Client extends ContractClient {
   }
   public readonly fromJSON = {
     rsvp: this.txFromJSON<Result<void>>,
+        apply: this.txFromJSON<Result<void>>,
+        approve: this.txFromJSON<Result<void>>,
+        decline: this.txFromJSON<Result<void>>,
         check_in: this.txFromJSON<Result<void>>,
         finalize: this.txFromJSON<Result<void>>,
         get_phase: this.txFromJSON<Phase>,

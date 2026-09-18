@@ -18,6 +18,19 @@
 //!     └───────────────────finalize────────────┘
 //! ```
 //!
+//! Who may `rsvp` at all is the event's `Admission` mode, fixed at creation and
+//! enforced here rather than by a screen. Under `Approval` the guest's path
+//! gains a step in front of the deposit:
+//!
+//! ```text
+//! apply ──▶ Applied ──approve──▶ Approved ──rsvp──▶ Reserved
+//!              └─────decline───▶ Declined (terminal)
+//! ```
+//!
+//! Nothing is taken until that `rsvp`, and it is the applicant's own
+//! transaction — an approval that could pull a deposit would mean anyone could
+//! be charged for being liked.
+//!
 //! The phases are what stop someone who was forwarded the check-in link from
 //! reserving and checking in on the spot without ever attending — which would
 //! both pocket the fee allowance and dilute the real attendees' share of the
@@ -82,9 +95,23 @@ pub enum Phase {
     Finalized,
 }
 
+/// Where somebody stands with one event.
+///
+/// The first three exist only under `Admission::Approval` and none of them has
+/// any money behind it — an application is a question, and asking it costs
+/// nothing. `Reserved` is the first state that means a deposit is locked, which
+/// is why it is also the first state the reserved list and the capacity count
+/// know about.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Attendance {
+    /// Asked to come, not yet answered.
+    Applied,
+    /// Answered yes. May now reserve, and that is when the deposit moves.
+    Approved,
+    /// Answered no. Terminal, so a declined applicant cannot re-apply their way
+    /// back into an organizer's inbox.
+    Declined,
     Reserved,
     CheckedIn,
 }
@@ -165,6 +192,20 @@ pub struct Finalized {
 #[contractevent]
 pub struct PhaseChanged {
     pub phase: Phase,
+}
+
+#[contractevent]
+pub struct ApplicationReceived {
+    pub applicant: Address,
+}
+
+/// One event for both answers, because the interesting thing to watch is that
+/// an application was answered at all — an organizer who approves everybody and
+/// one who is actually choosing look identical until you read the flag.
+#[contractevent]
+pub struct ApplicationAnswered {
+    pub applicant: Address,
+    pub approved: bool,
 }
 
 #[contracttype]
@@ -275,11 +316,17 @@ impl EventContract {
         }
         guest.require_auth();
 
-        if env
+        // Having a record is no longer the same as having a spot: under
+        // `Approval` a guest holds one from the moment they apply, and the
+        // whole point of that mode is that they reserve afterwards.
+        let standing = env
             .storage()
             .persistent()
-            .has(&DataKey::Attendance(guest.clone()))
-        {
+            .get::<_, Attendance>(&DataKey::Attendance(guest.clone()));
+        if matches!(
+            standing,
+            Some(Attendance::Reserved) | Some(Attendance::CheckedIn)
+        ) {
             return Err(Error::AlreadyReserved);
         }
 
@@ -292,7 +339,7 @@ impl EventContract {
         // leave this contract, and a guest who is already reserved or arriving
         // at a full event has been turned away without anyone paying for a
         // cross-contract call.
-        Self::require_admitted(&env, &config, &guest)?;
+        Self::require_admitted(&env, &config, &guest, standing)?;
 
         let this = env.current_contract_address();
         token::Client::new(&env, &config.token).transfer(&guest, &this, &config.deposit);
@@ -315,6 +362,48 @@ impl EventContract {
         Ok(())
     }
 
+    /// Ask to come. `Admission::Approval` only, and it moves no money.
+    ///
+    /// The SOW's promise is that nothing is taken before the organizer says
+    /// yes, so this is two transactions rather than one: `apply` here, then
+    /// `rsvp` after approval, and the deposit moves in that second one. It has
+    /// to be the applicant's own transaction. An approval that could pull
+    /// somebody's deposit would mean anyone could be charged for being liked.
+    pub fn apply(env: Env, guest: Address) -> Result<(), Error> {
+        let config = Self::config(&env)?;
+        match Self::phase(&env) {
+            Phase::Reserving => {}
+            Phase::CheckingIn => return Err(Error::ReservationsClosed),
+            Phase::Finalized => return Err(Error::AlreadyFinalized),
+        }
+        if config.admission != Admission::Approval {
+            return Err(Error::WrongAdmissionMode);
+        }
+        guest.require_auth();
+
+        let key = DataKey::Attendance(guest.clone());
+        if env.storage().persistent().has(&key) {
+            return Err(Error::AlreadyApplied);
+        }
+
+        env.storage().persistent().set(&key, &Attendance::Applied);
+        Self::bump_attendance(&env, &guest);
+        Self::bump_instance(&env);
+
+        ApplicationReceived { applicant: guest }.publish(&env);
+        Ok(())
+    }
+
+    /// Let an applicant reserve. Organizer only.
+    pub fn approve(env: Env, applicant: Address) -> Result<(), Error> {
+        Self::answer(&env, applicant, true)
+    }
+
+    /// Turn an applicant down. Organizer only.
+    pub fn decline(env: Env, applicant: Address) -> Result<(), Error> {
+        Self::answer(&env, applicant, false)
+    }
+
     /// Prove attendance with the organizer's secret and take the deposit back.
     ///
     /// This is the only place a guest gets paid on the happy path — the deposit
@@ -334,9 +423,15 @@ impl EventContract {
             .persistent()
             .get::<_, Attendance>(&DataKey::Attendance(guest.clone()))
         {
-            None => return Err(Error::NotReserved),
             Some(Attendance::CheckedIn) => return Err(Error::AlreadyCheckedIn),
             Some(Attendance::Reserved) => {}
+            // Approved but never reserved is the same as never asking, as far
+            // as the door is concerned: no deposit was ever locked, so there is
+            // nothing here to hand back.
+            None
+            | Some(Attendance::Applied)
+            | Some(Attendance::Approved)
+            | Some(Attendance::Declined) => return Err(Error::NotReserved),
         }
 
         if env.crypto().sha256(&secret).to_bytes() != config.code_hash {
@@ -513,12 +608,57 @@ impl EventContract {
         );
     }
 
+    /// Answer one application, yes or no.
+    ///
+    /// Only an application in `Applied` can be answered, which makes a decision
+    /// final in both directions. That is the conservative reading: an approval
+    /// the organizer could take back is one a guest cannot plan around, and a
+    /// decline they could take back is an inbox a declined applicant can keep
+    /// reopening.
+    fn answer(env: &Env, applicant: Address, approved: bool) -> Result<(), Error> {
+        let config = Self::config(env)?;
+        if Self::phase(env) == Phase::Finalized {
+            return Err(Error::AlreadyFinalized);
+        }
+        if config.admission != Admission::Approval {
+            return Err(Error::WrongAdmissionMode);
+        }
+        config.organizer.require_auth();
+
+        let key = DataKey::Attendance(applicant.clone());
+        match env.storage().persistent().get::<_, Attendance>(&key) {
+            Some(Attendance::Applied) => {}
+            _ => return Err(Error::NotApplied),
+        }
+
+        let decision = if approved {
+            Attendance::Approved
+        } else {
+            Attendance::Declined
+        };
+        env.storage().persistent().set(&key, &decision);
+        Self::bump_attendance(env, &applicant);
+        Self::bump_instance(env);
+
+        ApplicationAnswered {
+            applicant,
+            approved,
+        }
+        .publish(env);
+        Ok(())
+    }
+
     /// Decide whether `guest` may reserve at all.
     ///
     /// This is the whole point of putting admission on-chain: a gate a screen
     /// applies is a suggestion, because `rsvp` can be called straight against
     /// the contract by anyone who knows its address.
-    fn require_admitted(env: &Env, config: &Config, guest: &Address) -> Result<(), Error> {
+    fn require_admitted(
+        env: &Env,
+        config: &Config,
+        guest: &Address,
+        standing: Option<Attendance>,
+    ) -> Result<(), Error> {
         match config.admission {
             Admission::Open => Ok(()),
             Admission::Score(min) => {
@@ -535,10 +675,17 @@ impl EventContract {
                 }
                 Ok(())
             }
-            // Enforcement for these two does not exist yet. A mode that cannot
-            // be enforced admits nobody rather than everybody: an event created
-            // with a gate this revision does not understand is closed, not open.
-            Admission::Approval | Admission::Vouch(_) => Err(Error::WrongAdmissionMode),
+            // The organizer's yes is the whole gate, and it has to already have
+            // been given: `Applied` and `Declined` are both "not approved", and
+            // so is having never asked.
+            Admission::Approval => match standing {
+                Some(Attendance::Approved) => Ok(()),
+                _ => Err(Error::NotApplied),
+            },
+            // Enforcement does not exist yet. A mode that cannot be enforced
+            // admits nobody rather than everybody: an event created with a gate
+            // this revision does not understand is closed, not open.
+            Admission::Vouch(_) => Err(Error::WrongAdmissionMode),
         }
     }
 

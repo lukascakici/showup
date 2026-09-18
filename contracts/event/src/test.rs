@@ -336,15 +336,197 @@ fn a_gate_this_revision_cannot_enforce_admits_nobody() {
     let f = setup_gated(
         ForfeitPolicy::ToOrganizer,
         Ledger::Real,
-        Admission::Approval,
+        Admission::Vouch(1),
     );
     let guest = f.guest(DEPOSIT);
 
-    // Approval lands next; until it does, an event created with it is closed
-    // rather than open. Replaced by the real approval tests when they arrive.
+    // Vouching lands in Block B; until it does, an event created with it is
+    // closed rather than open.
     assert_eq!(
         f.client.try_rsvp(&guest),
         Err(Ok(Error::WrongAdmissionMode))
+    );
+}
+
+/// An approval-gated event with a live ledger.
+fn by_approval() -> Fixture {
+    setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Real,
+        Admission::Approval,
+    )
+}
+
+#[test]
+fn application_moves_no_money() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+    let pool = f.balance(&f.client.address);
+
+    f.client.apply(&applicant);
+
+    // The SOW's promise, as an assertion: nothing is taken before the organizer
+    // says yes. Not taken and refunded — never taken.
+    assert_eq!(f.balance(&applicant), DEPOSIT);
+    assert_eq!(f.balance(&f.client.address), pool);
+    assert_eq!(
+        f.client.get_attendance(&applicant),
+        Some(Attendance::Applied)
+    );
+    assert_eq!(f.client.get_reserved().len(), 0);
+}
+
+#[test]
+fn approved_applicant_can_reserve() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+
+    f.client.apply(&applicant);
+    f.client.approve(&applicant);
+    f.client.rsvp(&applicant);
+
+    // Two transactions, and the deposit moved in the second one — the
+    // applicant's own.
+    assert_eq!(f.balance(&applicant), 0);
+    assert_eq!(
+        f.client.get_attendance(&applicant),
+        Some(Attendance::Reserved)
+    );
+    assert_eq!(f.client.get_reserved().len(), 1);
+}
+
+#[test]
+fn declined_applicant_cannot_reserve() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+
+    f.client.apply(&applicant);
+    f.client.decline(&applicant);
+
+    assert_eq!(
+        f.client.get_attendance(&applicant),
+        Some(Attendance::Declined)
+    );
+    assert_eq!(f.client.try_rsvp(&applicant), Err(Ok(Error::NotApplied)));
+    assert_eq!(f.balance(&applicant), DEPOSIT);
+}
+
+#[test]
+fn a_declined_applicant_cannot_ask_again() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+
+    f.client.apply(&applicant);
+    f.client.decline(&applicant);
+
+    // Declining is terminal in both directions: the organizer's inbox is not
+    // something a rejected applicant can reopen at will.
+    assert_eq!(
+        f.client.try_apply(&applicant),
+        Err(Ok(Error::AlreadyApplied))
+    );
+}
+
+#[test]
+fn approving_someone_who_never_applied_is_refused() {
+    let f = by_approval();
+    let stranger = f.guest(DEPOSIT);
+
+    assert_eq!(f.client.try_approve(&stranger), Err(Ok(Error::NotApplied)));
+    assert_eq!(f.client.try_decline(&stranger), Err(Ok(Error::NotApplied)));
+    assert_eq!(f.client.get_attendance(&stranger), None);
+}
+
+#[test]
+fn applying_twice_is_refused() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+
+    f.client.apply(&applicant);
+
+    assert_eq!(
+        f.client.try_apply(&applicant),
+        Err(Ok(Error::AlreadyApplied))
+    );
+}
+
+#[test]
+fn applying_to_an_open_event_is_wrong_mode() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+
+    // There is nobody to approve you at an open event, so an application there
+    // would be a record that nothing could ever clear.
+    assert_eq!(
+        f.client.try_apply(&guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(
+        f.client.try_approve(&guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+}
+
+#[test]
+fn reserving_while_still_applied_is_refused() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+
+    f.client.apply(&applicant);
+
+    // Unanswered is not yes. This is the one that would quietly turn the whole
+    // mode into an open event if the check read "has a record" instead of "has
+    // an approved record".
+    assert_eq!(f.client.try_rsvp(&applicant), Err(Ok(Error::NotApplied)));
+    assert_eq!(f.balance(&applicant), DEPOSIT);
+}
+
+#[test]
+fn applications_do_not_consume_capacity() {
+    let f = by_approval();
+
+    // Twice the capacity in applications, none of them answered.
+    for _ in 0..CAPACITY * 2 {
+        let applicant = f.guest(DEPOSIT);
+        f.client.apply(&applicant);
+    }
+
+    // A pile of applications must not be able to lock an event that has nobody
+    // in it — that is a denial of service the organizer cannot clear.
+    let approved = f.guest(DEPOSIT);
+    f.client.apply(&approved);
+    f.client.approve(&approved);
+    f.client.rsvp(&approved);
+
+    assert_eq!(f.client.get_reserved().len(), 1);
+}
+
+#[test]
+fn an_approved_applicant_who_never_reserved_cannot_check_in() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+    f.client.apply(&applicant);
+    f.client.approve(&applicant);
+    f.client.open_checkin();
+
+    // Approval is permission to lock a deposit, not a spot. Skipping the
+    // reservation would mean walking out with the fee allowance for an event
+    // nothing was ever staked on.
+    assert_eq!(
+        f.client.try_check_in(&applicant, &f.secret),
+        Err(Ok(Error::NotReserved))
+    );
+}
+
+#[test]
+fn applications_close_when_check_in_opens() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+    f.client.open_checkin();
+
+    assert_eq!(
+        f.client.try_apply(&applicant),
+        Err(Ok(Error::ReservationsClosed))
     );
 }
 
