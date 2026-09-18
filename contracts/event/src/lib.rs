@@ -288,6 +288,12 @@ impl EventContract {
             return Err(Error::EventFull);
         }
 
+        // Last of the checks, and deliberately so: it is the only one that can
+        // leave this contract, and a guest who is already reserved or arriving
+        // at a full event has been turned away without anyone paying for a
+        // cross-contract call.
+        Self::require_admitted(&env, &config, &guest)?;
+
         let this = env.current_contract_address();
         token::Client::new(&env, &config.token).transfer(&guest, &this, &config.deposit);
 
@@ -505,6 +511,35 @@ impl EventContract {
             TTL_THRESHOLD,
             TTL_EXTEND_TO,
         );
+    }
+
+    /// Decide whether `guest` may reserve at all.
+    ///
+    /// This is the whole point of putting admission on-chain: a gate a screen
+    /// applies is a suggestion, because `rsvp` can be called straight against
+    /// the contract by anyone who knows its address.
+    fn require_admitted(env: &Env, config: &Config, guest: &Address) -> Result<(), Error> {
+        match config.admission {
+            Admission::Open => Ok(()),
+            Admission::Score(min) => {
+                let reputation = config.reputation.as_ref().ok_or(Error::NoReputation)?;
+                // Not a `try_` call, unlike every write into the ledger. A write
+                // that fails is swallowed because no score is worth trapping a
+                // guest's refund for; a read that fails has no safe answer —
+                // assuming zero locks everyone out, assuming enough turns a
+                // gated event open. So it traps, and the guest is told to try
+                // again rather than quietly let in.
+                let score = ReputationClient::new(env, reputation).get_score(guest);
+                if score.shows < min {
+                    return Err(Error::ScoreTooLow);
+                }
+                Ok(())
+            }
+            // Enforcement for these two does not exist yet. A mode that cannot
+            // be enforced admits nobody rather than everybody: an event created
+            // with a gate this revision does not understand is closed, not open.
+            Admission::Approval | Admission::Vouch(_) => Err(Error::WrongAdmissionMode),
+        }
     }
 
     /// Record a show or a no-show, and never let it matter.

@@ -70,6 +70,11 @@ fn setup(policy: ForfeitPolicy) -> Fixture {
 }
 
 fn setup_with(policy: ForfeitPolicy, ledger: Ledger) -> Fixture {
+    setup_gated(policy, ledger, Admission::Open)
+}
+
+/// The same fixture with the admission mode opened up as a third dimension.
+fn setup_gated(policy: ForfeitPolicy, ledger: Ledger, admission: Admission) -> Fixture {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -113,7 +118,7 @@ fn setup_with(policy: ForfeitPolicy, ledger: Ledger) -> Fixture {
         &code_hash,
         &policy,
         &address,
-        &Admission::Open,
+        &admission,
     );
 
     Fixture {
@@ -150,6 +155,21 @@ impl Fixture {
             .filter_by_contract(&self.client.address)
             .events()
             .len()
+    }
+
+    /// Give `who` a record, by writing the check-ins straight to the ledger.
+    ///
+    /// Shorter than running them through whole events, and it exercises the
+    /// same path: the ledger has this event registered, so these are the
+    /// identical writes `check_in` makes.
+    fn give_shows(&self, who: &Address, shows: u32) {
+        let ledger = self
+            .reputation
+            .as_ref()
+            .expect("this fixture has no real ledger");
+        for _ in 0..shows {
+            ledger.record_checkin(&self.client.address, who);
+        }
     }
 
     /// `(shows, no_shows)` as the ledger has them.
@@ -206,6 +226,126 @@ fn rsvp_past_capacity_is_rejected() {
 
     let latecomer = f.guest(DEPOSIT);
     assert_eq!(f.client.try_rsvp(&latecomer), Err(Ok(Error::EventFull)));
+}
+
+/// The gated fixture: a live ledger and a two-show threshold.
+fn gated(min_shows: u32) -> Fixture {
+    setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Real,
+        Admission::Score(min_shows),
+    )
+}
+
+#[test]
+fn score_below_threshold_is_refused() {
+    let f = gated(2);
+    let guest = f.guest(DEPOSIT);
+    f.give_shows(&guest, 1);
+
+    assert_eq!(f.client.try_rsvp(&guest), Err(Ok(Error::ScoreTooLow)));
+    // Refused before the transfer, not after it and refunded.
+    assert_eq!(f.balance(&guest), DEPOSIT);
+    assert_eq!(f.client.get_reserved().len(), 0);
+}
+
+#[test]
+fn score_exactly_at_threshold_is_admitted() {
+    let f = gated(2);
+    let guest = f.guest(DEPOSIT);
+    f.give_shows(&guest, 2);
+
+    f.client.rsvp(&guest);
+
+    // The boundary is `<`, not `<=`. Getting this backwards would turn every
+    // published threshold into a lie by exactly one event.
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Reserved));
+}
+
+#[test]
+fn score_above_threshold_is_admitted() {
+    let f = gated(2);
+    let guest = f.guest(DEPOSIT);
+    f.give_shows(&guest, 5);
+
+    f.client.rsvp(&guest);
+
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Reserved));
+}
+
+#[test]
+fn score_zero_wallet_refused_from_a_gated_event() {
+    let f = gated(1);
+    // A wallet the ledger has never seen. It reads as `{0, 0}` rather than
+    // erroring, so this is the path a brand-new guest actually takes.
+    let newcomer = f.guest(DEPOSIT);
+
+    assert_eq!(f.score(&newcomer), (0, 0));
+    assert_eq!(f.client.try_rsvp(&newcomer), Err(Ok(Error::ScoreTooLow)));
+}
+
+#[test]
+fn no_shows_do_not_count_against_the_gate() {
+    let f = gated(1);
+    let guest = f.guest(DEPOSIT);
+    f.give_shows(&guest, 1);
+    f.reputation
+        .as_ref()
+        .unwrap()
+        .record_no_show(&f.client.address, &guest);
+
+    // The gate reads `shows`, full stop. Netting no-shows off it would be a
+    // second, invisible formula on top of the one the organizer chose.
+    assert_eq!(f.score(&guest), (1, 1));
+    f.client.rsvp(&guest);
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Reserved));
+}
+
+#[test]
+fn open_event_admits_anyone_as_before() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let newcomer = f.guest(DEPOSIT);
+
+    assert_eq!(f.score(&newcomer), (0, 0));
+    f.client.rsvp(&newcomer);
+
+    // Every event on the live factory is an open one. The branch above must not
+    // have changed a thing for them.
+    assert_eq!(
+        f.client.get_attendance(&newcomer),
+        Some(Attendance::Reserved)
+    );
+}
+
+#[test]
+fn score_gate_without_a_reputation_address_refuses_cleanly() {
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::None,
+        Admission::Score(1),
+    );
+    let guest = f.guest(DEPOSIT);
+
+    // A gate with nothing to read cannot answer. It says so, instead of
+    // panicking or falling open.
+    assert_eq!(f.client.try_rsvp(&guest), Err(Ok(Error::NoReputation)));
+}
+
+#[test]
+fn a_gate_this_revision_cannot_enforce_admits_nobody() {
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Real,
+        Admission::Approval,
+    );
+    let guest = f.guest(DEPOSIT);
+
+    // Approval lands next; until it does, an event created with it is closed
+    // rather than open. Replaced by the real approval tests when they arrive.
+    assert_eq!(
+        f.client.try_rsvp(&guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
 }
 
 #[test]
