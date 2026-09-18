@@ -29,7 +29,7 @@ use soroban_sdk::{
     BytesN, Env, String, Vec,
 };
 
-pub use interfaces::ForfeitPolicy;
+pub use interfaces::{Admission, ForfeitPolicy};
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -56,6 +56,19 @@ pub enum Error {
     InvalidTitle = 15,
     /// Zero. An event with no start time cannot be sorted or described.
     InvalidStartTime = 16,
+    /// `rsvp` on a `Score`-gated event from a record below the threshold.
+    ScoreTooLow = 17,
+    /// `rsvp` on an `Approval` event from someone the organizer never approved.
+    NotApplied = 18,
+    /// A second `apply` from the same guest.
+    AlreadyApplied = 19,
+    /// A host-only call from an address that is not a host.
+    NotAHost = 20,
+    /// A call that only makes sense under a different admission mode — applying
+    /// to an open event, or vouching for a guest at one.
+    WrongAdmissionMode = 21,
+    /// A gate that needs a reputation ledger on an event created without one.
+    NoReputation = 22,
 }
 
 #[contracttype]
@@ -112,6 +125,10 @@ pub struct Config {
     /// underneath them, and `None` has to keep working because events created
     /// before reputation existed still run.
     pub reputation: Option<Address>,
+    /// Who may reserve a spot. Fixed at creation, like the deposit and the
+    /// capacity: the terms somebody agreed to when they locked their money must
+    /// not be editable by the person holding it.
+    pub admission: Admission,
 }
 
 #[contracttype]
@@ -193,6 +210,7 @@ impl EventContract {
         code_hash: BytesN<32>,
         policy: ForfeitPolicy,
         reputation: Option<Address>,
+        admission: Admission,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -231,6 +249,7 @@ impl EventContract {
             code_hash,
             policy,
             reputation,
+            admission,
         };
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage()

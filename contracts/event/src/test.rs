@@ -113,6 +113,7 @@ fn setup_with(policy: ForfeitPolicy, ledger: Ledger) -> Fixture {
         &code_hash,
         &policy,
         &address,
+        &Admission::Open,
     );
 
     Fixture {
@@ -373,6 +374,7 @@ fn initialize_twice_is_rejected() {
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
             &None,
+            &Admission::Open,
         ),
         Err(Ok(Error::AlreadyInitialized))
     );
@@ -402,7 +404,8 @@ fn initialize_rejects_nonsense_parameters() {
             &CAPACITY,
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
-            &None
+            &None,
+            &Admission::Open,
         ),
         Err(Ok(Error::InvalidDeposit))
     );
@@ -417,7 +420,8 @@ fn initialize_rejects_nonsense_parameters() {
             &0,
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
-            &None
+            &None,
+            &Admission::Open,
         ),
         Err(Ok(Error::InvalidCapacity))
     );
@@ -552,6 +556,7 @@ fn a_nameless_or_timeless_event_is_rejected() {
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
             &None,
+            &Admission::Open,
         )
     };
 
@@ -588,6 +593,7 @@ fn a_nameless_or_timeless_event_is_rejected() {
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
             &None,
+            &Admission::Open,
         ),
         Err(Ok(Error::InvalidTitle))
     );

@@ -36,6 +36,47 @@ pub const TTL_EXTEND_TO: u32 = LEDGERS_PER_DAY * 90;
 /// event is not rewriting the same TTL on every single call.
 pub const TTL_THRESHOLD: u32 = LEDGERS_PER_DAY * 30;
 
+/// The fewest shows a record needs before its owner may vouch for someone.
+///
+/// One is enough on purpose: the point of vouching is to let a newcomer in on
+/// somebody else's record, so a threshold high enough to be scarce would close
+/// the door it exists to open. The other half of the rule is not a number — a
+/// voucher whose past vouches were broken does not qualify at any show count —
+/// and it lives with the vouch bookkeeping in Block B.
+pub const VOUCH_QUALIFY_SHOWS: u32 = 1;
+
+/// Who is allowed to reserve a spot.
+///
+/// Fixed at creation and enforced inside the event contract rather than by a
+/// screen, because a gate a frontend applies is a suggestion: anyone can call
+/// `rsvp` directly against the contract.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Admission {
+    /// Anyone, first come first served. What every event created so far is.
+    Open,
+    /// Anyone whose reputation record shows at least this many check-ins.
+    Score(u32),
+    /// Anyone the organizer says yes to, one at a time.
+    Approval,
+    /// Anyone vouched for by this many members with a record of their own.
+    Vouch(u32),
+}
+
+/// A member's attendance record, as the event contract reads it.
+///
+/// Mirrors the reputation contract's own `Score` field for field. It is copied
+/// rather than shared because that contract deliberately does not link this
+/// crate — doing so would publish a `ForfeitPolicy` type on a reputation
+/// ledger's spec — and a `#[contracttype]` struct encodes as a map keyed by
+/// field name, so two identical declarations decode each other exactly.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Score {
+    pub shows: u32,
+    pub no_shows: u32,
+}
+
 /// Where the deposits of no-shows go when an event is finalized.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -66,22 +107,25 @@ pub trait Event {
         code_hash: BytesN<32>,
         policy: ForfeitPolicy,
         reputation: Option<Address>,
+        admission: Admission,
     );
 }
 
 /// The slice of the reputation ledger its two callers need.
 ///
 /// The factory calls `register_event` when it deploys an event; the event
-/// itself calls the two `record_*` functions. Nothing here returns a score —
-/// reading one is a frontend concern and does not belong in a contract's wasm
-/// spec.
+/// itself calls the two `record_*` functions and, once an event can be gated on
+/// a record, reads one back with `get_score`.
 ///
-/// Everything here can fail without consequence, and the event contract calls
-/// these through the generated `try_` variants precisely so it can ignore a
-/// failure. A score is never worth trapping a guest's refund for.
+/// The writes can fail without consequence, and the event contract calls those
+/// through the generated `try_` variants precisely so it can ignore a failure.
+/// A score is never worth trapping a guest's refund for. The read is the
+/// opposite case: an admission check that cannot reach the ledger has no answer,
+/// and guessing one would either turn a gated event open or lock everybody out.
 #[contractclient(name = "ReputationClient")]
 pub trait Reputation {
     fn register_event(env: Env, event: Address);
     fn record_checkin(env: Env, event: Address, member: Address);
     fn record_no_show(env: Env, event: Address, member: Address);
+    fn get_score(env: Env, member: Address) -> Score;
 }

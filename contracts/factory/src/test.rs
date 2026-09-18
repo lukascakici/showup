@@ -80,6 +80,7 @@ impl Fixture {
             &CAPACITY,
             &self.code_hash,
             &ForfeitPolicy::ToOrganizer,
+            &Admission::Open,
         )
     }
 
@@ -95,6 +96,7 @@ impl Fixture {
                 &CAPACITY,
                 &self.code_hash,
                 &ForfeitPolicy::ToOrganizer,
+                &Admission::Open,
             )
             .map(|ok| ok.unwrap())
             .map_err(|_| ())
@@ -204,6 +206,7 @@ fn create_event_requires_the_organizers_authorization() {
         &CAPACITY,
         &code_hash,
         &ForfeitPolicy::ToOrganizer,
+        &Admission::Open,
     );
     assert!(attempt.is_err());
 }
@@ -241,6 +244,7 @@ fn create_event_before_initialize_is_rejected() {
             &CAPACITY,
             &code_hash,
             &ForfeitPolicy::ToOrganizer,
+            &Admission::Open,
         ),
         Err(Ok(Error::NotInitialized))
     );

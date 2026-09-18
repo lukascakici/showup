@@ -11,6 +11,7 @@ import {
   generateSecret,
   hashSecret,
   toStroops,
+  type Admission,
   type ForfeitPolicy,
 } from "@/lib/contracts";
 import { useSigner } from "@/lib/signer";
@@ -180,6 +181,11 @@ export function CreateEvent() {
         capacity: capacityNum,
         code_hash: codeHash,
         policy: { tag: policy, values: undefined } as ForfeitPolicy,
+        // Every mode but this one needs a control that does not exist yet, and
+        // the contract does not branch on it yet either. Sending `Open`
+        // explicitly keeps the form behaving exactly as it did while the
+        // contract side is built out underneath it.
+        admission: { tag: "Open", values: undefined } as Admission,
       });
       // Everything above was a simulation against the RPC. From here the wallet
       // opens and the ledger has to close, which is where the time goes.

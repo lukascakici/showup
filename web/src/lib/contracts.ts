@@ -1,6 +1,7 @@
 import {
   Client as FactoryClient,
   networks as factoryNetworks,
+  type Admission,
   type ForfeitPolicy,
 } from "factory-client";
 import { Client as EventClient } from "event-client";
@@ -29,7 +30,7 @@ export const STROOPS_PER_XLM = 10_000_000n;
 /** What each guest is reimbursed on check-in, to cover the fees they spent. */
 export const FEE_ALLOWANCE_STROOPS = 1_000_000n; // 0.1 XLM
 
-export type { ForfeitPolicy };
+export type { Admission, ForfeitPolicy };
 
 type ClientOpts = {
   publicKey?: string;

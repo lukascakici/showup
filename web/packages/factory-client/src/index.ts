@@ -47,6 +47,29 @@ export type DataKey = {tag: "Admin", values: void} | {tag: "EventWasmHash", valu
 
 
 /**
+ * A member's attendance record, as the event contract reads it.
+ * 
+ * Mirrors the reputation contract's own `Score` field for field. It is copied
+ * rather than shared because that contract deliberately does not link this
+ * crate — doing so would publish a `ForfeitPolicy` type on a reputation
+ * ledger's spec — and a `#[contracttype]` struct encodes as a map keyed by
+ * field name, so two identical declarations decode each other exactly.
+ */
+export interface Score {
+  no_shows: u32;
+  shows: u32;
+}
+
+/**
+ * Who is allowed to reserve a spot.
+ * 
+ * Fixed at creation and enforced inside the event contract rather than by a
+ * screen, because a gate a frontend applies is a suggestion: anyone can call
+ * `rsvp` directly against the contract.
+ */
+export type Admission = {tag: "Open", values: void} | {tag: "Score", values: readonly [u32]} | {tag: "Approval", values: void} | {tag: "Vouch", values: readonly [u32]};
+
+/**
  * Where the deposits of no-shows go when an event is finalized.
  */
 export type ForfeitPolicy = {tag: "ToOrganizer", values: void} | {tag: "SplitAmongAttendees", values: void};
@@ -83,7 +106,7 @@ export interface Client {
    * event's own `initialize` pull the fee pool out of their wallet as part of
    * the same transaction.
    */
-  create_event: ({organizer, title, starts_at, token, deposit, fee_allowance, capacity, code_hash, policy}: {organizer: string, title: string, starts_at: u64, token: string, deposit: i128, fee_allowance: i128, capacity: u32, code_hash: Buffer, policy: ForfeitPolicy}, options?: MethodOptions) => Promise<AssembledTransaction<Result<string>>>
+  create_event: ({organizer, title, starts_at, token, deposit, fee_allowance, capacity, code_hash, policy, admission}: {organizer: string, title: string, starts_at: u64, token: string, deposit: i128, fee_allowance: i128, capacity: u32, code_hash: Buffer, policy: ForfeitPolicy, admission: Admission}, options?: MethodOptions) => Promise<AssembledTransaction<Result<string>>>
 
   /**
    * Construct and simulate a get_reputation transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -148,12 +171,14 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAJZ2V0X2FkbWluAAAAAAAAAAAAAAEAAAPpAAAAEwAAAAM=",
         "AAAAAAAAADVSZWdpc3RlciB0aGUgZmFjdG9yeSBhZ2FpbnN0IHRoZSB1cGxvYWRlZCBldmVudCB3YXNtLgAAAAAAAAppbml0aWFsaXplAAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAD2V2ZW50X3dhc21faGFzaAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAAAAAAAAAAALbGlzdF9ldmVudHMAAAAAAAAAAAEAAAPqAAAAEw==",
-        "AAAAAAAAANtEZXBsb3kgYW5kIGluaXRpYWxpemUgYW4gZXZlbnQgb3duZWQgYnkgYG9yZ2FuaXplcmAuCgpUaGUgb3JnYW5pemVyIGF1dGhvcml6ZXMgdGhpcyB3aG9sZSBjYWxsIHRyZWUsIHdoaWNoIGlzIHdoYXQgbGV0cyB0aGUKZXZlbnQncyBvd24gYGluaXRpYWxpemVgIHB1bGwgdGhlIGZlZSBwb29sIG91dCBvZiB0aGVpciB3YWxsZXQgYXMgcGFydCBvZgp0aGUgc2FtZSB0cmFuc2FjdGlvbi4AAAAADGNyZWF0ZV9ldmVudAAAAAkAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAABXRpdGxlAAAAAAAAEAAAAAAAAAAJc3RhcnRzX2F0AAAAAAAABgAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAAAAAAdkZXBvc2l0AAAAAAsAAAAAAAAADWZlZV9hbGxvd2FuY2UAAAAAAAALAAAAAAAAAAhjYXBhY2l0eQAAAAQAAAAAAAAACWNvZGVfaGFzaAAAAAAAA+4AAAAgAAAAAAAAAAZwb2xpY3kAAAAAB9AAAAANRm9yZmVpdFBvbGljeQAAAAAAAAEAAAPpAAAAEwAAAAM=",
+        "AAAAAAAAANtEZXBsb3kgYW5kIGluaXRpYWxpemUgYW4gZXZlbnQgb3duZWQgYnkgYG9yZ2FuaXplcmAuCgpUaGUgb3JnYW5pemVyIGF1dGhvcml6ZXMgdGhpcyB3aG9sZSBjYWxsIHRyZWUsIHdoaWNoIGlzIHdoYXQgbGV0cyB0aGUKZXZlbnQncyBvd24gYGluaXRpYWxpemVgIHB1bGwgdGhlIGZlZSBwb29sIG91dCBvZiB0aGVpciB3YWxsZXQgYXMgcGFydCBvZgp0aGUgc2FtZSB0cmFuc2FjdGlvbi4AAAAADGNyZWF0ZV9ldmVudAAAAAoAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAABXRpdGxlAAAAAAAAEAAAAAAAAAAJc3RhcnRzX2F0AAAAAAAABgAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAAAAAAdkZXBvc2l0AAAAAAsAAAAAAAAADWZlZV9hbGxvd2FuY2UAAAAAAAALAAAAAAAAAAhjYXBhY2l0eQAAAAQAAAAAAAAACWNvZGVfaGFzaAAAAAAAA+4AAAAgAAAAAAAAAAZwb2xpY3kAAAAAB9AAAAANRm9yZmVpdFBvbGljeQAAAAAAAAAAAAAJYWRtaXNzaW9uAAAAAAAH0AAAAAlBZG1pc3Npb24AAAAAAAABAAAD6QAAABMAAAAD",
         "AAAAAAAAACNgTm9uZWAgdW50aWwgYW4gYWRtaW4gd2lyZXMgb25lIHVwLgAAAAAOZ2V0X3JlcHV0YXRpb24AAAAAAAAAAAABAAAD6AAAABM=",
         "AAAAAAAAANxXaXJlIHRoZSBmYWN0b3J5IHRvIGEgcmVwdXRhdGlvbiBsZWRnZXIsIG9yIG1vdmUgaXQgdG8gYW5vdGhlciBvbmUuCkFkbWluIG9ubHkuCgpUaGlzIGlzIHRoZSBzZWNvbmQgaGFsZiBvZiB0aGUgY2lyY3VsYXIgc2V0dXA6IHJlcHV0YXRpb24gaXMgZGVwbG95ZWQKa25vd2luZyB0aGUgZmFjdG9yeSdzIGFkZHJlc3MsIHRoZW4gdGhlIGZhY3RvcnkgaXMgcG9pbnRlZCBiYWNrIGhlcmUuAAAADnNldF9yZXB1dGF0aW9uAAAAAAABAAAAAAAAAApyZXB1dGF0aW9uAAAAAAATAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAAAAAAAAPZ2V0X2V2ZW50X2NvdW50AAAAAAAAAAABAAAABA==",
         "AAAAAAAAAINXaGljaCBldmVudCByZXZpc2lvbiBuZXcgZXZlbnRzIGdldC4gTGV0cyBhIHJldmlld2VyIGNoZWNrIHRoYXQgdGhlCmRlcGxveWVkIGZhY3RvcnkgcmVhbGx5IGlzIHBvaW50aW5nIGF0IHRoZSB3YXNtIHRoZSBkb2NzIGNsYWltLgAAAAATZ2V0X2V2ZW50X3dhc21faGFzaAAAAAAAAAAAAQAAA+kAAAPuAAAAIAAAAAM=",
         "AAAAAAAAAQ1Qb2ludCBuZXcgZXZlbnRzIGF0IGEgbmV3IGV2ZW50IHdhc20uIEFkbWluIG9ubHkuCgpSZWFkIGF0IGRlcGxveSB0aW1lIG9uIGV2ZXJ5IGBjcmVhdGVfZXZlbnRgLCBzbyB0aGlzIHRha2VzIGVmZmVjdCBvbiB0aGUKbmV4dCBldmVudCBhbmQgbGVhdmVzIGV2ZXJ5IGV4aXN0aW5nIG9uZSBleGFjdGx5IGFzIGl0IHdhcyDigJQgYW4gZXZlbnQKcGVvcGxlIGhhdmUgYWxyZWFkeSBsb2NrZWQgZGVwb3NpdHMgaW4gbXVzdCBuZXZlciBjaGFuZ2UgdW5kZXJuZWF0aCB0aGVtLgAAAAAAABNzZXRfZXZlbnRfd2FzbV9oYXNoAAAAAAEAAAAAAAAAD2V2ZW50X3dhc21faGFzaAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
+        "AAAAAQAAAatBIG1lbWJlcidzIGF0dGVuZGFuY2UgcmVjb3JkLCBhcyB0aGUgZXZlbnQgY29udHJhY3QgcmVhZHMgaXQuCgpNaXJyb3JzIHRoZSByZXB1dGF0aW9uIGNvbnRyYWN0J3Mgb3duIGBTY29yZWAgZmllbGQgZm9yIGZpZWxkLiBJdCBpcyBjb3BpZWQKcmF0aGVyIHRoYW4gc2hhcmVkIGJlY2F1c2UgdGhhdCBjb250cmFjdCBkZWxpYmVyYXRlbHkgZG9lcyBub3QgbGluayB0aGlzCmNyYXRlIOKAlCBkb2luZyBzbyB3b3VsZCBwdWJsaXNoIGEgYEZvcmZlaXRQb2xpY3lgIHR5cGUgb24gYSByZXB1dGF0aW9uCmxlZGdlcidzIHNwZWMg4oCUIGFuZCBhIGAjW2NvbnRyYWN0dHlwZV1gIHN0cnVjdCBlbmNvZGVzIGFzIGEgbWFwIGtleWVkIGJ5CmZpZWxkIG5hbWUsIHNvIHR3byBpZGVudGljYWwgZGVjbGFyYXRpb25zIGRlY29kZSBlYWNoIG90aGVyIGV4YWN0bHkuAAAAAAAAAAAFU2NvcmUAAAAAAAACAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAABXNob3dzAAAAAAAABA==",
+        "AAAAAgAAAN1XaG8gaXMgYWxsb3dlZCB0byByZXNlcnZlIGEgc3BvdC4KCkZpeGVkIGF0IGNyZWF0aW9uIGFuZCBlbmZvcmNlZCBpbnNpZGUgdGhlIGV2ZW50IGNvbnRyYWN0IHJhdGhlciB0aGFuIGJ5IGEKc2NyZWVuLCBiZWNhdXNlIGEgZ2F0ZSBhIGZyb250ZW5kIGFwcGxpZXMgaXMgYSBzdWdnZXN0aW9uOiBhbnlvbmUgY2FuIGNhbGwKYHJzdnBgIGRpcmVjdGx5IGFnYWluc3QgdGhlIGNvbnRyYWN0LgAAAAAAAAAAAAAJQWRtaXNzaW9uAAAAAAAABAAAAAAAAABEQW55b25lLCBmaXJzdCBjb21lIGZpcnN0IHNlcnZlZC4gV2hhdCBldmVyeSBldmVudCBjcmVhdGVkIHNvIGZhciBpcy4AAAAET3BlbgAAAAEAAABCQW55b25lIHdob3NlIHJlcHV0YXRpb24gcmVjb3JkIHNob3dzIGF0IGxlYXN0IHRoaXMgbWFueSBjaGVjay1pbnMuAAAAAAAFU2NvcmUAAAAAAAABAAAABAAAAAAAAAAwQW55b25lIHRoZSBvcmdhbml6ZXIgc2F5cyB5ZXMgdG8sIG9uZSBhdCBhIHRpbWUuAAAACEFwcHJvdmFsAAAAAQAAAENBbnlvbmUgdm91Y2hlZCBmb3IgYnkgdGhpcyBtYW55IG1lbWJlcnMgd2l0aCBhIHJlY29yZCBvZiB0aGVpciBvd24uAAAAAAVWb3VjaAAAAAAAAAEAAAAE",
         "AAAAAgAAAD1XaGVyZSB0aGUgZGVwb3NpdHMgb2Ygbm8tc2hvd3MgZ28gd2hlbiBhbiBldmVudCBpcyBmaW5hbGl6ZWQuAAAAAAAAAAAAAA1Gb3JmZWl0UG9saWN5AAAAAAAAAgAAAAAAAAAaU3RyYWlnaHQgdG8gdGhlIG9yZ2FuaXplci4AAAAAAAtUb09yZ2FuaXplcgAAAAAAAAAAK1NwbGl0IGV2ZW5seSBhbW9uZyBldmVyeW9uZSB3aG8gY2hlY2tlZCBpbi4AAAAAE1NwbGl0QW1vbmdBdHRlbmRlZXMA" ]),
       options
     )

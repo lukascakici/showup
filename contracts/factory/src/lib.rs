@@ -17,7 +17,9 @@
 //! in the system costs an upload and an admin call — not a new factory address,
 //! a binding regeneration and a v2/v3 split through every doc.
 
-use interfaces::{EventClient, ForfeitPolicy, ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD};
+use interfaces::{
+    Admission, EventClient, ForfeitPolicy, ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD,
+};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, Address, BytesN, Env,
     String, Vec,
@@ -97,6 +99,7 @@ impl EventFactory {
         capacity: u32,
         code_hash: BytesN<32>,
         policy: ForfeitPolicy,
+        admission: Admission,
     ) -> Result<Address, Error> {
         let wasm_hash: BytesN<32> = env
             .storage()
@@ -131,6 +134,7 @@ impl EventFactory {
             &code_hash,
             &policy,
             &reputation,
+            &admission,
         );
 
         // Deliberately not a `try_` call. If the ledger is configured but won't
