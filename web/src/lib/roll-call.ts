@@ -8,7 +8,7 @@
  * of them at the door.
  *
  * What that costs is proof. A roll call entry is **a wallet address somebody
- * typed into a form**, not evidence that its owner was anywhere — there is no
+ * typed into a form**, not evidence that its owner was anywhere. There is no
  * signature behind it, because the one wallet that could not provide one is
  * Albedo, which `/api/events/sync` already documents as the reason this project
  * derives everything it can from the chain instead of from claims. So these
@@ -31,9 +31,10 @@ export type RollCall = {
    * The whole URL path: `showup.click/<slug>`.
    *
    * A roll call lives at the top level because it is printed on paper and read
-   * off a wall by someone typing it into a phone — every extra segment is
-   * another thing to get wrong in a room with bad signal. Unlisted, not
-   * secured: nothing links to it, and knowing it grants nothing worth having.
+   * off a wall by someone typing it into a phone, and every extra segment is
+   * another thing to get wrong in a room with bad signal. The home page links
+   * to it while the window is open, so the path is public rather than secret;
+   * that costs nothing, because knowing it grants nothing worth having.
    */
   slug: string;
   title: string;
@@ -46,7 +47,7 @@ export type RollCall = {
 /**
  * Paths that belong to the app and can never be a roll call.
  *
- * The route sits at `/[call]`, so it is the last thing Next tries — every
+ * The route sits at `/[call]`, so it is the last thing Next tries, and every
  * static segment beats it. This list exists so a slug cannot be *added* that
  * shadows a real page: the page would keep winning and the roll call would
  * silently never load, which is a confusing half-hour at the wrong moment.
@@ -57,14 +58,14 @@ const RESERVED = ["create", "e", "api", "icon.svg", "opengraph-image"];
  * Every roll call there is, in code rather than in a database.
  *
  * One line to add one, nothing to administer, and no write path a stranger
- * could reach — an admin screen for a feature this small would be more surface
+ * could reach. An admin screen for a feature this small would be more surface
  * than feature.
  */
 export const ROLL_CALLS: readonly RollCall[] = [
   {
     slug: "prohackathon_residency",
-    title: "ProHackathon Residency",
-    // 19.09.2026 00:00 and 21.09.2026 00:00, both UTC+03:00 — the two days the
+    title: "Pro Hackathon Grand Pera Edition",
+    // 19.09.2026 00:00 and 21.09.2026 00:00, both UTC+03:00: the two days the
     // meetup spans, with the close a day out so a late arrival on the 20th is
     // still let in.
     opensAt: 1_789_765_200,
@@ -80,9 +81,9 @@ export function rollCallBySlug(slug: string): RollCall | null {
 /**
  * Whether the door is open.
  *
- * A closed roll call still shows who came — the list is the point afterwards —
- * it just stops taking names, so a link that escapes the room cannot keep
- * collecting them for a week.
+ * A closed roll call still shows who came, because the list is the point
+ * afterwards. It just stops taking names, so a link that escapes the room
+ * cannot keep collecting them for a week.
  */
 export function isOpen(call: RollCall, now: number): boolean {
   return now >= call.opensAt && now < call.closesAt;

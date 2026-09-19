@@ -14,11 +14,11 @@ import {
  * The roll call: who said they were in the room.
  *
  * `firestore.rules` grants clients nothing, so this route is the only way in or
- * out of the collection — the same shape as `/api/events/sync`, and for the same
+ * out of the collection, the same shape as `/api/events/sync` and for the same
  * reason: a Firebase web config ships inside the browser bundle, so a client
  * write path is a write path for everyone on the internet.
  *
- * Unlike that route, this one *does* accept data — an address it cannot verify.
+ * Unlike that route, this one *does* accept data: an address it cannot verify.
  * See `lib/roll-call.ts` for why that trade is acceptable here and nowhere near
  * anything graded. The guards that remain are the ones worth having: the slug
  * must be a roll call this build knows about, the address must be a well-formed

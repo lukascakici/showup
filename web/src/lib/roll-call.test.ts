@@ -47,7 +47,7 @@ describe("the configured roll call", () => {
 
   // The route is `/[call]`, the very last thing Next matches. A slug named after
   // a real page would lose to that page and the roll call would silently never
-  // load — so it is refused here instead of being debugged in a hallway.
+  // load, so it is refused here instead of being debugged in a hallway.
   it("refuses a slug that shadows a real page", () => {
     for (const reserved of ["create", "e", "api"]) {
       expect(rollCallBySlug(reserved)).toBeNull();
@@ -90,7 +90,7 @@ describe("the list", () => {
   });
 
   it("sorts an entry with no timestamp last instead of first", () => {
-    // Read straight after a write, so a missing `at` is a live possibility —
+    // Read straight after a write, so a missing `at` is a live possibility,
     // and a zero sorting to the top would show somebody else's arrival as the
     // most recent one.
     const sorted = newestFirst([

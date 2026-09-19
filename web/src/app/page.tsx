@@ -15,6 +15,7 @@ import { CalendarPlus } from "lucide-react";
 import { Button, ButtonLink, Card, Chip, SectionLabel, Skeleton, Stat } from "@/components/ui";
 import { DepositFlowArt } from "@/components/DepositFlow";
 import { EventPoster } from "@/components/EventPoster";
+import { LiveRollCall } from "@/components/LiveRollCall";
 
 type Tab = "upcoming" | "past";
 
@@ -30,6 +31,8 @@ export default function Home() {
   return (
     <div>
       <Hero stats={stats} />
+
+      <LiveRollCall />
 
       <div className="mb-8 flex items-center justify-between gap-4">
         <h2 className="font-display text-[30px] font-bold tracking-[-0.025em]">
