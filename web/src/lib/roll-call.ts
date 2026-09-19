@@ -39,6 +39,18 @@ export type RollCall = {
   slug: string;
   title: string;
   where?: string;
+  /**
+   * The organizer's own poster, in `public/`.
+   *
+   * An event page without one falls back to the generated poster, which is
+   * honest for something that has only an address and a name. A meetup that
+   * printed lanyards has real artwork, and inventing a colourway next to it
+   * would look like the page had not been told.
+   *
+   * `alt` carries what the poster says, because everything legible in it is
+   * legible only to people who can see it.
+   */
+  banner?: { src: string; alt: string };
   /** Unix seconds, UTC. Outside this window the door refuses. */
   opensAt: number;
   closesAt: number;
@@ -65,6 +77,11 @@ export const ROLL_CALLS: readonly RollCall[] = [
   {
     slug: "prohackathon_residency",
     title: "Pro Hackathon Grand Pera Edition",
+    where: "Grand Pera, Beyoğlu, Istanbul",
+    banner: {
+      src: "/prohackathon_residency.jpg",
+      alt: "Pro Hackathon, Grand Pera Edition. Rise In and Stellar, 19 to 20 September 2026, Grand Pera, Beyoğlu, Istanbul.",
+    },
     // 19.09.2026 00:00 and 21.09.2026 00:00, both UTC+03:00: the two days the
     // meetup spans, with the close a day out so a late arrival on the 20th is
     // still let in.
