@@ -12,7 +12,7 @@ import {
 import { fromStroops } from "@/lib/contracts";
 import { shortAddr } from "@/lib/format";
 import { CalendarPlus } from "lucide-react";
-import { Button, ButtonLink, Card, Chip, SectionLabel, Skeleton, Stat } from "@/components/ui";
+import { Button, ButtonLink, Card, Chip, SectionLabel, Skeleton } from "@/components/ui";
 import { DepositFlowArt } from "@/components/DepositFlow";
 import { EventPoster } from "@/components/EventPoster";
 import { LiveRollCall } from "@/components/LiveRollCall";
@@ -127,52 +127,57 @@ export default function Home() {
 /* -------------------------------------------------------------------------- */
 
 type Summary = {
-  active: number;
-  attendees: number;
-  locked: bigint;
+  reserved: number;
+  showed: number;
   rate: number | null;
+  /** Deposit plus fee allowance, handed back at the door. */
+  returned: bigint;
+  /** Deposits the no-shows lost, in stroops. */
+  forfeited: bigint;
 };
 
 /**
- * Everything the hero claims, counted off the events themselves.
+ * The one question this product exists to answer, counted off the chain.
  *
- * The design fills this row with round marketing numbers. These are the real
- * ones, which on Testnet will often be small — a small true number is the whole
- * point of a product whose pitch is that the deposit is real.
+ * Not a dashboard. Every other figure available here (events created, wallets
+ * seen, XLM currently held) is a number about us, and on Testnet all of them
+ * are small enough to be noise. The claim being made is that a deposit pulls
+ * the number of people who turn up towards the number who said they would, and
+ * that gap is the only thing worth putting at the top of the page.
+ *
+ * Counted over **finalised events only**, because those are the ones where
+ * every deposit has actually moved. An event still checking in has no-shows
+ * who might yet walk through the door, and counting their deposits as forfeited
+ * would be stating an outcome the chain has not reached.
  */
-function summarise(events: ListedEvent[] | undefined): Summary {
-  if (!events || events.length === 0) {
-    return { active: 0, attendees: 0, locked: 0n, rate: null };
-  }
+export function summarise(events: ListedEvent[] | undefined): Summary {
+  const empty: Summary = { reserved: 0, showed: 0, rate: null, returned: 0n, forfeited: 0n };
+  if (!events || events.length === 0) return empty;
 
-  let active = 0;
-  let locked = 0n;
-  let reservedSettled = 0;
-  let showedSettled = 0;
-  const attendees = new Set<string>();
+  let reserved = 0;
+  let showed = 0;
+  let returned = 0n;
+  let forfeited = 0n;
 
   for (const e of events) {
-    if (e.phase !== "Finalized") {
-      active++;
-      // A deposit is locked from the moment it is reserved until the guest
-      // checks in or the organizer finalises — so what is still held is exactly
-      // the people who have reserved and not yet shown.
-      locked += e.deposit * BigInt(e.reserved.length - e.checkedIn.length);
-    }
-    // Only events that have stopped taking reservations can be scored: one that
-    // is still filling has nobody checked in yet and would read as 0%.
-    if (e.phase !== "Reserving") {
-      reservedSettled += e.reserved.length;
-      showedSettled += e.checkedIn.length;
-    }
-    for (const guest of e.checkedIn) attendees.add(guest);
+    if (e.phase !== "Finalized") continue;
+    reserved += e.reserved.length;
+    showed += e.checkedIn.length;
+    // What check-in actually transfers: the deposit and the fee allowance that
+    // rode in with it. Quoting the deposit alone would understate every refund
+    // the contract has ever made.
+    returned += (e.deposit + e.feeAllowance) * BigInt(e.checkedIn.length);
+    // The fee allowance is not forfeited — it goes back to the organizer as
+    // unspent pool, so it never belonged to the no-show to lose.
+    forfeited += e.deposit * BigInt(e.reserved.length - e.checkedIn.length);
   }
 
   return {
-    active,
-    attendees: attendees.size,
-    locked,
-    rate: reservedSettled > 0 ? (showedSettled / reservedSettled) * 100 : null,
+    reserved,
+    showed,
+    rate: reserved > 0 ? (showed / reserved) * 100 : null,
+    returned,
+    forfeited,
   };
 }
 
@@ -195,21 +200,76 @@ function Hero({ stats }: { stats: Summary }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-11 gap-y-6.5 pt-1.5">
-          <Stat value={stats.active} label="active events" />
-          <Stat value={stats.attendees} label="verified attendees" />
-          <Stat
-            value={fromStroops(stats.locked)}
-            label="XLM in locked deposits"
-            tone="accent"
-          />
-          <Stat
-            value={stats.rate === null ? "—" : `${stats.rate.toFixed(1)}%`}
-            label="real turnout rate"
-            tone={stats.rate === null ? "default" : "success"}
-          />
-        </div>
+        <Turnout stats={stats} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * The gap between who said they would come and who came, drawn to scale.
+ *
+ * A bar rather than four figures, because the argument is a comparison and a
+ * comparison is a length. The bar is the claim; the sentence under it is the
+ * receipt, naming the people and the money the percentage is made of, so that
+ * nobody has to take the headline on trust.
+ *
+ * Every number here moves on its own. Nothing is a target, a projection or a
+ * rounded-up version of something smaller — when three people out of seventeen
+ * flake, this says three.
+ */
+function Turnout({ stats }: { stats: Summary }) {
+  const noShows = stats.reserved - stats.showed;
+
+  // Before anything has settled there is no rate, and a 0% bar would read as a
+  // product that does not work rather than one nobody has finished using yet.
+  if (stats.rate === null) {
+    return (
+      <div className="min-w-[min(300px,100%)] flex-1 pt-1.5">
+        <SectionLabel>RESERVED VERSUS TURNED UP</SectionLabel>
+        <p className="mt-3 max-w-[340px] text-sm text-muted">
+          No event has settled yet. The moment one does, its real turnout lands here,
+          counted off the chain rather than typed in.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[min(300px,100%)] flex-1 pt-1.5">
+      <SectionLabel>RESERVED VERSUS TURNED UP</SectionLabel>
+
+      <div className="mt-4 flex items-baseline gap-3">
+        <span className="font-mono text-[42px] leading-none text-success">
+          {stats.rate.toFixed(1)}%
+        </span>
+        <span className="font-mono text-[15px] text-muted-2">
+          {stats.showed} of {stats.reserved}
+        </span>
+      </div>
+
+      <div
+        className="mt-4 h-2.5 w-full max-w-[380px] overflow-hidden rounded-full bg-surface-3"
+        role="img"
+        aria-label={`${stats.showed} of ${stats.reserved} reserved spots showed up`}
+      >
+        <div className="h-full rounded-full bg-success" style={{ width: `${stats.rate}%` }} />
+      </div>
+
+      <p className="mt-4 max-w-[380px] text-sm leading-[1.6] text-muted text-pretty">
+        <span className="text-foreground-2">{fromStroops(stats.returned)} XLM</span> went
+        back to people at the door.
+        {noShows > 0 ? (
+          <>
+            {" "}
+            The {noShows} who didn&apos;t come left{" "}
+            <span className="text-foreground-2">{fromStroops(stats.forfeited)} XLM</span>{" "}
+            behind.
+          </>
+        ) : (
+          " Nobody has flaked yet."
+        )}
+      </p>
     </div>
   );
 }
