@@ -51,6 +51,14 @@ export type RollCall = {
    * legible only to people who can see it.
    */
   banner?: { src: string; alt: string };
+  /**
+   * The line that greets somebody who has just scanned the code.
+   *
+   * It belongs to the roll call rather than to the component, because what you
+   * say to a room is about that room. The next one is in another city, and a
+   * greeting hardcoded in a modal would welcome it to this one.
+   */
+  greeting?: { title: string; line: string };
   /** Unix seconds, UTC. Outside this window the door refuses. */
   opensAt: number;
   closesAt: number;
@@ -81,6 +89,10 @@ export const ROLL_CALLS: readonly RollCall[] = [
     banner: {
       src: "/prohackathon_residency.jpg",
       alt: "Pro Hackathon, Grand Pera Edition. Rise In and Stellar, 19 to 20 September 2026, Grand Pera, Beyoğlu, Istanbul.",
+    },
+    greeting: {
+      title: "Welcome to Istanbul!",
+      line: "Connect a wallet and tap Join. That is the whole thing.",
     },
     // 19.09.2026 00:00 and 21.09.2026 00:00, both UTC+03:00: the two days the
     // meetup spans, with the close a day out so a late arrival on the 20th is

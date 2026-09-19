@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { rollCallBySlug } from "@/lib/roll-call";
 import { RollCall } from "@/components/RollCall";
+import { RollCallWelcome } from "@/components/RollCallWelcome";
 
 /**
  * A roll call at the top level: `showup.click/prohackathon_residency`.
@@ -36,5 +37,10 @@ export default async function RollCallPage({ params }: { params: Promise<{ call:
   const call = rollCallBySlug(slug);
   if (!call) notFound();
 
-  return <RollCall call={call} />;
+  return (
+    <>
+      <RollCallWelcome call={call} />
+      <RollCall call={call} />
+    </>
+  );
 }

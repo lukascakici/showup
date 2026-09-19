@@ -462,7 +462,45 @@ body {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+/* The welcome arriving. The panel rises into place instead of being there
+   already, because it is the answer to an action the visitor just took in the
+   physical world: pointing a camera at a wall. */
+@keyframes welcome-scrim {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-panel {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.welcome-scrim {
+  animation: welcome-scrim 160ms ease-out both;
+}
+
+/* Overshoots slightly on the way in, which is what makes it read as arriving
+   rather than fading up. */
+.welcome-panel {
+  animation: welcome-panel 280ms cubic-bezier(0.18, 0.9, 0.24, 1.08) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Still there, just already there. */
+  .welcome-scrim,
+  .welcome-panel {
+    animation: none;
+  }
 
   .runner rect {
     animation: none;
