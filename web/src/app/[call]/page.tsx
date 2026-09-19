@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { rollCallBySlug } from "@/lib/roll-call";
 import { RollCall } from "@/components/RollCall";
 import { RollCallWelcome } from "@/components/RollCallWelcome";
+import { RollCallPost } from "@/components/RollCallPost";
 
 /**
  * A roll call at the top level: `showup.click/prohackathon_residency`.
@@ -40,7 +41,10 @@ export default async function RollCallPage({ params }: { params: Promise<{ call:
   return (
     <>
       <RollCallWelcome call={call} />
-      <RollCall call={call} />
+      {/* Handed down as a prop rather than imported inside `RollCall`, which is
+          a client component: this way the post is fetched and rendered on the
+          server and no part of it reaches the browser as JavaScript. */}
+      <RollCall call={call} post={call.postId ? <RollCallPost id={call.postId} /> : null} />
     </>
   );
 }

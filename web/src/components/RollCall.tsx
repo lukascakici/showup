@@ -29,7 +29,7 @@ type State =
  * home page should not be able to tell they have crossed into a different kind
  * of page, because as far as they are concerned they have not.
  */
-export function RollCall({ call }: { call: Call }) {
+export function RollCall({ call, post }: { call: Call; post?: ReactNode }) {
   const { address, status, openPicker } = useWallet();
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -207,6 +207,8 @@ export function RollCall({ call }: { call: Call }) {
                 </>
               )}
             </Panel>
+
+            {post}
 
             <Card>
               <h2 className="font-display text-sm font-bold tracking-tight">

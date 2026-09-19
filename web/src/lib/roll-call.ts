@@ -59,6 +59,14 @@ export type RollCall = {
    * greeting hardcoded in a modal would welcome it to this one.
    */
   greeting?: { title: string; line: string };
+  /**
+   * An X post to show on the page, by id.
+   *
+   * Announcements for these meetups live on X and nowhere we control, so the
+   * page borrows one rather than restating it. Stored as an id because that is
+   * the only part of a post URL that is stable.
+   */
+  postId?: string;
   /** Unix seconds, UTC. Outside this window the door refuses. */
   opensAt: number;
   closesAt: number;
@@ -94,6 +102,7 @@ export const ROLL_CALLS: readonly RollCall[] = [
       title: "Welcome to Istanbul!",
       line: "Connect a wallet and tap Join. That is the whole thing.",
     },
+    postId: "2101222741395296461",
     // 19.09.2026 00:00 and 21.09.2026 00:00, both UTC+03:00: the two days the
     // meetup spans, with the close a day out so a late arrival on the 20th is
     // still let in.
