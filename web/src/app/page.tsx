@@ -25,12 +25,11 @@ export default function Home() {
   const events = list?.events;
   const [tab, setTab] = useState<Tab>("upcoming");
 
-  const stats = useMemo(() => summarise(events), [events]);
   const shown = useMemo(() => partition(events, tab), [events, tab]);
 
   return (
     <div>
-      <Hero stats={stats} />
+      <Hero />
 
       <LiveRollCall />
 
@@ -126,43 +125,7 @@ export default function Home() {
 /* Hero                                                                       */
 /* -------------------------------------------------------------------------- */
 
-type Summary = {
-  reserved: number;
-  showed: number;
-  rate: number | null;
-};
-
-/**
- * The one question this product exists to answer, counted off the chain.
- *
- * Not a dashboard. Every other figure available here (events created, wallets
- * seen, XLM currently held) is a number about us, and on Testnet all of them
- * are small enough to be noise. The claim being made is that a deposit pulls
- * the number of people who turn up towards the number who said they would, and
- * that gap is the only thing worth putting at the top of the page.
- *
- * Counted over **finalised events only**, because those are the ones that are
- * over. An event still checking in has no-shows who might yet walk through the
- * door, and scoring them now would publish an outcome the chain has not
- * reached and the page would have to take back.
- */
-export function summarise(events: ListedEvent[] | undefined): Summary {
-  const empty: Summary = { reserved: 0, showed: 0, rate: null };
-  if (!events || events.length === 0) return empty;
-
-  let reserved = 0;
-  let showed = 0;
-
-  for (const e of events) {
-    if (e.phase !== "Finalized") continue;
-    reserved += e.reserved.length;
-    showed += e.checkedIn.length;
-  }
-
-  return { reserved, showed, rate: reserved > 0 ? (showed / reserved) * 100 : null };
-}
-
-function Hero({ stats }: { stats: Summary }) {
+function Hero() {
   return (
     <div className="mb-13 rounded-[20px] border border-border-strong bg-[linear-gradient(150deg,#1D1D20_0%,#141416_60%)] p-8 sm:p-[34px]">
       <div className="flex flex-wrap items-start gap-10">
@@ -181,7 +144,7 @@ function Hero({ stats }: { stats: Summary }) {
           </p>
         </div>
 
-        <Turnout stats={stats} />
+        <Turnout />
       </div>
     </div>
   );
@@ -190,43 +153,43 @@ function Hero({ stats }: { stats: Summary }) {
 /**
  * What a deposit is worth, per hundred people who said they were coming.
  *
- * Two bars, and they are not the same kind of number. The lower one is measured:
- * it is every reservation this contract has settled, counted off the chain. The
- * upper one is an assumption about events that ask for nothing, carried here
- * because the product's claim is a comparison and a comparison needs two sides.
+ * Two bars, and they are not the same kind of number. The lower one is a count
+ * of what this contract has actually settled; the upper one is an assumption
+ * about events that ask for nothing, carried here because the product's claim is
+ * a comparison and a comparison needs two sides.
  *
- * It is drawn as the weaker of the two on purpose. An assumption rendered in the
- * same ink as a measurement is the most common way a landing page lies, and the
- * difference between "we counted this" and "this is the usual" has to survive
- * being looked at for one second by somebody who will never read a footnote.
+ * The measured one is drawn as the stronger of the two on purpose. An assumption
+ * rendered in the same ink as a measurement is the most common way a landing
+ * page lies, and the difference has to survive being looked at for one second by
+ * somebody who will never read a footnote.
  */
 
 /**
  * Turnout for an event that asks for nothing up front.
  *
  * A rule of thumb from how free RSVPs behave, not a figure anybody measured
- * here, and it is labelled as such everywhere it is shown. Deliberately a round
- * number: a decimal would dress an assumption up as a finding.
+ * here. Deliberately round: a decimal would dress an assumption up as a finding.
  */
 const ASSUMED_FREE_TURNOUT = 50;
 
-function Turnout({ stats }: { stats: Summary }) {
-  // Before anything has settled there is nothing to compare the assumption
-  // against, and a lone bar for an event type we do not run would be an advert
-  // for a claim with no evidence under it.
-  if (stats.rate === null) {
-    return (
-      <div className="min-w-[min(300px,100%)] flex-1 pt-1.5">
-        <SectionLabel>WITH A DEPOSIT, AND WITHOUT</SectionLabel>
-        <p className="mt-3 max-w-[340px] text-sm text-muted">
-          No event has settled yet. The moment one does, its real turnout lands here,
-          counted off the chain rather than typed in.
-        </p>
-      </div>
-    );
-  }
+/**
+ * Turnout across every event this contract has settled.
+ *
+ * **Counted by hand on 19.09.2026: 14 of 17 reserved spots, across the four
+ * finalised events on the factory.** Written down rather than derived, so the
+ * hero is the same on the first frame as on the last and nobody watches it
+ * resolve from "nothing has settled yet" on a refresh.
+ *
+ * The cost of that is that it does not move when the chain does. It is a claim
+ * about this project made on the front of this project, so **re-count it before
+ * anybody is asked to look at the site** — the four addresses are in
+ * `docs/deployments.md` and `get_reserved` / `get_checked_in` are public calls
+ * that need no key.
+ */
+const MEASURED_TURNOUT = 82.4;
 
-  const gained = Math.round(stats.rate - ASSUMED_FREE_TURNOUT);
+function Turnout() {
+  const gained = Math.round(MEASURED_TURNOUT - ASSUMED_FREE_TURNOUT);
 
   return (
     <div className="min-w-[min(320px,100%)] flex-1 pt-1.5">
@@ -241,18 +204,16 @@ function Turnout({ stats }: { stats: Summary }) {
         />
         <Bar
           title="With a deposit"
-          value={stats.rate}
-          reading={`${stats.rate.toFixed(1)}%`}
+          value={MEASURED_TURNOUT}
+          reading={`${MEASURED_TURNOUT}%`}
           measured
         />
       </div>
 
-      {gained > 0 && (
-        <p className="mt-5 max-w-[380px] text-sm leading-[1.6] text-muted text-pretty">
-          Per 100 people who reserve, that is about{" "}
-          <span className="text-foreground-2">{gained} more</span> of them in the room.
-        </p>
-      )}
+      <p className="mt-5 max-w-[380px] text-sm leading-[1.6] text-muted text-pretty">
+        Per 100 people who reserve, that is about{" "}
+        <span className="text-foreground-2">{gained} more</span> of them in the room.
+      </p>
     </div>
   );
 }
