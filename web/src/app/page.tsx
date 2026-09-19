@@ -237,14 +237,12 @@ function Turnout({ stats }: { stats: Summary }) {
           title="Free RSVP"
           value={ASSUMED_FREE_TURNOUT}
           reading={`~${ASSUMED_FREE_TURNOUT}%`}
-          note="typical, not measured here"
           measured={false}
         />
         <Bar
           title="With a deposit"
           value={stats.rate}
           reading={`${stats.rate.toFixed(1)}%`}
-          note={`measured on-chain · ${stats.showed} of ${stats.reserved}`}
           measured
         />
       </div>
@@ -260,21 +258,21 @@ function Turnout({ stats }: { stats: Summary }) {
 }
 
 /**
- * `measured` is the whole point of this component rather than a styling flag:
- * it decides both the ink and the wording, so a bar cannot end up looking
- * counted while saying it was assumed.
+ * `measured` is the whole point of this component rather than a styling flag.
+ *
+ * On screen it is the difference between the accent and a grey, which is a
+ * distinction made entirely in colour — so it is also spelled out in the label
+ * a screen reader reads, where there is no colour to carry it.
  */
 function Bar({
   title,
   value,
   reading,
-  note,
   measured,
 }: {
   title: string;
   value: number;
   reading: string;
-  note: string;
   measured: boolean;
 }) {
   return (
@@ -294,14 +292,15 @@ function Bar({
       <div
         className="h-2.5 w-full overflow-hidden rounded-full bg-surface-3"
         role="img"
-        aria-label={`${title}: ${reading}, ${note}`}
+        aria-label={`${title}: ${reading}, ${
+          measured ? "measured on-chain" : "a typical figure, not measured here"
+        }`}
       >
         <div
           className={`h-full rounded-full ${measured ? "bg-success" : "bg-border-hover"}`}
           style={{ width: `${value}%` }}
         />
       </div>
-      <div className="mt-1.5 text-xs text-muted-3">{note}</div>
     </div>
   );
 }
