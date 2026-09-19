@@ -1,89 +1,228 @@
 @import "tailwindcss";
 
 /*
-  Showup design system — Uber-like: flat, high-contrast, single amber accent.
-  Dark-first. No gradients, no glow, no glassmorphism anywhere. Faint grid
-  background only.
+  Showup design system — silver on off-black. One face, Jeko, set at every size
+  and in every role: headings, body, balances and addresses. Flat surfaces
+  stacked by depth, and a single accent taken straight off the mark.
+
+  The accent is a neutral, so nothing here separates by hue: hierarchy is
+  brightness, and the strongest thing on any screen is a silver fill with the
+  background colour written on it. The two exceptions are semantic rather than
+  decorative and stay coloured for exactly that reason — green means a deposit
+  came back, red means something failed.
+
+  The only gradients are decorative and never carry meaning: the ambient
+  backdrop, the guest chips, and the per-event posters.
 */
 
 :root {
-  --background: #0a0a0a;
-  --surface: #111111;
-  --surface-2: #161616;
-  --border: #242424;
-  --border-strong: #333333;
-  --foreground: #ededed;
-  --muted: #8a8a8a;
-  --muted-2: #6a6a6a;
+  /* Surfaces, darkest first. `surface` is a card; `surface-2` is a panel
+     recessed inside one; `surface-3` is a raised strip (panel headers, hover);
+     `surface-4` is the selected segment of a toggle. */
+  --background: #0f0f10;
+  --surface: #1a1a1c;
+  --surface-2: #151517;
+  --surface-3: #222225;
+  --surface-4: #303034;
 
-  /* Single accent: warm amber */
-  --accent: #e0a44a;
-  --accent-hover: #cf9440;
-  --accent-fg: #1a1206;
+  --border: #232326;
+  --border-strong: #2d2d31;
+  --border-hover: #4b4b51;
 
-  --danger: #f2493f;
-  --grid-line: rgba(255, 255, 255, 0.04);
+  --foreground: #e6e6e9;
+  --foreground-2: #bfc0c6;
+  --muted: #8b8c93;
+  --muted-2: #797a81;
+  --muted-3: #696a71;
+
+  /* Single accent: the mark's own silver, in four lifts. `accent` is the
+     actionable one and the only one ever used as a fill; `accent-lift` is the
+     brightest thing in the system and is spent on figures that are money. */
+  --accent: #b9bbc2;
+  --accent-hover: #d6d8de;
+  --accent-soft: #cdcfd6;
+  --accent-lift: #f4f5f8;
+  --accent-fg: #0f0f10;
+
+  /* Kept coloured on purpose: these two are the only places on the site where
+     the colour is the message rather than the styling. */
+  --success: #5cc79b;
+  --danger: #e8615a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-border-hover: var(--border-hover);
   --color-foreground: var(--foreground);
+  --color-foreground-2: var(--foreground-2);
   --color-muted: var(--muted);
   --color-muted-2: var(--muted-2);
+  --color-muted-3: var(--muted-3);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-lift: var(--accent-lift);
   --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
   --color-danger: var(--danger);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-hand: var(--font-script);
+
+  /* All three point at the same family on purpose. `font-display` and
+     `font-mono` stay as names in the markup because they still mean something —
+     this is a heading, this is an address — they just no longer change face. */
+  --font-sans: var(--font-jeko);
+  --font-display: var(--font-jeko);
+  --font-mono: var(--font-jeko);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-jeko), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 /*
-  Faint grid as a fixed overlay, masked so it fully fades out in the center and
-  is only barely felt toward the edges/corners — reads as texture, not a grid.
+  Ambient backdrop: soft violet fields that wander and re-shape.
+
+  Three of them rather than the six the design draws — each one is a blurred
+  layer the size of the viewport, and the compositor pays for every frame of
+  every one of them. Three at these speeds reads the same and costs a third.
 */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -20;
-  pointer-events: none;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 72px 72px;
-  background-position: center center;
-  -webkit-mask-image: radial-gradient(
-    ellipse 90% 80% at 50% 42%,
-    transparent 45%,
-    #000 100%
+@keyframes drift-a {
+  0% {
+    transform: translate(-14vw, -6vh) scale(1);
+  }
+  33% {
+    transform: translate(22vw, 14vh) scale(1.25);
+  }
+  66% {
+    transform: translate(8vw, -16vh) scale(0.9);
+  }
+  100% {
+    transform: translate(-14vw, -6vh) scale(1);
+  }
+}
+
+@keyframes drift-b {
+  0% {
+    transform: translate(18vw, 20vh) scale(1.1);
+  }
+  40% {
+    transform: translate(-20vw, -10vh) scale(0.85);
+  }
+  70% {
+    transform: translate(-4vw, 18vh) scale(1.3);
+  }
+  100% {
+    transform: translate(18vw, 20vh) scale(1.1);
+  }
+}
+
+@keyframes drift-c {
+  0% {
+    transform: translate(0, 26vh) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(24vw, -4vh) scale(1.2) rotate(24deg);
+  }
+  100% {
+    transform: translate(0, 26vh) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes blob-morph {
+  0% {
+    border-radius: 58% 42% 38% 62% / 47% 55% 45% 53%;
+  }
+  25% {
+    border-radius: 38% 62% 55% 45% / 62% 38% 62% 38%;
+  }
+  50% {
+    border-radius: 64% 36% 47% 53% / 38% 60% 40% 62%;
+  }
+  75% {
+    border-radius: 44% 56% 62% 38% / 55% 44% 56% 45%;
+  }
+  100% {
+    border-radius: 58% 42% 38% 62% / 47% 55% 45% 53%;
+  }
+}
+
+.blob {
+  position: absolute;
+  will-change: transform;
+}
+
+.blob-a {
+  left: -10%;
+  top: 2%;
+  width: 860px;
+  height: 760px;
+  opacity: 0.9;
+  filter: blur(60px);
+  border-radius: 58% 42% 38% 62% / 47% 55% 45% 53%;
+  background: radial-gradient(
+    55% 60% at 45% 40%,
+    rgba(196, 199, 208, 0.13) 0%,
+    rgba(160, 163, 172, 0.04) 50%,
+    rgba(196, 199, 208, 0) 76%
   );
-  mask-image: radial-gradient(
-    ellipse 90% 80% at 50% 42%,
-    transparent 45%,
-    #000 100%
+  animation:
+    drift-a 68s ease-in-out infinite,
+    blob-morph 52s ease-in-out infinite;
+}
+
+.blob-b {
+  right: -12%;
+  top: 22%;
+  width: 720px;
+  height: 680px;
+  opacity: 0.55;
+  filter: blur(70px);
+  border-radius: 44% 56% 62% 38% / 55% 44% 56% 45%;
+  background: radial-gradient(
+    60% 55% at 55% 45%,
+    rgba(168, 172, 182, 0.1) 0%,
+    rgba(168, 172, 182, 0.03) 52%,
+    rgba(168, 172, 182, 0) 76%
   );
+  animation:
+    drift-b 86s ease-in-out infinite,
+    blob-morph 64s ease-in-out infinite reverse;
+}
+
+.blob-c {
+  left: 8%;
+  top: 46%;
+  width: 1000px;
+  height: 620px;
+  opacity: 0.7;
+  filter: blur(80px);
+  border-radius: 64% 36% 47% 53% / 38% 60% 40% 62%;
+  background: radial-gradient(
+    55% 60% at 50% 50%,
+    rgba(140, 144, 154, 0.11) 0%,
+    rgba(110, 114, 124, 0.03) 54%,
+    rgba(110, 114, 124, 0) 78%
+  );
+  animation:
+    drift-c 104s ease-in-out infinite,
+    blob-morph 78s ease-in-out infinite;
 }
 
 /*
-  Amber segments tracing the wallet panel's border.
+  Silver segments tracing the wallet panel's border.
 
-  The usual way to do this is a conic-gradient spun behind the panel, which the
-  no-gradients rule forbids — so it's a solid stroke instead: a dash on a
-  rounded-rect outline, travelling by dashoffset. `pathLength: 100` normalises the
-  outline, so the dash keeps its proportions whatever size the panel is.
+  A solid stroke rather than the usual conic-gradient spun behind the panel: a
+  dash on a rounded-rect outline, travelling by dashoffset. `pathLength: 100`
+  normalises the outline, so the dash keeps its proportions whatever size the
+  panel is.
 
   Two variants, swapped by the class on the <svg>:
     .runner-loop  one segment going all the way round
@@ -129,10 +268,227 @@ body::before {
   transform-origin: center;
 }
 
+/*
+  How the deposit works: four scenes on one five-second clock.
+
+  Every scene is a loop of the same length and they are started a beat apart by
+  `--beat`, so the row plays left to right — the deposit leaves, it is held, it
+  comes back, what is left is split. Slow on purpose: this sits under the event
+  list, and the eye should be able to ignore it.
+
+  Each animation ends where it should rest, so the reduced-motion rule at the
+  bottom of this file can switch every one of them off and still leave a correct
+  picture on screen.
+*/
+.flow-scene {
+  --beat: 0s;
+}
+
+/* The deposit going in: it appears at the wallet's mouth, crosses, and is taken. */
+@keyframes flow-coin {
+  0%,
+  6% {
+    transform: translateX(-11px);
+    opacity: 0;
+  }
+  14% {
+    transform: translateX(-9px);
+    opacity: 1;
+  }
+  46%,
+  100% {
+    transform: translateX(16px);
+    opacity: 1;
+  }
+}
+
+.flow-coin {
+  transform: translateX(16px);
+  animation: flow-coin 5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+/* And coming back out, which is the same journey with the sign flipped. */
+@keyframes flow-coin-back {
+  0%,
+  6% {
+    transform: translateX(16px);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-9px);
+    opacity: 1;
+  }
+  58%,
+  100% {
+    transform: translateX(-11px);
+    opacity: 0;
+  }
+}
+
+.flow-coin-back {
+  transform: translateX(-11px);
+  opacity: 0;
+  animation: flow-coin-back 5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+/* Held: one ring leaving the lock, slowly, and nothing else. */
+@keyframes flow-ring {
+  0% {
+    transform: scale(0.45);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.flow-ring {
+  transform-origin: 38px 24px;
+  opacity: 0;
+  animation: flow-ring 5s ease-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+/* The tick, drawn rather than shown: `pathLength: 1` makes the dash arithmetic
+   independent of the path's real length. */
+@keyframes flow-check {
+  0%,
+  28% {
+    stroke-dashoffset: 1;
+  }
+  46%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.flow-check {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: flow-check 5s ease-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+/* The split: one coin becomes three, which is what the policy actually does. */
+@keyframes flow-share-a {
+  0%,
+  20% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  32% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: translate(-17px, -13px);
+    opacity: 0;
+  }
+}
+
+@keyframes flow-share-b {
+  0%,
+  20% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  34% {
+    opacity: 1;
+  }
+  74%,
+  100% {
+    transform: translate(18px, -11px);
+    opacity: 0;
+  }
+}
+
+@keyframes flow-share-c {
+  0%,
+  20% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  36% {
+    opacity: 1;
+  }
+  78%,
+  100% {
+    transform: translate(2px, 17px);
+    opacity: 0;
+  }
+}
+
+.flow-share-a,
+.flow-share-b,
+.flow-share-c {
+  opacity: 0;
+  animation: 5s cubic-bezier(0.3, 0, 0.2, 1) infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.flow-share-a {
+  animation-name: flow-share-a;
+}
+
+.flow-share-b {
+  animation-name: flow-share-b;
+}
+
+.flow-share-c {
+  animation-name: flow-share-c;
+}
+
+/* A reserved spot that is still filling — the one thing on the page that beats. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+
   .runner rect {
     animation: none;
     opacity: 0;
+  }
+
+  .blob,
+  .pulse-dot {
+    animation: none;
+  }
+
+  /* Left where each scene resolves: the deposit in the vault, the tick drawn,
+     the ring and the split coins gone. */
+  .flow-coin,
+  .flow-coin-back,
+  .flow-ring,
+  .flow-check,
+  .flow-share-a,
+  .flow-share-b,
+  .flow-share-c {
+    animation: none;
+  }
+
+  .flow-coin-back {
+    transform: translateX(16px);
+    opacity: 1;
   }
 }
 
@@ -144,5 +500,5 @@ body::before {
 /* Custom scrollbar — restrained */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-color: var(--border-hover) transparent;
 }

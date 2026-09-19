@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ChevronDown,
   Copy,
   Check,
   RefreshCw,
@@ -12,7 +11,7 @@ import {
 import { useWallet } from "@/lib/wallet";
 import { EXPLORER_ACCOUNT } from "@/lib/stellar";
 import { formatXlm, shortAddr } from "@/lib/format";
-import { Button, Skeleton } from "./ui";
+import { Button, Skeleton, SectionLabel } from "./ui";
 import { FaucetButton } from "./Faucet";
 
 export function WalletMenu() {
@@ -64,26 +63,28 @@ export function WalletMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex h-11 items-center gap-2 rounded-xl border border-border-strong bg-surface px-3 text-sm transition-colors hover:border-muted"
+        className="flex h-11 items-center gap-3"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Wallet"
       >
-        <span className="font-mono text-xs text-foreground">
-          {shortAddr(address)}
-        </span>
         {/* "—" used to mean both "still fetching" and "this account doesn't
             exist", which are different answers to different questions. */}
-        <span className="hidden text-xs text-muted sm:inline">
-          {balance?.funded
-            ? `${formatXlm(balance.xlm, 2)} XLM`
-            : balance
-              ? "Not funded"
-              : balanceLoading
-                ? "…"
-                : "—"}
+        <span className="hidden items-center gap-2 rounded-full border border-border-strong bg-surface px-2.5 py-1.5 transition-colors hover:border-border-hover sm:flex">
+          <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent-soft" />
+          <span className="font-mono text-[12.5px] text-foreground">
+            {balance?.funded
+              ? `${formatXlm(balance.xlm, 2)} XLM`
+              : balance
+                ? "Not funded"
+                : balanceLoading
+                  ? "…"
+                  : "—"}
+          </span>
         </span>
-        <ChevronDown
-          className={`size-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        <span
+          aria-hidden
+          className="size-7 shrink-0 rounded-full bg-[linear-gradient(150deg,#3A3A3E,#B9BBC2)]"
         />
       </button>
 
@@ -92,28 +93,28 @@ export function WalletMenu() {
         // narrower than about 352px with no scrollbar to bring it back — the
         // balance and the faucet simply weren't there. It gives up width to the
         // viewport now instead of leaving the page.
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/40">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border-strong bg-surface p-5 shadow-2xl shadow-black/50">
           {/* Balance */}
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                Balance
-              </span>
+              <SectionLabel>BALANCE</SectionLabel>
               {/* An account that doesn't exist on the ledger yet is not an
                   account holding zero. Printing "0" for both meant the faucet
                   below looked optional to the one person who needs it. */}
               {balanceLoading && !balance ? (
-                <Skeleton className="mt-1 h-9 w-32" />
+                <Skeleton className="mt-2 h-9 w-32" />
               ) : balance?.funded ? (
-                <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold tracking-tight tabular-nums">
+                <div className="mt-2 flex items-baseline gap-1.5">
+                  <span className="font-mono text-3xl leading-none tabular-nums">
                     {formatXlm(balance.xlm)}
                   </span>
-                  <span className="text-sm font-medium text-muted">XLM</span>
+                  <span className="text-sm text-muted">XLM</span>
                 </div>
               ) : (
-                <div className="mt-1">
-                  <span className="text-xl font-bold tracking-tight">Not funded yet</span>
+                <div className="mt-2">
+                  <span className="font-display text-xl font-bold tracking-tight">
+                    Not funded yet
+                  </span>
                   <p className="mt-1 text-xs text-muted">
                     This account doesn&apos;t exist on Testnet until it holds some XLM.
                     Use the faucet below.
@@ -147,11 +148,11 @@ export function WalletMenu() {
           <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-border bg-surface-2 px-3">
             <button
               onClick={copy}
-              className="inline-flex min-h-11 min-w-0 items-center gap-1.5 font-mono text-xs text-foreground transition-colors hover:text-accent"
+              className="inline-flex min-h-11 min-w-0 items-center gap-1.5 font-mono text-xs text-foreground transition-colors hover:text-accent-soft"
             >
               <span className="truncate">{shortAddr(address, 6, 6)}</span>
               {copied ? (
-                <Check className="size-3.5 shrink-0 text-accent" />
+                <Check className="size-3.5 shrink-0 text-success" />
               ) : (
                 <Copy className="size-3.5 shrink-0 text-muted" />
               )}
@@ -182,16 +183,14 @@ export function WalletMenu() {
           )}
 
           {/* Faucet */}
-          <div className="mt-4">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">
-              Test faucet
-            </span>
-            <div className="mt-2">
+          <div className="mt-5">
+            <SectionLabel>TEST FAUCET</SectionLabel>
+            <div className="mt-2.5">
               <FaucetButton />
             </div>
           </div>
 
-          <div className="my-4 h-px bg-border" />
+          <div className="my-5 h-px bg-border" />
 
           <Button variant="danger" fullWidth onClick={disconnect}>
             <LogOut className="size-4" />

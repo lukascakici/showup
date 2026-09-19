@@ -16,7 +16,7 @@ import {
 } from "@/lib/contracts";
 import { useSigner } from "@/lib/signer";
 import { rememberSecret } from "@/lib/secrets";
-import { Button, Card, Field, Input } from "./ui";
+import { Button, ErrorNote, Field, Input, Panel } from "./ui";
 import { EventCreated } from "./EventCreated";
 
 type State =
@@ -83,7 +83,7 @@ function Stepper({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-surface-2 text-lg font-semibold text-foreground transition-colors hover:border-muted disabled:pointer-events-none disabled:opacity-40"
+      className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-surface text-lg font-medium text-foreground transition-colors hover:border-border-hover disabled:pointer-events-none disabled:opacity-40"
     >
       {children}
     </button>
@@ -209,9 +209,8 @@ export function CreateEvent() {
   }
 
   return (
-    <Card>
-      <h2 className="text-lg font-bold tracking-tight">New event</h2>
-      <p className="mt-1 text-sm text-muted">
+    <Panel title="New event" meta="Stellar · Soroban">
+      <p className="text-sm text-muted">
         Set the deposit and how many people can reserve a spot.
       </p>
 
@@ -270,10 +269,10 @@ export function CreateEvent() {
                       setTouched((t) => ({ ...t, deposit: true }));
                     }}
                     aria-pressed={deposit.trim() === amount}
-                    className={`h-11 min-w-14 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+                    className={`h-11 min-w-14 rounded-xl border px-3 text-sm font-medium transition-colors ${
                       deposit.trim() === amount
-                        ? "border-accent bg-surface-2 text-accent"
-                        : "border-border-strong text-muted hover:border-muted hover:text-foreground"
+                        ? "border-accent bg-accent/5 text-accent-lift"
+                        : "border-border-strong text-muted hover:border-border-hover hover:text-foreground"
                     }`}
                   >
                     {amount}
@@ -301,7 +300,7 @@ export function CreateEvent() {
                 onBlur={leave("capacity")}
                 placeholder="10"
                 inputMode="numeric"
-                className="min-w-0 flex-1 text-center font-semibold tabular-nums"
+                className="min-w-0 flex-1 text-center font-medium tabular-nums"
               />
               <Stepper
                 label="One more spot"
@@ -313,16 +312,16 @@ export function CreateEvent() {
           </Field>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+            <legend className="mb-2 text-xs text-muted-2">
               If someone doesn&apos;t show
             </legend>
             {POLICIES.map((p) => (
               <label
                 key={p.value}
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
                   policy === p.value
-                    ? "border-accent bg-surface-2"
-                    : "border-border-strong hover:border-muted"
+                    ? "border-accent bg-accent/5"
+                    : "border-border-strong bg-surface hover:border-border-hover"
                 }`}
               >
                 <input
@@ -334,16 +333,16 @@ export function CreateEvent() {
                   className="mt-1 accent-[var(--accent)]"
                 />
                 <span>
-                  <span className="block text-sm font-semibold text-foreground">{p.label}</span>
+                  <span className="block text-sm font-medium text-foreground">{p.label}</span>
                   <span className="mt-0.5 block text-xs text-muted">{p.hint}</span>
                 </span>
               </label>
             ))}
           </fieldset>
 
-          <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface-2 p-3">
-            <Info className="mt-0.5 size-4 shrink-0 text-muted" />
-            <p className="text-xs text-muted">
+          <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface p-3.5">
+            <Info className="mt-0.5 size-4 shrink-0 text-accent-lift" />
+            <p className="text-xs leading-[1.55] text-muted">
               You&apos;ll fund{" "}
               <strong className="text-foreground">{fromStroops(poolStroops)} XLM</strong> now —{" "}
               {fromStroops(FEE_ALLOWANCE_STROOPS)} XLM per spot — so nobody pays to attend:
@@ -371,10 +370,10 @@ export function CreateEvent() {
       </form>
 
       {state.kind === "error" && (
-        <p className="mt-4 rounded-xl border border-danger/40 bg-surface-2 p-3 text-sm text-danger">
-          {state.message}
-        </p>
+        <div className="mt-4">
+          <ErrorNote>{state.message}</ErrorNote>
+        </div>
       )}
-    </Card>
+    </Panel>
   );
 }

@@ -16,7 +16,7 @@ import { Button } from "./ui";
 type FaucetMsg = { tone: "ok" | "info" | "error"; text: string } | null;
 
 const TONE = {
-  ok: "text-accent",
+  ok: "text-success",
   info: "text-muted",
   error: "text-danger",
 } as const;

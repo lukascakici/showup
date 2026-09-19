@@ -40,12 +40,12 @@ export function NetworkBanner() {
   };
 
   return (
-    <div className="border-b border-danger/40 bg-surface-2" role="alert">
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-6">
+    <div className="border-b border-danger/40 bg-danger/5" role="alert">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:px-7">
         <div className="flex min-w-0 items-start gap-3">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" />
           <p className="text-sm text-foreground">
-            <strong className="font-semibold">
+            <strong className="font-medium">
               {walletName ?? "Your wallet"} is on {networkName(network.passphrase)}.
             </strong>{" "}
             <span className="text-muted">

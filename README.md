@@ -63,8 +63,12 @@ for every step.
   retries and every contract error code, all mapped to plain-language copy. Each
   wallet reports failure differently and none of them throw an `Error`, so the
   mapping is written against the shipped source of all five.
-- **Uber-like UI** — flat dark theme, a single warm-amber accent, a plain solid top
-  bar, and a subtle pointer-driven grid trail. No gradients, no glassmorphism.
+- **Silver-on-off-black UI** — flat surfaces stacked by depth, a single neutral
+  silver accent taken off the logo mark, and one green kept for a deposit coming
+  back. Jeko throughout, self-hosted and Turkish-complete, so headings, body,
+  balances and addresses are all one face. Per-event posters derive their colourway
+  from the event's own address, so the same event wears the same poster in every
+  browser with nothing stored to keep it that way.
 
 **Events, end to end**
 

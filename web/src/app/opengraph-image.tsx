@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { SITE_DESCRIPTION } from "@/lib/og";
 import { SITE_URL } from "@/lib/links";
+import { markDataUri } from "@/lib/mark";
 
 /**
  * The card behind every Showup link.
@@ -10,17 +13,40 @@ import { SITE_URL } from "@/lib/links";
  * or on an RPC read — would buy nothing. The per-event facts travel in the
  * title and description, which cost one chain read the page was making anyway.
  *
- * Same rules as the app: flat black, one amber accent, no gradient, no emoji.
+ * Same rules as the app: off-black, one silver accent, no gradient, no emoji,
+ * and Jeko throughout. The colours are spelled out because Satori resolves no
+ * custom properties, and the font is handed over as TTF because it reads TTF,
+ * OTF and WOFF but not the WOFF2 the browser gets.
  */
 
 export const alt = "Showup — put a refundable deposit on showing up";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const AMBER = "#e0a44a";
-const BACKGROUND = "#0a0a0a";
+const ACCENT = "#cdcfd6";
+const BACKGROUND = "#0f0f10";
+const FOREGROUND = "#e6e6e9";
+const MUTED = "#9a9ba1";
+const QUIET = "#696a71";
+
+/**
+ * Read off disk rather than fetched.
+ *
+ * The documented `fetch(new URL('./x.ttf', import.meta.url))` is not implemented
+ * in the Turbopack build and fails the prerender outright. This route is static —
+ * the card is generated once, during the build, in Node — so reading the file is
+ * both available and cheaper. `process.cwd()` is the Next project root here and
+ * on Vercel alike.
+ *
+ * TTF, not the WOFF2 the browser gets: Satori reads TTF, OTF and WOFF only.
+ */
+const font = (file: string) =>
+  readFileSync(join(process.cwd(), "src/app/fonts", file));
 
 export default function OpengraphImage() {
+  const regular = font("jeko-regular.ttf");
+  const bold = font("jeko-bold.ttf");
+
   return new ImageResponse(
     (
       <div
@@ -31,18 +57,19 @@ export default function OpengraphImage() {
           flexDirection: "column",
           justifyContent: "space-between",
           backgroundColor: BACKGROUND,
+          fontFamily: "Jeko",
           padding: 80,
         }}
       >
-        {/* Satori has no `::before`, so the accent rule is a real element. */}
-        <div style={{ display: "flex", width: 96, height: 8, backgroundColor: AMBER }} />
+        {/* A data URI rather than an asset, and Satori renders no `next/image`. */}
+        <img src={markDataUri(ACCENT)} width={92} height={92} alt="" />
 
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div
             style={{
               fontSize: 108,
               fontWeight: 700,
-              color: "#ffffff",
+              color: FOREGROUND,
               letterSpacing: -4,
               lineHeight: 1.05,
             }}
@@ -52,7 +79,7 @@ export default function OpengraphImage() {
           <div
             style={{
               fontSize: 40,
-              color: "#a1a1a1",
+              color: MUTED,
               lineHeight: 1.35,
               maxWidth: 880,
               marginTop: 24,
@@ -66,15 +93,21 @@ export default function OpengraphImage() {
             the domain instead — on a card pasted into a group chat it is the
             only thing telling you where the link goes. */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ display: "flex", fontSize: 28, color: AMBER, fontWeight: 700 }}>
+          <div style={{ display: "flex", fontSize: 28, color: ACCENT, fontWeight: 700 }}>
             {SITE_URL.replace(/^https?:\/\//, "")}
           </div>
-          <div style={{ display: "flex", fontSize: 28, color: "#6b6b6b" }}>
+          <div style={{ display: "flex", fontSize: 28, color: QUIET }}>
             no real funds are used
           </div>
         </div>
       </div>
     ),
-    size,
+    {
+      ...size,
+      fonts: [
+        { name: "Jeko", data: regular, weight: 400, style: "normal" },
+        { name: "Jeko", data: bold, weight: 700, style: "normal" },
+      ],
+    },
   );
 }

@@ -194,7 +194,7 @@ describe("EventDetail — the funding pre-flight", () => {
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
     expect(screen.getByText(/isn't on testnet yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reserve for 10 XLM/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /lock deposit and reserve/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /request test XLM/i })).toBeInTheDocument();
   });
 
@@ -206,7 +206,7 @@ describe("EventDetail — the funding pre-flight", () => {
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
     expect(screen.getByText(/not enough test XLM/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reserve for 10 XLM/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /lock deposit and reserve/i })).toBeDisabled();
   });
 
   it("lets a funded account through without a word", () => {
@@ -215,7 +215,7 @@ describe("EventDetail — the funding pre-flight", () => {
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
     expect(screen.queryByText(/not enough test XLM/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reserve for 10 XLM/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /lock deposit and reserve/i })).toBeEnabled();
   });
 
   // Horizon being down is not evidence that someone is broke.
@@ -224,7 +224,7 @@ describe("EventDetail — the funding pre-flight", () => {
     state.balance = null;
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
-    expect(screen.getByRole("button", { name: /reserve for 10 XLM/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /lock deposit and reserve/i })).toBeEnabled();
   });
 });
 

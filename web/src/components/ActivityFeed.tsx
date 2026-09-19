@@ -5,7 +5,7 @@ import { activityId, type Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
 import { formatMoment, shortAddr, shortHash } from "@/lib/format";
-import { Button, Card, Skeleton } from "./ui";
+import { Button, SectionLabel, Skeleton } from "./ui";
 
 /**
  * Everything here is read back off the ledger — the contract's own events.
@@ -34,9 +34,8 @@ export function ActivityFeed({
   const empty = activity.length === 0;
 
   return (
-    <Card>
-      <h3 className="text-base font-bold tracking-tight">Activity</h3>
-      <p className="mt-1 text-sm text-muted">Straight from the contract&apos;s events on-chain.</p>
+    <div>
+      <SectionLabel className="border-b border-border pb-3">ACTIVITY</SectionLabel>
 
       {loading && empty ? (
         <div className="mt-4 flex flex-col gap-3" role="status" aria-label="Loading activity">
@@ -56,14 +55,17 @@ export function ActivityFeed({
           )}
         </div>
       ) : empty ? (
-        <p className="mt-4 text-sm text-muted-2">Nothing yet.</p>
+        <p className="mt-4 text-sm text-muted-2">
+          Nothing yet. Every reservation and check-in shows up here, straight from the
+          contract&apos;s events on-chain.
+        </p>
       ) : (
-        <ul className="mt-4 flex flex-col divide-y divide-border">
+        <ul className="mt-2 flex flex-col divide-y divide-border">
           {activity.map((a) => (
-            <li key={activityId(a)} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+            <li key={activityId(a)} className="flex items-start gap-3 py-3.5">
               <Icon kind={a.kind} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-foreground">{describe(a)}</p>
+                <p className="text-sm text-foreground-2">{describe(a)}</p>
                 {/* The hash, not the ledger number. Every one of these rows is a
                     piece of evidence someone has to be able to read off the
                     screen and check on Stellar Expert — a ledger number sends
@@ -76,7 +78,7 @@ export function ActivityFeed({
                     target="_blank"
                     rel="noreferrer"
                     title={a.txHash}
-                    className="inline-flex items-center gap-1 font-mono text-xs text-muted transition-colors hover:text-accent"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-muted-2 transition-colors hover:text-accent-soft"
                   >
                     {shortHash(a.txHash)}
                     <ExternalLink className="size-3" />
@@ -107,15 +109,15 @@ export function ActivityFeed({
           Couldn&apos;t refresh just now, so this may be missing the last few moments.
         </p>
       )}
-    </Card>
+    </div>
   );
 }
 
 function Icon({ kind }: { kind: Activity["kind"] }) {
   const className = "mt-0.5 size-4 shrink-0";
   if (kind === "created") return <CalendarPlus className={`${className} text-muted`} />;
-  if (kind === "reserved") return <Lock className={`${className} text-muted`} />;
-  if (kind === "checked_in") return <CheckCircle2 className={`${className} text-accent`} />;
+  if (kind === "reserved") return <Lock className={`${className} text-accent`} />;
+  if (kind === "checked_in") return <CheckCircle2 className={`${className} text-success`} />;
   if (kind === "phase_changed") return <DoorOpen className={`${className} text-muted`} />;
   return <Flag className={`${className} text-muted`} />;
 }

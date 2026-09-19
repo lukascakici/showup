@@ -29,7 +29,9 @@ export default async function RollCallQrPage({
   return (
     <div className="flex flex-col items-center gap-8 py-8 text-center">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{call.title}</h1>
+        <h1 className="font-display text-[34px] font-bold leading-[1.06] tracking-[-0.03em] text-balance sm:text-[44px]">
+          {call.title}
+        </h1>
         <p className="mt-2 text-sm text-muted">Scan to say you&apos;re here</p>
       </div>
 

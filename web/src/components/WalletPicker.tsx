@@ -92,7 +92,7 @@ function Picker() {
           bar's space whether or not the bar is there. */}
       <div
         ref={panel}
-        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/60"
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border-strong bg-surface shadow-2xl shadow-black/60"
       >
         <svg
           className="runner runner-loop pointer-events-none absolute inset-0 size-full"
@@ -103,7 +103,10 @@ function Picker() {
         </svg>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border py-2 pl-5 pr-2">
-          <h2 id="wallet-picker-title" className="text-base font-bold tracking-tight">
+          <h2
+            id="wallet-picker-title"
+            className="font-display text-base font-bold tracking-tight"
+          >
             Connect a wallet
           </h2>
           {/* 24px before this — the dismiss control on a modal that covers the
@@ -112,7 +115,7 @@ function Picker() {
           <button
             onClick={closePicker}
             aria-label="Close"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-3 hover:text-foreground"
           >
             <X className="size-4" />
           </button>
@@ -177,7 +180,7 @@ function Picker() {
           </p>
         )}
 
-        <p className="shrink-0 border-t border-border px-5 py-3 text-xs text-muted-2">
+        <p className="shrink-0 border-t border-border px-5 py-3 text-xs text-muted-3">
           Showup runs on Stellar Testnet. Your wallet must be on Testnet too.
         </p>
       </div>
@@ -209,25 +212,23 @@ function NoWalletHelp({
 }) {
   return (
     <div className="border-t border-border px-5 py-4">
-      <h3 className="text-sm font-semibold text-foreground">Don&apos;t have any of these?</h3>
+      <h3 className="font-display text-sm font-bold text-foreground">
+        Don&apos;t have any of these?
+      </h3>
       <p className="mt-1.5 text-sm text-muted">
-        <strong className="font-semibold text-foreground">Albedo</strong> needs nothing
-        installed — pick it above and approve in the {touch ? "tab" : "window"} it opens.
-        It takes about a minute, and it works on Testnet out of the box.
+        <strong className="font-medium text-foreground">Albedo</strong> needs nothing
+        installed. Pick it above and approve in the {touch ? "tab" : "window"} it opens.
       </p>
       <p className="mt-2 text-sm text-muted">
         {touch ? (
           <>
-            If you&apos;d rather use an app, install Freighter from your app store
+            Prefer an app? Install Freighter from your app store
             {walletConnectConfigured
-              ? ", then come back and pick WalletConnect — that is the row Freighter answers on a phone."
-              : ". This deploy can't reach it on a phone, so Albedo is the way here."}
+              ? ", then pick WalletConnect: the row it answers on."
+              : ". This deploy can't reach it on a phone, so Albedo is the way."}
           </>
         ) : (
-          <>
-            Freighter and Hana are browser extensions — install one from its row above,
-            then use Check again.
-          </>
+          <>Freighter and Hana are browser extensions. Install one, then Check again.</>
         )}
       </p>
       <Button
@@ -272,7 +273,7 @@ function WalletRow({
         {monogram}
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-semibold text-foreground">
+        <span className="block truncate text-sm font-medium text-foreground">
           {wallet.name}
         </span>
         <span className="block truncate text-xs text-muted">
@@ -297,10 +298,10 @@ function WalletRow({
           href={wallet.url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2"
+          className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface-3"
         >
           {body}
-          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent">
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent-soft">
             Install
             <ArrowUpRight className="size-3.5" />
           </span>
@@ -315,7 +316,7 @@ function WalletRow({
         ref={ref}
         onClick={onChoose}
         disabled={disabled}
-        className="flex w-full items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-40"
+        className="flex w-full items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-40"
       >
         {body}
         {pending && <Loader2 className="size-4 shrink-0 animate-spin text-accent" />}

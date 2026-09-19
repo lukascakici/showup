@@ -1,38 +1,44 @@
+import { MARK_PATH, MARK_RING } from "@/lib/mark";
+
 /**
- * Showup logo lockup: a location pin with a clock inside — "be somewhere, on time".
- * Flat amber pin, dark clock face. No gradients, no glow.
+ * Showup lockup: the ring mark, and the wordmark set in Jeko.
+ *
+ * The mark is a stroked circle and a single traced outline, so it takes
+ * `currentColor` and stays crisp at any size — a 16px favicon and a 320px print
+ * sheet are the same kilobyte of path. Nothing here is a raster.
  */
+
+/** The ring and the S, on their own. Sized by the caller, coloured by inheritance. */
+export function LogoMark({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 500 500"
+      fill="none"
+      aria-hidden
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle
+        cx={MARK_RING.cx}
+        cy={MARK_RING.cy}
+        r={MARK_RING.r}
+        stroke="currentColor"
+        strokeWidth={MARK_RING.width}
+      />
+      <path fill="currentColor" d={MARK_PATH} />
+    </svg>
+  );
+}
+
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <span className={`flex items-center gap-2 ${className}`}>
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden
-        className="shrink-0"
-      >
-        {/* Location pin */}
-        <path
-          d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0Z"
-          fill="var(--accent)"
-        />
-        {/* Clock face inside the pin head */}
-        <circle cx="12" cy="10" r="3.4" stroke="var(--accent-fg)" strokeWidth="1.4" />
-        <path
-          d="M12 10V8.1M12 10h1.9"
-          stroke="var(--accent-fg)"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+    <span className={`flex items-center gap-2.5 ${className}`}>
+      <LogoMark className="size-[26px] shrink-0 text-accent" />
       {/* Below ~380px the wordmark, the Create tab and the wallet chip don't all
-          fit on one line, and the chip is the one that gets pushed off. The pin
+          fit on one line, and the chip is the one that gets pushed off. The mark
           on its own is still the home link, so this is the cheapest thing to
           drop. Above that width nothing changes. */}
-      <span className="relative -top-[3px] hidden font-hand text-2xl font-bold leading-none text-accent min-[380px]:inline">
+      <span className="hidden font-display text-lg font-bold tracking-[-0.02em] text-foreground min-[380px]:inline">
         showup
       </span>
     </span>

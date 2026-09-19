@@ -15,6 +15,10 @@
 
 export const CHECK_IN_PARAM = "c";
 
+/** Where Showup answers questions. Named once; the footer and the cards share it. */
+export const X_HANDLE = "showup_click";
+export const X_URL = `https://x.com/${X_HANDLE}`;
+
 /**
  * The origin every shared link is built on — deliberately not the one the page
  * happens to be served from.

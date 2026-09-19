@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { loadEvent } from "@/lib/chain";
 import { eventPreview, FALLBACK_PREVIEW, OG_IMAGE_PATH, SITE_NAME } from "@/lib/og";
-import { inviteUrl } from "@/lib/links";
+import { inviteUrl, X_HANDLE } from "@/lib/links";
 import { EventPageBody } from "./EventPageBody";
 
 /**
@@ -52,6 +52,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
+      site: `@${X_HANDLE}`,
       title: preview.title,
       description: preview.description,
       images: [OG_IMAGE_PATH],

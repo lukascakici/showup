@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CheckCircle2, KeyRound } from "lucide-react";
 import { checkInUrl, inviteUrl } from "@/lib/links";
-import { ButtonLink, Card } from "./ui";
+import { ButtonLink, Card, SectionLabel } from "./ui";
 import { CopyLink } from "./CopyLink";
 import { QrCode } from "./QrCode";
 
@@ -36,17 +36,15 @@ export function EventCreated({
     <div className="flex flex-col gap-4">
       <Card>
         <div className="flex items-start gap-3">
-          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-accent" />
+          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
           <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight">Your event is live</h2>
+            <h2 className="font-display text-lg font-bold tracking-tight">Your event is live</h2>
             <p className="mt-1 truncate text-sm text-muted">{title}</p>
           </div>
         </div>
 
         <div className="mt-5 border-t border-border pt-5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
-            Invite link
-          </h3>
+          <SectionLabel>INVITE LINK</SectionLabel>
           <p className="mt-1.5 text-sm text-muted">
             Send this to the people you want there. Opening it lets them reserve a
             spot with the deposit — it gives nothing else away, so it&apos;s safe to
@@ -69,7 +67,7 @@ export function EventCreated({
         <div className="flex items-start gap-3">
           <KeyRound className="mt-0.5 size-5 shrink-0 text-muted" />
           <div className="min-w-0">
-            <h3 className="text-base font-bold tracking-tight">
+            <h3 className="font-display text-base font-bold tracking-tight">
               Your check-in link — save it now
             </h3>
             <p className="mt-1.5 text-sm text-muted">
@@ -91,7 +89,7 @@ export function EventCreated({
         </div>
       </Card>
 
-      <p className="text-center text-xs text-muted-2">
+      <p className="text-center text-xs text-muted-3">
         Both links are on the event page too, whenever you need them again —{" "}
         <Link href={`/e/${id}`} className="underline transition-colors hover:text-foreground">
           {title || "your event"}

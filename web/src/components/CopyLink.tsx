@@ -44,7 +44,7 @@ export function CopyLink({ url, label }: { url: string; label: string }) {
           className="flex size-11 shrink-0 items-center justify-center rounded-r-xl text-muted transition-colors hover:text-foreground"
         >
           {state === "copied" ? (
-            <Check className="size-4 text-accent" />
+            <Check className="size-4 text-success" />
           ) : (
             <Copy className="size-4" />
           )}
