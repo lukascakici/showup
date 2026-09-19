@@ -130,10 +130,6 @@ type Summary = {
   reserved: number;
   showed: number;
   rate: number | null;
-  /** Deposit plus fee allowance, handed back at the door. */
-  returned: bigint;
-  /** Deposits the no-shows lost, in stroops. */
-  forfeited: bigint;
 };
 
 /**
@@ -145,40 +141,25 @@ type Summary = {
  * the number of people who turn up towards the number who said they would, and
  * that gap is the only thing worth putting at the top of the page.
  *
- * Counted over **finalised events only**, because those are the ones where
- * every deposit has actually moved. An event still checking in has no-shows
- * who might yet walk through the door, and counting their deposits as forfeited
- * would be stating an outcome the chain has not reached.
+ * Counted over **finalised events only**, because those are the ones that are
+ * over. An event still checking in has no-shows who might yet walk through the
+ * door, and scoring them now would publish an outcome the chain has not
+ * reached and the page would have to take back.
  */
 export function summarise(events: ListedEvent[] | undefined): Summary {
-  const empty: Summary = { reserved: 0, showed: 0, rate: null, returned: 0n, forfeited: 0n };
+  const empty: Summary = { reserved: 0, showed: 0, rate: null };
   if (!events || events.length === 0) return empty;
 
   let reserved = 0;
   let showed = 0;
-  let returned = 0n;
-  let forfeited = 0n;
 
   for (const e of events) {
     if (e.phase !== "Finalized") continue;
     reserved += e.reserved.length;
     showed += e.checkedIn.length;
-    // What check-in actually transfers: the deposit and the fee allowance that
-    // rode in with it. Quoting the deposit alone would understate every refund
-    // the contract has ever made.
-    returned += (e.deposit + e.feeAllowance) * BigInt(e.checkedIn.length);
-    // The fee allowance is not forfeited — it goes back to the organizer as
-    // unspent pool, so it never belonged to the no-show to lose.
-    forfeited += e.deposit * BigInt(e.reserved.length - e.checkedIn.length);
   }
 
-  return {
-    reserved,
-    showed,
-    rate: reserved > 0 ? (showed / reserved) * 100 : null,
-    returned,
-    forfeited,
-  };
+  return { reserved, showed, rate: reserved > 0 ? (showed / reserved) * 100 : null };
 }
 
 function Hero({ stats }: { stats: Summary }) {
@@ -207,26 +188,36 @@ function Hero({ stats }: { stats: Summary }) {
 }
 
 /**
- * The gap between who said they would come and who came, drawn to scale.
+ * What a deposit is worth, per hundred people who said they were coming.
  *
- * A bar rather than four figures, because the argument is a comparison and a
- * comparison is a length. The bar is the claim; the sentence under it is the
- * receipt, naming the people and the money the percentage is made of, so that
- * nobody has to take the headline on trust.
+ * Two bars, and they are not the same kind of number. The lower one is measured:
+ * it is every reservation this contract has settled, counted off the chain. The
+ * upper one is an assumption about events that ask for nothing, carried here
+ * because the product's claim is a comparison and a comparison needs two sides.
  *
- * Every number here moves on its own. Nothing is a target, a projection or a
- * rounded-up version of something smaller — when three people out of seventeen
- * flake, this says three.
+ * It is drawn as the weaker of the two on purpose. An assumption rendered in the
+ * same ink as a measurement is the most common way a landing page lies, and the
+ * difference between "we counted this" and "this is the usual" has to survive
+ * being looked at for one second by somebody who will never read a footnote.
  */
-function Turnout({ stats }: { stats: Summary }) {
-  const noShows = stats.reserved - stats.showed;
 
-  // Before anything has settled there is no rate, and a 0% bar would read as a
-  // product that does not work rather than one nobody has finished using yet.
+/**
+ * Turnout for an event that asks for nothing up front.
+ *
+ * A rule of thumb from how free RSVPs behave, not a figure anybody measured
+ * here, and it is labelled as such everywhere it is shown. Deliberately a round
+ * number: a decimal would dress an assumption up as a finding.
+ */
+const ASSUMED_FREE_TURNOUT = 50;
+
+function Turnout({ stats }: { stats: Summary }) {
+  // Before anything has settled there is nothing to compare the assumption
+  // against, and a lone bar for an event type we do not run would be an advert
+  // for a claim with no evidence under it.
   if (stats.rate === null) {
     return (
       <div className="min-w-[min(300px,100%)] flex-1 pt-1.5">
-        <SectionLabel>RESERVED VERSUS TURNED UP</SectionLabel>
+        <SectionLabel>WITH A DEPOSIT, AND WITHOUT</SectionLabel>
         <p className="mt-3 max-w-[340px] text-sm text-muted">
           No event has settled yet. The moment one does, its real turnout lands here,
           counted off the chain rather than typed in.
@@ -235,41 +226,82 @@ function Turnout({ stats }: { stats: Summary }) {
     );
   }
 
+  const gained = Math.round(stats.rate - ASSUMED_FREE_TURNOUT);
+
   return (
-    <div className="min-w-[min(300px,100%)] flex-1 pt-1.5">
-      <SectionLabel>RESERVED VERSUS TURNED UP</SectionLabel>
+    <div className="min-w-[min(320px,100%)] flex-1 pt-1.5">
+      <SectionLabel>WITH A DEPOSIT, AND WITHOUT</SectionLabel>
 
-      <div className="mt-4 flex items-baseline gap-3">
-        <span className="font-mono text-[42px] leading-none text-success">
-          {stats.rate.toFixed(1)}%
-        </span>
-        <span className="font-mono text-[15px] text-muted-2">
-          {stats.showed} of {stats.reserved}
-        </span>
+      <div className="mt-5 flex max-w-[380px] flex-col gap-5">
+        <Bar
+          title="Free RSVP"
+          value={ASSUMED_FREE_TURNOUT}
+          reading={`~${ASSUMED_FREE_TURNOUT}%`}
+          note="typical, not measured here"
+          measured={false}
+        />
+        <Bar
+          title="With a deposit"
+          value={stats.rate}
+          reading={`${stats.rate.toFixed(1)}%`}
+          note={`measured on-chain · ${stats.showed} of ${stats.reserved}`}
+          measured
+        />
       </div>
 
+      {gained > 0 && (
+        <p className="mt-5 max-w-[380px] text-sm leading-[1.6] text-muted text-pretty">
+          Per 100 people who reserve, that is about{" "}
+          <span className="text-foreground-2">{gained} more</span> of them in the room.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * `measured` is the whole point of this component rather than a styling flag:
+ * it decides both the ink and the wording, so a bar cannot end up looking
+ * counted while saying it was assumed.
+ */
+function Bar({
+  title,
+  value,
+  reading,
+  note,
+  measured,
+}: {
+  title: string;
+  value: number;
+  reading: string;
+  note: string;
+  measured: boolean;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <span className={`text-sm ${measured ? "text-foreground" : "text-muted-2"}`}>
+          {title}
+        </span>
+        <span
+          className={`font-mono text-[19px] leading-none ${
+            measured ? "text-success" : "text-muted-2"
+          }`}
+        >
+          {reading}
+        </span>
+      </div>
       <div
-        className="mt-4 h-2.5 w-full max-w-[380px] overflow-hidden rounded-full bg-surface-3"
+        className="h-2.5 w-full overflow-hidden rounded-full bg-surface-3"
         role="img"
-        aria-label={`${stats.showed} of ${stats.reserved} reserved spots showed up`}
+        aria-label={`${title}: ${reading}, ${note}`}
       >
-        <div className="h-full rounded-full bg-success" style={{ width: `${stats.rate}%` }} />
+        <div
+          className={`h-full rounded-full ${measured ? "bg-success" : "bg-border-hover"}`}
+          style={{ width: `${value}%` }}
+        />
       </div>
-
-      <p className="mt-4 max-w-[380px] text-sm leading-[1.6] text-muted text-pretty">
-        <span className="text-foreground-2">{fromStroops(stats.returned)} XLM</span> went
-        back to people at the door.
-        {noShows > 0 ? (
-          <>
-            {" "}
-            The {noShows} who didn&apos;t come left{" "}
-            <span className="text-foreground-2">{fromStroops(stats.forfeited)} XLM</span>{" "}
-            behind.
-          </>
-        ) : (
-          " Nobody has flaked yet."
-        )}
-      </p>
+      <div className="mt-1.5 text-xs text-muted-3">{note}</div>
     </div>
   );
 }

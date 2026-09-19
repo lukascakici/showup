@@ -3,12 +3,13 @@ import type { ListedEvent } from "@/lib/events";
 import { summarise } from "./page";
 
 /**
- * The home page's headline figures are a claim about money, made to strangers.
+ * The home page's headline is a claim about other people's events, made to
+ * strangers, and this is where the measured half of it comes from.
  *
- * Every number the hero prints is derived here: how many people reserved, how
- * many turned up, what came back at the door and what the no-shows left behind.
- * Getting one of them wrong does not crash anything and does not look wrong on
- * screen; it just publishes a false figure about somebody's deposit.
+ * The hero puts a rule of thumb next to a counted figure. The rule of thumb is
+ * honest because it is labelled; the counted figure is only honest if it is
+ * actually counted right. Getting it wrong crashes nothing and looks like
+ * nothing on screen, it just overstates how well the product works.
  */
 function event(over: Partial<ListedEvent> = {}): ListedEvent {
   return {
@@ -42,30 +43,15 @@ describe("the turnout figures", () => {
     expect(s.rate).toBeCloseTo((12 / 14) * 100, 5);
   });
 
-  it("returns the fee allowance along with the deposit", () => {
-    // Check-in transfers deposit + fee_allowance in one go, so quoting the
-    // deposit alone would understate every refund the contract has ever made.
-    const s = summarise([event({ reserved: guests(2), checkedIn: guests(2) })]);
-    expect(s.returned).toBe(2n * (50_000_000n + 1_000_000n));
-  });
-
-  it("forfeits the deposit only, never the fee allowance", () => {
-    // The unspent fee pool goes back to the organizer at finalize. It was never
-    // the no-show's to lose, so counting it as forfeited would inflate the
-    // figure with somebody else's money.
-    const s = summarise([event({ reserved: guests(3), checkedIn: guests(1) })]);
-    expect(s.forfeited).toBe(2n * 50_000_000n);
-  });
-
   it("ignores an event that is still running", () => {
     // A no-show in an event still checking in may yet walk through the door.
-    // Counting their deposit as forfeited states an outcome the chain has not
-    // reached, and the page would have to take it back afterwards.
+    // Scoring them now publishes an outcome the chain has not reached, and the
+    // page would have to take it back afterwards.
     const s = summarise([
       event({ phase: "Reserving", reserved: guests(9) }),
       event({ phase: "CheckingIn", reserved: guests(5), checkedIn: guests(1) }),
     ]);
-    expect(s).toEqual({ reserved: 0, showed: 0, rate: null, returned: 0n, forfeited: 0n });
+    expect(s).toEqual({ reserved: 0, showed: 0, rate: null });
   });
 
   it("has no rate at all before anything settles, rather than zero", () => {
@@ -76,9 +62,8 @@ describe("the turnout figures", () => {
     expect(summarise([event({ reserved: [], checkedIn: [] })]).rate).toBeNull();
   });
 
-  it("says 100 percent when everybody came, and forfeits nothing", () => {
+  it("says 100 percent when everybody came", () => {
     const s = summarise([event({ reserved: guests(4), checkedIn: guests(4) })]);
     expect(s.rate).toBe(100);
-    expect(s.forfeited).toBe(0n);
   });
 });
