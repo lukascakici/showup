@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Firestore } from "firebase-admin/firestore";
 import { adminFirestore } from "@/lib/firebase-admin";
+import { cronVerdict } from "@/lib/cron";
 import { FACTORY_ID } from "@/lib/contracts";
 import { activityId, listEventIds, loadEvent, server, sweepEventActivity } from "@/lib/chain";
 import { EVENTS_COLLECTION, type IndexedEvent } from "@/lib/event-index";
@@ -122,8 +123,15 @@ export async function POST(request: Request) {
  * GET because that is what Vercel Cron sends. It still accepts no data.
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+  const verdict = cronVerdict(process.env.CRON_SECRET, request.headers.get("authorization"));
+  if (verdict === "not-configured") {
+    // 503 rather than 401: nothing is wrong with the caller, the deploy is
+    // missing a variable. Vercel Cron surfaces a failing run, which is how this
+    // gets noticed at all.
+    console.error("[sync] CRON_SECRET is not set; refusing to sweep");
+    return NextResponse.json({ error: "cron-secret-not-configured" }, { status: 503 });
+  }
+  if (verdict === "not-authorized") {
     return NextResponse.json({ error: "not authorized" }, { status: 401 });
   }
 
