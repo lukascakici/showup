@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Lock } from "lucide-react";
+import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Hand, Lock, UserCheck, Users } from "lucide-react";
 import { activityId, type Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
@@ -119,6 +119,11 @@ function Icon({ kind }: { kind: Activity["kind"] }) {
   if (kind === "reserved") return <Lock className={`${className} text-accent`} />;
   if (kind === "checked_in") return <CheckCircle2 className={`${className} text-success`} />;
   if (kind === "phase_changed") return <DoorOpen className={`${className} text-muted`} />;
+  if (kind === "applied") return <Hand className={`${className} text-muted`} />;
+  if (kind === "answered") return <UserCheck className={`${className} text-muted`} />;
+  if (kind === "host_added" || kind === "host_removed") {
+    return <Users className={`${className} text-muted`} />;
+  }
   return <Flag className={`${className} text-muted`} />;
 }
 
@@ -138,6 +143,23 @@ function describe(a: Activity): string {
   }
   if (a.kind === "checked_in") {
     return `${shortAddr(a.guest)} showed up and took ${fromStroops(a.refunded)} XLM back`;
+  }
+  if (a.kind === "applied") {
+    return `${shortAddr(a.applicant)} asked to come`;
+  }
+  if (a.kind === "answered") {
+    // Both answers, spelled out. An organizer who approves everybody and one who
+    // is actually choosing publish the same event, and the only thing that tells
+    // them apart is this word.
+    return a.approved
+      ? `${shortAddr(a.applicant)} was approved`
+      : `${shortAddr(a.applicant)} was turned down`;
+  }
+  if (a.kind === "host_added") {
+    return `${shortAddr(a.host)} can now run this event`;
+  }
+  if (a.kind === "host_removed") {
+    return `${shortAddr(a.host)} can no longer run this event`;
   }
   const forfeited = fromStroops(a.forfeited);
   return `Finalized — ${a.showed} showed, ${a.noShows} didn't, ${forfeited} XLM forfeited`;

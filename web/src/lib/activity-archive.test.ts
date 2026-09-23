@@ -121,3 +121,60 @@ describe("knowing whether the feed is complete", () => {
     expect(reachesCreation([checkedIn()])).toBe(false);
   });
 });
+
+/**
+ * Admission rows, through storage and back.
+ *
+ * `answered` is the one that can be wrong quietly. One contract event carries
+ * both a yes and a no, so the whole difference between a guest list and a
+ * rubber stamp is a single boolean — and a boolean is exactly the field that
+ * goes missing in a round trip through a schemaless database without anything
+ * failing.
+ */
+describe("applications and hosts in the archive", () => {
+  const base = { ledger: 12, txHash: HASH, at: 1_700_000_000_000 };
+  const G = "GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW";
+
+  it("keeps an approval an approval and a decline a decline", () => {
+    for (const approved of [true, false]) {
+      const row = { kind: "answered" as const, applicant: G, approved, ...base };
+      expect(fromArchived(toArchived(row))).toEqual(row);
+    }
+  });
+
+  it("reads a stored row with no flag as a decline, never an approval", () => {
+    // The row that predates the field, or one written by a build that did not
+    // know about it. Guessing "approved" here would invent a spot the organizer
+    // never gave, in a record kept precisely so nobody has to take our word.
+    const back = fromArchived({ kind: "answered", applicant: G, ...base });
+    expect(back).toMatchObject({ kind: "answered", approved: false });
+  });
+
+  it("round-trips an application and both host rows", () => {
+    const rows = [
+      { kind: "applied" as const, applicant: G, ...base },
+      { kind: "host_added" as const, host: G, ...base },
+      { kind: "host_removed" as const, host: G, ...base },
+    ];
+    for (const row of rows) {
+      expect(fromArchived(toArchived(row))).toEqual(row);
+    }
+  });
+
+  it("stores no undefined fields, whatever the kind", () => {
+    // Firestore rejects `undefined` outright rather than storing a null, so a
+    // record built by spreading the union fails on whichever variant it was
+    // handed — and it fails at write time, in a batch, long after the decode.
+    const rows = [
+      { kind: "applied" as const, applicant: G, ...base },
+      { kind: "answered" as const, applicant: G, approved: true, ...base },
+      { kind: "host_added" as const, host: G, ...base },
+      { kind: "host_removed" as const, host: G, ...base },
+    ];
+    for (const row of rows) {
+      for (const [key, value] of Object.entries(toArchived(row))) {
+        expect(value, `${row.kind}.${key} is undefined`).not.toBeUndefined();
+      }
+    }
+  });
+});

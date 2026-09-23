@@ -156,6 +156,13 @@ export type Activity = Occurred &
     | { kind: "reserved"; guest: string; spotsLeft: number }
     | { kind: "checked_in"; guest: string; refunded: bigint }
     | { kind: "finalized"; showed: number; noShows: number; forfeited: bigint }
+    // Admission and co-hosting. Everything above is about money moving; these
+    // are about who was let near it, which is the other half of what an
+    // organizer is accountable for and was invisible until now.
+    | { kind: "applied"; applicant: string }
+    | { kind: "answered"; applicant: string; approved: boolean }
+    | { kind: "host_added"; host: string }
+    | { kind: "host_removed"; host: string }
   );
 
 /**
@@ -289,6 +296,22 @@ function decodeActivity(raw: rpc.Api.EventResponse[], eventId: string): Activity
         refunded: BigInt(String(data.refunded ?? 0)),
         ...where,
       });
+    } else if (name === "application_received") {
+      out.push({ kind: "applied", applicant: String(data.applicant), ...where });
+    } else if (name === "application_answered") {
+      out.push({
+        kind: "answered",
+        applicant: String(data.applicant),
+        // One event carries both answers, so this flag is the whole difference
+        // between a guest list and a rubber stamp. Defaulting it to `true`
+        // would turn every decline in the archive into an approval.
+        approved: data.approved === true,
+        ...where,
+      });
+    } else if (name === "host_added") {
+      out.push({ kind: "host_added", host: String(data.host), ...where });
+    } else if (name === "host_removed") {
+      out.push({ kind: "host_removed", host: String(data.host), ...where });
     } else if (name === "finalized") {
       out.push({
         kind: "finalized",

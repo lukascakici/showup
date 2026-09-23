@@ -43,6 +43,9 @@ export type ArchivedActivity = {
   showed?: number;
   noShows?: number;
   forfeited?: string;
+  applicant?: string;
+  approved?: boolean;
+  host?: string;
 };
 
 /**
@@ -70,6 +73,13 @@ export function toArchived(a: Activity): ArchivedActivity {
         noShows: a.noShows,
         forfeited: a.forfeited.toString(),
       };
+    case "applied":
+      return { ...base, applicant: a.applicant };
+    case "answered":
+      return { ...base, applicant: a.applicant, approved: a.approved };
+    case "host_added":
+    case "host_removed":
+      return { ...base, host: a.host };
   }
 }
 
@@ -107,6 +117,21 @@ export function fromArchived(doc: ArchivedActivity): Activity | null {
         forfeited: BigInt(doc.forfeited ?? "0"),
         ...base,
       };
+    case "applied":
+      return { kind: "applied", applicant: doc.applicant ?? "", ...base };
+    case "answered":
+      // Strictly `true`, matching the decoder: a stored row with the flag
+      // missing must not read back as an approval nobody gave.
+      return {
+        kind: "answered",
+        applicant: doc.applicant ?? "",
+        approved: doc.approved === true,
+        ...base,
+      };
+    case "host_added":
+      return { kind: "host_added", host: doc.host ?? "", ...base };
+    case "host_removed":
+      return { kind: "host_removed", host: doc.host ?? "", ...base };
     default:
       // A row written by a newer deploy than this bundle. Skipping it shows a
       // shorter history; guessing at it would show a wrong one.
