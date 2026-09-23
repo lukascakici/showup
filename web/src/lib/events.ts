@@ -9,7 +9,14 @@ import {
   type ActivityFeedResult,
   type EventState,
 } from "./chain";
-import { readIndexedEvents, toEventState } from "./event-index";
+import {
+  forgetIndexCache,
+  readIndexedEventsCached,
+  requestSync,
+  toEventState,
+  type IndexedEvent,
+} from "./event-index";
+import { hiddenIds } from "./listing";
 import { usePolled } from "./polled";
 import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
 
@@ -57,24 +64,74 @@ export type EventList = {
  * Now each event stands alone, and anything the chain cannot answer for falls
  * back to the off-chain index — clearly marked, because a snapshot from twenty
  * minutes ago is worth showing but is not worth mistaking for live state.
+ *
+ * What the factory returns is filtered by the hidden list before anything else
+ * happens: see `./listing`. That ordering is deliberate. A hidden event is never
+ * fetched, so it costs no RPC call, and it can never turn up in `unreadable` and
+ * be reported to the visitor as an event that failed to load.
  */
-export async function loadEventList(): Promise<EventList> {
-  let ids: string[] | null = null;
-  try {
-    ids = await listEventIds();
-  } catch {
-    // The factory itself is unreadable. Rare, and exactly when the index earns
-    // its keep — but it is a genuine outage, so say nothing false about it.
-    ids = null;
-  }
+/** Never ask the server to sync more often than this, whatever else is true. */
+const SYNC_MIN_GAP_MS = 60_000;
 
-  if (ids === null) {
-    const indexed = await readIndexedEvents();
-    if (indexed.length === 0) {
+/** How often to refresh an index that already knows about every event. */
+const SYNC_IDLE_GAP_MS = 5 * 60_000;
+
+let lastSyncAt = 0;
+
+/**
+ * Keep the index populated from the page that reads the chain anyway.
+ *
+ * Until now the only things that wrote `events/{id}` were opening one event's
+ * page and the nightly sweep, so an event nobody had opened yet simply had no
+ * document — and the `hidden` flag has nowhere to live until it does. The home
+ * page reads every event off the chain on every poll; this hands that read to
+ * the server so it can be written down.
+ *
+ * Fire-and-forget, and deliberately not on every tick. The rule is not a plain
+ * timer: **an id the index has never seen syncs within the minute**, because
+ * that is somebody's event that has just been created and is missing from the
+ * one place it can be curated from. Everything else waits five minutes, since
+ * re-indexing state nobody has changed is a Firestore write for nothing.
+ *
+ * The floor applies either way, so a sync that keeps failing — an index that is
+ * not configured, a server that is down — retries once a minute rather than on
+ * every poll.
+ */
+function syncIndexIfStale(chainIds: string[], indexed: IndexedEvent[], now: number) {
+  const since = now - lastSyncAt;
+  if (since < SYNC_MIN_GAP_MS) return;
+
+  const known = new Set(indexed.map((doc) => doc.id));
+  const unseen = chainIds.some((id) => !known.has(id));
+  if (!unseen && since < SYNC_IDLE_GAP_MS) return;
+
+  lastSyncAt = now;
+  // Drop the cache afterwards so the next poll reads what was just written,
+  // rather than serving the pre-sync snapshot for the rest of the minute.
+  void requestSync().then(forgetIndexCache);
+}
+
+export async function loadEventList(): Promise<EventList> {
+  // One index read serves both jobs: it carries the `hidden` flags, and it is
+  // the fallback for anything the chain cannot answer for. Before this it was
+  // fetched only on the failure path, and twice when that path was taken.
+  const [idsOrNull, indexed] = await Promise.all([
+    listEventIds().catch(() => {
+      // The factory itself is unreadable. Rare, and exactly when the index earns
+      // its keep — but it is a genuine outage, so say nothing false about it.
+      return null;
+    }),
+    readIndexedEventsCached(),
+  ]);
+  const hidden = hiddenIds(indexed);
+
+  if (idsOrNull === null) {
+    const visible = indexed.filter((doc) => !hidden.has(doc.id));
+    if (visible.length === 0) {
       throw new Error("Couldn't reach the network, and there's nothing cached to fall back on.");
     }
     return {
-      events: indexed.map((doc) => ({
+      events: visible.map((doc) => ({
         ...toEventState(doc),
         source: "index" as const,
         syncedAt: doc.syncedAt,
@@ -83,18 +140,20 @@ export async function loadEventList(): Promise<EventList> {
     };
   }
 
-  const settled = await Promise.allSettled(ids.map(loadEvent));
+  syncIndexIfStale(idsOrNull, indexed, Date.now());
+
+  const ids = idsOrNull.filter((id) => !hidden.has(id));
+  const settled = await Promise.allSettled(ids.map((id) => loadEvent(id)));
 
   // Slots rather than pushes, so the factory's ordering survives a partial
   // failure — the page relies on it to put the newest event first.
   const slots: (ListedEvent | null)[] = settled.map((result) =>
     result.status === "fulfilled" ? { ...result.value, source: "chain" as const } : null,
   );
-  const gaps = ids.filter((_, i) => slots[i] === null);
   const unreadable: string[] = [];
 
-  if (gaps.length > 0) {
-    const byId = new Map((await readIndexedEvents()).map((doc) => [doc.id, doc]));
+  if (slots.some((slot) => slot === null)) {
+    const byId = new Map(indexed.map((doc) => [doc.id, doc]));
     ids.forEach((id, i) => {
       if (slots[i] !== null) return;
       const doc = byId.get(id);

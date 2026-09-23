@@ -58,6 +58,16 @@ export type IndexedEvent = {
   activitySweptTo?: number;
   activityComplete?: boolean;
   activitySyncedAt?: number;
+
+  /**
+   * The one field here that is **not** derived from the chain.
+   *
+   * Set by hand to take the event out of the home page's list; see `./listing`
+   * for what that does and does not mean. The sync route writes this document
+   * with `{ merge: true }` and names every field it sets, so this one is never
+   * touched by a re-sync.
+   */
+  hidden?: boolean;
 };
 
 export const EVENTS_COLLECTION = "events";
@@ -95,6 +105,36 @@ export async function readIndexedEvents(): Promise<IndexedEvent[]> {
     query(collection(db, EVENTS_COLLECTION), where("factory", "==", FACTORY_ID)),
   );
   return snapshot.docs.map((d) => d.data() as IndexedEvent);
+}
+
+/** How long a fetched index is reused before Firestore is asked again. */
+export const INDEX_TTL_MS = 60_000;
+
+let cached: { at: number; docs: IndexedEvent[] } | null = null;
+
+/** Drop the cache. For tests, and anywhere a fresh read is worth the trip. */
+export function forgetIndexCache() {
+  cached = null;
+}
+
+/**
+ * `readIndexedEvents`, at most once a minute.
+ *
+ * The home page polls every ten seconds and now needs this on the happy path
+ * too — not as a fallback, but because the `hidden` flags live here. Querying
+ * the collection on every tick would be a Firestore bill for an answer that
+ * changes by hand perhaps twice a month. A minute of staleness costs an event
+ * staying visible for another minute after somebody hid it.
+ *
+ * A failure is not cached: an outage should be retried on the next tick, not
+ * remembered as "the index is empty" for the following minute.
+ */
+export async function readIndexedEventsCached(now = Date.now()): Promise<IndexedEvent[]> {
+  if (cached && now - cached.at < INDEX_TTL_MS) return cached.docs;
+  const docs = await readIndexedEvents().catch(() => null);
+  if (docs === null) return cached?.docs ?? [];
+  cached = { at: now, docs };
+  return docs;
 }
 
 /** A single indexed event, or `null` when the index is off or has never seen it. */
