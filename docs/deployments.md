@@ -147,6 +147,65 @@ stellar contract invoke --network testnet \
 # error: HostError: Error(Contract, #17)
 ```
 
+### Admission by the organizer's yes, proved on Testnet
+
+An `Approval` event created through the upgraded factory:
+[`CA5SLCNM…S7GV63S6W2`](https://stellar.expert/explorer/testnet/contract/CA5SLCNML2EWC3FJVVMEIGTC3CJ7COBDZGO4FQ5754B4QQS7GV63S6W2).
+2 XLM deposit, capacity 3, forfeits to the organizer.
+
+The order below is the whole promise of this mode: **nothing is taken until the
+organizer has said yes**, and the guest is the one who pays when it happens.
+
+| Step | Result |
+| :-- | :-- |
+| `rsvp` before applying | rejected, `Error(Contract, #18)` — `NotApplied` |
+| `apply` | [`ad69d4825366b327ffc697be6616471b14f23db305df61e83c790f72e1c45cb6`](https://stellar.expert/explorer/testnet/tx/ad69d4825366b327ffc697be6616471b14f23db305df61e83c790f72e1c45cb6) |
+| state after applying | `"Applied"`, and `get_reserved` is still `[]` — **no money has moved** |
+| `rsvp` while still only applied | rejected, `Error(Contract, #18)` — `NotApplied` |
+| `approve` | [`9a57f288f8f924c689c32ec47594527d0f2eeed491e81b01a48b554f265485fd`](https://stellar.expert/explorer/testnet/tx/9a57f288f8f924c689c32ec47594527d0f2eeed491e81b01a48b554f265485fd) |
+| `rsvp` after approval | [`f3731b318a7f25c763c210dc0970a07e5ae70f1f56fd1042e401694dd6eb666e`](https://stellar.expert/explorer/testnet/tx/f3731b318a7f25c763c210dc0970a07e5ae70f1f56fd1042e401694dd6eb666e) — **2 XLM transferred**, and not before |
+| `check_in` | [`1949e9778e5ee8d91427d953956bada33a77dc60f84bfb309b034f1f14a6be0d`](https://stellar.expert/explorer/testnet/tx/1949e9778e5ee8d91427d953956bada33a77dc60f84bfb309b034f1f14a6be0d) — 2.1 XLM back, deposit plus the fee allowance |
+
+The approval is the organizer's transaction and the reservation is the guest's.
+That split is the point: an approval that could pull somebody's deposit would
+mean anyone could be charged for being liked.
+
+A second wallet through the same event, turned down:
+
+| Step | Result |
+| :-- | :-- |
+| `apply` | [`c713ac8635f7466406623019de0f15a847aa2376d10a73119f43bf100bf6926b`](https://stellar.expert/explorer/testnet/tx/c713ac8635f7466406623019de0f15a847aa2376d10a73119f43bf100bf6926b) |
+| `decline` | [`2698df98cbf7012807415d0e4b9d0c8d844e8230f1cd0f0a38f8db85a386ada2`](https://stellar.expert/explorer/testnet/tx/2698df98cbf7012807415d0e4b9d0c8d844e8230f1cd0f0a38f8db85a386ada2) |
+| `rsvp` after being declined | rejected, `Error(Contract, #18)` — `NotApplied` |
+| `apply` again after being declined | rejected, `Error(Contract, #19)` — `AlreadyApplied` |
+
+A decline is terminal in both directions. A declined applicant cannot reserve,
+and cannot re-apply their way back into an organizer's inbox.
+
+### An event run by someone who did not create it
+
+Same event, and the co-host is the wallet that was declined a spot in it — which
+is a good illustration of the split: running an event and being admitted to one
+are unrelated powers.
+
+| Step | Result |
+| :-- | :-- |
+| `open_checkin` by a non-host | rejected, `Error(Contract, #20)` — `NotAHost` |
+| `add_host` by the creator | [`2a28739712b24ec967fc160d7655a913718cbcb5ad8e4f12936a31cee6489b23`](https://stellar.expert/explorer/testnet/tx/2a28739712b24ec967fc160d7655a913718cbcb5ad8e4f12936a31cee6489b23) |
+| `open_checkin` by that same wallet | [`0a183ffb124a76cb954e3566c07859ed6b77908522388c81eac99508d31edc5c`](https://stellar.expert/explorer/testnet/tx/0a183ffb124a76cb954e3566c07859ed6b77908522388c81eac99508d31edc5c) |
+| `finalize` by that same wallet | [`f7e3735184875b87027a1bac06dcf93bdaf97030b60504cd7dabaf32f806218c`](https://stellar.expert/explorer/testnet/tx/f7e3735184875b87027a1bac06dcf93bdaf97030b60504cd7dabaf32f806218c) |
+
+`get_terms` on that event now reads:
+
+```json
+{"admission":"Approval","hosts":["GDL3H646…OZKI5","GB7TWPUD…VNKCL"]}
+```
+
+**A co-host can run the event; they cannot redirect its money.** Every payout in
+`finalize` goes to `config.organizer`, never to whichever host happened to make
+the call — so adding one is a decision about who can act, not about funds. The
+settlement above was called by the co-host and paid the creator.
+
 ### Events deployed before this revision still run
 
 `set_event_wasm_hash` changes what the factory deploys **next**; every event
