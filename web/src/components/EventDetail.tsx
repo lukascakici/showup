@@ -9,6 +9,8 @@ import {
   ExternalLink,
   Flag,
   Globe,
+  Hand,
+  Hourglass,
   Info,
   Link2,
   Lock,
@@ -16,6 +18,7 @@ import {
   TriangleAlert,
   Undo2,
   Wallet,
+  XCircle,
 } from "lucide-react";
 import {
   event as eventClient,
@@ -35,6 +38,7 @@ import {
   spotsLeft,
   useActivity,
   useEvent,
+  useStanding,
   type EventState,
 } from "@/lib/events";
 import {
@@ -76,6 +80,14 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     loading: activityLoading,
     refresh: refreshActivity,
   } = useActivity(id);
+  // Only read for approval-gated events: everywhere else the answer is already
+  // in the reserved and checked-in lists above. `refresh` runs after `apply`,
+  // so the panel moves on without waiting for the next poll.
+  const { data: standing, refresh: refreshStanding } = useStanding(
+    id,
+    address,
+    event?.admission.tag === "Approval",
+  );
   // null while unasked or unanswerable; only `false` is a confirmed "no such event".
   const [known, setKnown] = useState<boolean | null>(null);
   const [action, setAction] = useState<Action>({ kind: "idle" });
@@ -118,13 +130,13 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // every action on this page — all of which move XLM — left the number in the
   // top bar quietly wrong until someone thought to refresh it.
   const after = useCallback(async () => {
-    await Promise.all([refresh(), refreshActivity(), refreshBalance()]);
+    await Promise.all([refresh(), refreshActivity(), refreshBalance(), refreshStanding()]);
     // Something just happened on chain, so the archive is one row behind. Not
     // awaited: the sync re-reads everything from the contract itself, so it can
     // arrive whenever it arrives.
     void requestSync(id);
     setAction({ kind: "idle" });
-  }, [id, refresh, refreshActivity, refreshBalance]);
+  }, [id, refresh, refreshActivity, refreshBalance, refreshStanding]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setAction({ kind: "busy" });
@@ -191,6 +203,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // membership now, so showing them to the creator alone would hide a button the
   // chain would have accepted.
   const isHost = !!address && event.hosts.includes(address);
+  const byApproval = event.admission.tag === "Approval";
   const mine = attendanceOf(event, address);
   const left = spotsLeft(event);
   const refund = event.deposit + event.feeAllowance;
@@ -203,6 +216,12 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const rsvp = () =>
     run(async () => {
       const tx = await eventClient(id, signer).rsvp({ guest: signer.publicKey! });
+      await tx.signAndSend();
+    });
+
+  const applyToCome = () =>
+    run(async () => {
+      const tx = await eventClient(id, signer).apply({ guest: signer.publicKey! });
       await tx.signAndSend();
     });
 
@@ -362,6 +381,18 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
                 refund={refund}
                 splits={splits}
                 finalized={finalized}
+              />
+            ) : reserving && byApproval && mine === "none" ? (
+              <Application
+                standing={standing}
+                deposit={event.deposit}
+                refund={refund}
+                feeAllowance={event.feeAllowance}
+                funding={funding}
+                left={left}
+                busy={busy}
+                onApply={applyToCome}
+                onReserve={rsvp}
               />
             ) : reserving && mine === "none" ? (
               <Offer
@@ -540,6 +571,122 @@ function WhereTile({ id }: { id: string }) {
         <ExternalLink className="size-3.5" />
       </a>
     </Tile>
+  );
+}
+
+/**
+ * The guest's side of an approval-gated event: four states, one at a time.
+ *
+ * The whole promise of this mode is that **nothing is taken until the organizer
+ * says yes**, so this screen has to make that visible rather than merely true.
+ * Applying is a button with no amount on it and no wallet balance next to it;
+ * the deposit and the funding warning only appear once there is actually
+ * something to pay, which is after an approval.
+ *
+ * `standing` is `null` both before the first read lands and when the wallet has
+ * no record at all. That is the same screen either way — "you have not asked
+ * yet" — so nothing here needs a loading state that would flash between them.
+ */
+function Application({
+  standing,
+  deposit,
+  refund,
+  feeAllowance,
+  funding,
+  left,
+  busy,
+  onApply,
+  onReserve,
+}: {
+  standing: string | null;
+  deposit: bigint;
+  refund: bigint;
+  feeAllowance: bigint;
+  funding: ReturnType<typeof fundingFor>;
+  left: number;
+  busy: boolean;
+  onApply: () => void;
+  onReserve: () => void;
+}) {
+  if (standing === "Applied") {
+    return (
+      <div className="flex items-start gap-3">
+        <Hourglass className="mt-0.5 size-5 shrink-0 text-muted" />
+        <div className="min-w-0">
+          <h3 className="font-display text-lg font-bold tracking-tight">
+            You&apos;ve asked to come
+          </h3>
+          <p className="mt-1 text-sm text-muted">
+            The organizer decides who gets a spot. Nothing has been taken from you and
+            nothing will be until they say yes — and then only when you reserve.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (standing === "Declined") {
+    return (
+      <div className="flex items-start gap-3">
+        <XCircle className="mt-0.5 size-5 shrink-0 text-muted-2" />
+        <div className="min-w-0">
+          <h3 className="font-display text-lg font-bold tracking-tight">
+            Not this one
+          </h3>
+          <p className="mt-1 text-sm text-muted">
+            The organizer turned this request down. Nothing was taken from you. A
+            decision is final on-chain, so asking again isn&apos;t possible here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (standing === "Approved") {
+    // From here it is an ordinary reservation, and the ordinary panel is the one
+    // that already knows how to say what a deposit costs and whether the wallet
+    // can cover it. Rebuilding that here would be two versions of the sentence
+    // about somebody's money.
+    return (
+      <>
+        <p className="mb-4 flex items-center gap-2 text-sm text-success">
+          <CheckCircle2 className="size-4 shrink-0" />
+          The organizer approved you. Your spot isn&apos;t held until you reserve it.
+        </p>
+        <Offer
+          deposit={deposit}
+          refund={refund}
+          feeAllowance={feeAllowance}
+          funding={funding}
+          left={left}
+          busy={busy}
+          onReserve={onReserve}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h3 className="font-display text-lg font-bold tracking-tight">
+        Ask to come
+      </h3>
+      <p className="mt-1 text-sm text-muted">
+        This event admits people one at a time. Ask for a spot and the organizer
+        decides — <strong className="font-medium text-foreground-2">this costs you
+        nothing</strong> and opens no payment. The {fromStroops(deposit)} XLM deposit
+        is only taken later, when you reserve the spot they gave you.
+      </p>
+      {left <= 0 && (
+        <p className="mt-3 text-sm text-muted-2">
+          Every spot is taken right now, so an approval may not have one to go with it.
+        </p>
+      )}
+      <Button onClick={onApply} loading={busy} size="lg" fullWidth className="mt-4">
+        <Hand className="size-4" />
+        Ask to come
+      </Button>
+    </>
   );
 }
 

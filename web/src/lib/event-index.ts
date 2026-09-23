@@ -68,9 +68,30 @@ export type IndexedEvent = {
    * touched by a re-sync.
    */
   hidden?: boolean;
+
+  /**
+   * The admission mode, flattened.
+   *
+   * Stored as a tag and a number rather than the binding's `{tag, values}`,
+   * because `values` is `undefined` for the two modes that carry none and
+   * Firestore rejects `undefined` outright. Absent on documents written before
+   * admission existed, which read back as `Open` — what those events are.
+   */
+  admission?: "Open" | "Score" | "Approval" | "Vouch";
+  admissionThreshold?: number;
 };
 
 export const EVENTS_COLLECTION = "events";
+
+/** The flattened pair, back into the shape the rest of the app passes around. */
+export function toAdmission(doc: Pick<IndexedEvent, "admission" | "admissionThreshold">) {
+  const tag = doc.admission ?? "Open";
+  return (
+    tag === "Score" || tag === "Vouch"
+      ? { tag, values: [doc.admissionThreshold ?? 0] as const }
+      : { tag, values: undefined }
+  ) as EventState["admission"];
+}
 
 export function toEventState(doc: IndexedEvent): EventState {
   return {
@@ -79,6 +100,7 @@ export function toEventState(doc: IndexedEvent): EventState {
     startsAt: doc.startsAt,
     organizer: doc.organizer,
     hosts: doc.hosts ?? [doc.organizer],
+    admission: toAdmission(doc),
     deposit: BigInt(doc.deposit),
     feeAllowance: BigInt(doc.feeAllowance),
     capacity: doc.capacity,

@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
   balance: null as unknown,
   status: "idle" as string,
   openPicker: vi.fn(),
+  standing: null as string | null,
 }));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
@@ -53,6 +54,7 @@ vi.mock("@/lib/events", async (importOriginal) => ({
     refreshing: false,
     refresh: vi.fn(),
   }),
+  useStanding: () => ({ data: state.standing, refresh: vi.fn() }),
   // `null` is "we couldn't ask the factory either" — a rejection, not a no.
   // Collapsing it to `false` here is exactly the bug the component guards
   // against, so the mock must not do it.
@@ -82,6 +84,7 @@ function anEvent(over: Partial<EventState> = {}): EventState {
     startsAt: 1_787_000_000,
     organizer: ORGANIZER,
     hosts: [ORGANIZER],
+    admission: { tag: "Open", values: undefined },
     deposit: 10n * XLM,
     feeAllowance: XLM / 10n,
     capacity: 10,
@@ -259,5 +262,74 @@ describe("EventDetail — the organizer's links", () => {
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
     expect(screen.getByRole("button", { name: /copy the check-in link/i })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The approval gate, from the guest's side.
+ *
+ * What these protect is the mode's whole promise: **nothing is taken until the
+ * organizer says yes.** That promise is enforced by the contract, which is the
+ * part that matters — but a screen that shows somebody a deposit amount and a
+ * "not enough XLM" warning while they are only asking has broken the promise
+ * where it is actually read, which is here.
+ */
+describe("an event that admits people one at a time", () => {
+  const approvalEvent = () =>
+    anEvent({ admission: { tag: "Approval", values: undefined } });
+
+  beforeEach(() => {
+    state.standing = null;
+    state.address = GUEST;
+  });
+
+  it("offers to ask, and shows no payment while asking", async () => {
+    state.event = approvalEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByRole("button", { name: /ask to come/i })).toBeInTheDocument();
+    // The reserve button belongs to a spot that has not been given yet.
+    expect(screen.queryByRole("button", { name: /reserve/i })).toBeNull();
+    // And no funding warning: there is nothing to fund.
+    expect(screen.queryByText(/not enough xlm/i)).toBeNull();
+  });
+
+  it("says the wait is a wait, and that it costs nothing", async () => {
+    state.event = approvalEvent();
+    state.standing = "Applied";
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/you've asked to come/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ask to come|reserve/i })).toBeNull();
+  });
+
+  it("turns a decline into an ending rather than a retry", async () => {
+    state.event = approvalEvent();
+    state.standing = "Declined";
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/not this one/i)).toBeInTheDocument();
+    // A decline is terminal on-chain. A button here would be a promise the
+    // contract refuses with `AlreadyApplied`, after a wallet prompt.
+    expect(screen.queryByRole("button", { name: /ask to come/i })).toBeNull();
+  });
+
+  it("only shows the deposit once a spot has actually been given", async () => {
+    state.event = approvalEvent();
+    state.standing = "Approved";
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/approved you/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reserve/i })).toBeInTheDocument();
+  });
+
+  it("leaves an open event exactly as it was", async () => {
+    // Every event on the factory before today is `Open`, and this mode must not
+    // have put a step in front of any of them.
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByRole("button", { name: /reserve/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ask to come/i })).toBeNull();
   });
 });

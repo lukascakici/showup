@@ -261,6 +261,10 @@ async function indexState(db: Firestore, id?: string) {
       reserved: e.reserved,
       checkedIn: e.checkedIn,
       phase: e.phase,
+      // Flattened, because Firestore rejects the `undefined` that the two
+      // no-argument modes carry in `values`. `toAdmission` puts it back.
+      admission: e.admission.tag,
+      admissionThreshold: Number(e.admission.values?.[0] ?? 0),
       reputation: null,
       syncedAt,
       syncedLedger: ledger,

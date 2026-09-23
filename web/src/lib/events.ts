@@ -5,6 +5,7 @@ import {
   fetchActivity,
   listEventIds,
   loadEvent,
+  loadStanding,
   type Activity,
   type ActivityFeedResult,
   type EventState,
@@ -35,6 +36,7 @@ export {
   isKnownEvent,
   listEventIds,
   loadEvent,
+  loadStanding,
   server,
   spotsLeft,
 } from "./chain";
@@ -170,6 +172,27 @@ export async function loadEventList(): Promise<EventList> {
 
 export function useEventList(intervalMs = 10_000) {
   const load = useCallback(() => loadEventList(), []);
+  return usePolled(load, intervalMs);
+}
+
+/**
+ * The connected wallet's standing, polled only when it can change anything.
+ *
+ * `enabled` is false for every open and score-gated event, because there the
+ * answer is already in the reserved and checked-in lists the page has. Asking
+ * anyway would be an extra RPC read every few seconds on the majority of
+ * events, for a value nothing renders.
+ */
+export function useStanding(
+  id: string,
+  address: string | null,
+  enabled: boolean,
+  intervalMs = 5_000,
+) {
+  const load = useCallback(
+    () => (address && enabled ? loadStanding(id, address) : Promise.resolve(null)),
+    [id, address, enabled],
+  );
   return usePolled(load, intervalMs);
 }
 

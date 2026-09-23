@@ -1,5 +1,11 @@
 import { rpc, scValToNative } from "@stellar/stellar-sdk";
-import { factory, event as eventClient, SOROBAN_RPC_URL, type ForfeitPolicy } from "./contracts";
+import {
+  factory,
+  event as eventClient,
+  SOROBAN_RPC_URL,
+  type Admission,
+  type ForfeitPolicy,
+} from "./contracts";
 import type { Phase } from "event-client";
 
 /**
@@ -27,6 +33,14 @@ export type EventState = {
   organizer: string;
   /** Everyone who may run the event. Always contains `organizer`. */
   hosts: string[];
+  /**
+   * Who may reserve. Fixed at creation and enforced inside `rsvp`.
+   *
+   * `Open` for every event deployed before `get_terms` existed, which is what
+   * they were created as — not a guess, and not a default standing in for an
+   * answer nobody has.
+   */
+  admission: Admission;
   deposit: bigint;
   feeAllowance: bigint;
   capacity: number;
@@ -101,6 +115,7 @@ export async function loadEvent(id: string): Promise<EventState> {
     // Not a guess: an event created before co-hosting existed has exactly one
     // host, and it is whoever created it.
     hosts: terms?.hosts ?? [c.organizer],
+    admission: terms?.admission ?? ({ tag: "Open", values: undefined } as Admission),
     deposit: c.deposit,
     feeAllowance: c.fee_allowance,
     capacity: c.capacity,
@@ -109,6 +124,23 @@ export async function loadEvent(id: string): Promise<EventState> {
     checkedIn: checkedIn.result,
     phase: phase.result.tag,
   };
+}
+
+/**
+ * Where one wallet stands with one event, straight from the contract.
+ *
+ * `reserved` and `checkedIn` are already on `EventState`, so this is only ever
+ * needed for the three states that are *not* lists: `Applied`, `Approved` and
+ * `Declined` exist under `Admission::Approval` and nothing enumerates them. A
+ * host cannot list their own applicants either — the contract publishes an
+ * event when somebody applies and stores the answer per address, and that is
+ * the whole surface.
+ *
+ * `null` means no record, which is what never having asked looks like.
+ */
+export async function loadStanding(id: string, guest: string): Promise<string | null> {
+  const tx = await eventClient(id).get_attendance({ guest });
+  return tx.result?.tag ?? null;
 }
 
 export function spotsLeft(e: EventState): number {
