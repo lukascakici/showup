@@ -199,3 +199,78 @@ describe("CreateEvent — the wait", () => {
     expect(screen.getByLabelText(/event name/i)).toBeEnabled();
   });
 });
+
+/**
+ * The admission mode is the one field on this form that cannot be corrected.
+ *
+ * Deposit, capacity and name are all visible on the event afterwards, so a
+ * mistake in them is obvious and the event can be remade. The gate is fixed at
+ * creation and enforced inside `rsvp`, and the way it goes wrong is silent: an
+ * organizer picks "people I approve", the form sends `Open`, and the first they
+ * hear of it is a stranger already holding a spot. So what these assert is not
+ * the radio buttons — it is what reaches the contract.
+ */
+describe("who can reserve a spot", () => {
+  it("defaults to open, and sends that", async () => {
+    chainSucceeds();
+    render(<CreateEvent />);
+    await fill(/event name/i, "Open night");
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    expect(chain.createEvent.mock.calls[0][0].admission).toEqual({
+      tag: "Open",
+      values: undefined,
+    });
+  });
+
+  it("sends Approval when the organizer picks it", async () => {
+    chainSucceeds();
+    render(<CreateEvent />);
+    await fill(/event name/i, "Guest list only");
+    await userEvent.click(screen.getByRole("radio", { name: /people i approve/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    expect(chain.createEvent.mock.calls[0][0].admission).toEqual({
+      tag: "Approval",
+      values: undefined,
+    });
+  });
+
+  it("carries the threshold with a Score gate, not just the tag", async () => {
+    chainSucceeds();
+    render(<CreateEvent />);
+    await fill(/event name/i, "Regulars only");
+    await userEvent.click(screen.getByRole("radio", { name: /shown up before/i }));
+    await userEvent.click(screen.getByRole("button", { name: /require one more check-in/i }));
+    await userEvent.click(screen.getByRole("button", { name: /require one more check-in/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    // `Score` without its number is `Score(0)`, which admits everybody — the
+    // same event the organizer did not ask for, with a gate on it that does
+    // nothing.
+    expect(chain.createEvent.mock.calls[0][0].admission).toEqual({
+      tag: "Score",
+      values: [3],
+    });
+  });
+
+  it("never lets the threshold reach zero", async () => {
+    chainSucceeds();
+    render(<CreateEvent />);
+    await userEvent.click(screen.getByRole("radio", { name: /shown up before/i }));
+    const fewer = screen.getByRole("button", { name: /require one fewer check-in/i });
+    expect(fewer).toBeDisabled();
+  });
+
+  it("offers no mode the contract cannot enforce", async () => {
+    render(<CreateEvent />);
+    // `Vouch` is a variant the contract knows and refuses everybody under. An
+    // organizer choosing it would be choosing an event nobody can join, and
+    // would find out from their guests.
+    expect(screen.queryByRole("radio", { name: /vouch/i })).toBeNull();
+    expect(screen.getAllByRole("radio", { name: /anyone|approve|shown up/i })).toHaveLength(3);
+  });
+});

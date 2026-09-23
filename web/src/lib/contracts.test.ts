@@ -91,6 +91,27 @@ describe("friendlyContractError", () => {
     }
   });
 
+  it("has an answer for every error the contract can raise", () => {
+    // The map stopped at 14 while the contract went to 23, so a guest refused
+    // for a low score was told "The transaction failed. Please try again." —
+    // which is not what happened and is the one thing that will not help. This
+    // walks the whole enum so the next code added cannot slip through the same
+    // way: add a variant to the contract, and this fails until it has words.
+    for (let code = 1; code <= 23; code++) {
+      const message = friendlyContractError(new Error(`HostError: Error(Contract, #${code})`));
+      expect(message, `contract error #${code} has no copy`).not.toMatch(/please try again/i);
+      expect(message.length, `contract error #${code} has no copy`).toBeGreaterThan(10);
+    }
+  });
+
+  it("does not tell someone to retry a refusal that is about them", () => {
+    // Every one of these is final for that wallet on that event. Retrying is
+    // the one action that cannot change the answer.
+    expect(friendlyContractError(new Error("Error(Contract, #17)"))).toMatch(/shown up before/i);
+    expect(friendlyContractError(new Error("Error(Contract, #18)"))).toMatch(/approved/i);
+    expect(friendlyContractError(new Error("Error(Contract, #20)"))).toMatch(/running this event/i);
+  });
+
   it("reads the wallet kit's plain object, which is not an Error", () => {
     // The kit builds every failure as { code, message } rather than throwing an
     // Error, so reading this with String(err) would print "[object Object]" — and a

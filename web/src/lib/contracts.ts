@@ -144,6 +144,19 @@ export function friendlyContractError(err: unknown): string {
     12: "Reservations closed when the organizer started check-in.",
     13: "Check-in hasn't started yet — the organizer opens it at the event.",
     14: "That's not possible from where this event currently stands.",
+    15: "That name is empty or too long.",
+    16: "This event needs a start time.",
+    // 17 to 23 arrived with on-chain admission. What each of them has in common
+    // is that trying again does not help — so none of them may fall through to
+    // the "please try again" at the bottom of this function, which is the
+    // advice the whole list existed to stop giving.
+    17: "This event is only open to people who have shown up before, and your record isn't there yet.",
+    18: "The organizer hasn't approved you for this event yet.",
+    19: "You've already asked to come to this event.",
+    20: "Only the people running this event can do that.",
+    21: "That isn't how this event admits people.",
+    22: "This event checks attendance records and can't reach the one it was set up with.",
+    23: "The organizer who created an event can't be removed from it.",
   };
 
   const match = message.match(/Error\(Contract,\s*#(\d+)\)/);

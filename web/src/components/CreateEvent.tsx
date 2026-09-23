@@ -90,6 +90,36 @@ function Stepper({
   );
 }
 
+/**
+ * The admission modes an organizer can actually pick.
+ *
+ * `Vouch` is missing on purpose. The contract knows the variant and **refuses
+ * everybody** under it, because the vouching mechanism it needs is not built
+ * yet — so offering it here would be a setting whose only effect is an event
+ * nobody can join, discovered by the guests. A mode reaches this list when it
+ * is enforced, not when it is named.
+ */
+const ADMISSIONS: { value: "Open" | "Score" | "Approval"; label: string; hint: string }[] = [
+  {
+    value: "Open",
+    label: "Anyone",
+    hint: "First come, first served, up to the number of spots.",
+  },
+  {
+    value: "Score",
+    label: "People who have shown up before",
+    hint: "Their record has to carry at least this many check-ins, counted on-chain by the events they attended.",
+  },
+  {
+    value: "Approval",
+    label: "People I approve",
+    hint: "They ask to come and you decide. Nothing is taken from them until you say yes.",
+  },
+];
+
+/** The default threshold: one attended event is enough to not be a stranger. */
+const DEFAULT_MIN_SHOWS = 1;
+
 const POLICIES: { value: ForfeitPolicy["tag"]; label: string; hint: string }[] = [
   {
     value: "SplitAmongAttendees",
@@ -110,6 +140,8 @@ export function CreateEvent() {
   const [deposit, setDeposit] = useState("10");
   const [capacity, setCapacity] = useState("10");
   const [policy, setPolicy] = useState<ForfeitPolicy["tag"]>("SplitAmongAttendees");
+  const [admission, setAdmission] = useState<"Open" | "Score" | "Approval">("Open");
+  const [minShows, setMinShows] = useState(DEFAULT_MIN_SHOWS);
   const [state, setState] = useState<State>({ kind: "idle" });
 
   /**
@@ -181,11 +213,11 @@ export function CreateEvent() {
         capacity: capacityNum,
         code_hash: codeHash,
         policy: { tag: policy, values: undefined } as ForfeitPolicy,
-        // Every mode but this one needs a control that does not exist yet, and
-        // the contract does not branch on it yet either. Sending `Open`
-        // explicitly keeps the form behaving exactly as it did while the
-        // contract side is built out underneath it.
-        admission: { tag: "Open", values: undefined } as Admission,
+        // Fixed at creation and enforced inside `rsvp`, so this is the last
+        // moment it can be chosen — and the only place it is ever set.
+        admission: (admission === "Score"
+          ? { tag: "Score", values: [minShows] }
+          : { tag: admission, values: undefined }) as Admission,
       });
       // Everything above was a simulation against the RPC. From here the wallet
       // opens and the ledger has to close, which is where the time goes.
@@ -310,6 +342,66 @@ export function CreateEvent() {
               </Stepper>
             </div>
           </Field>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-xs text-muted-2">Who can reserve a spot</legend>
+            {ADMISSIONS.map((a) => (
+              <label
+                key={a.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
+                  admission === a.value
+                    ? "border-accent bg-accent/5"
+                    : "border-border-strong bg-surface hover:border-border-hover"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="admission"
+                  value={a.value}
+                  checked={admission === a.value}
+                  onChange={() => setAdmission(a.value)}
+                  className="mt-1 accent-[var(--accent)]"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">{a.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{a.hint}</span>
+
+                  {/* Inside the option it belongs to, so the number is visibly
+                      part of the choice rather than a field that outlives it. */}
+                  {a.value === "Score" && admission === "Score" && (
+                    <span className="mt-3 flex items-center gap-2">
+                      <Stepper
+                        label="Require one fewer check-in"
+                        onClick={() => setMinShows(Math.max(1, minShows - 1))}
+                        disabled={minShows <= 1}
+                      >
+                        −
+                      </Stepper>
+                      <span className="flex h-12 min-w-14 items-center justify-center rounded-xl border border-border-strong bg-surface px-3 font-medium tabular-nums">
+                        {minShows}
+                      </span>
+                      <Stepper
+                        label="Require one more check-in"
+                        onClick={() => setMinShows(minShows + 1)}
+                      >
+                        +
+                      </Stepper>
+                      <span className="text-xs text-muted">
+                        {minShows === 1 ? "check-in" : "check-ins"} needed
+                      </span>
+                    </span>
+                  )}
+                </span>
+              </label>
+            ))}
+
+            {/* Said here rather than discovered by a guest at the door. This is
+                fixed at creation: the terms somebody agreed to when they locked
+                their money must not be editable by the person holding it. */}
+            <p className="mt-1 text-xs text-muted-3">
+              This can&apos;t be changed after the event is created.
+            </p>
+          </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs text-muted-2">
