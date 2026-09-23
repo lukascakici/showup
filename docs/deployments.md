@@ -14,13 +14,14 @@ proof.
 | :-- | :-- |
 | Event factory | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | Reputation ledger | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| Event wasm hash — **current** | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
+| Event wasm hash — **current** | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
+| Event wasm hash — at the admission upgrade | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
 | Event wasm hash — at v2 bring-up | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
-Two wasm hashes because the factory was pointed at a new event revision on
-08.08.2026 — see *Upgraded in place* below, which records the transaction that
+Three wasm hashes because the factory has been pointed at a new event revision
+twice, on 08.08.2026 and again on 23.09.2026 — see *Upgraded in place* below, which records the transaction that
 did it. The **current** one is the value `scripts/check-wasm-hash.mjs` asks the
 live factory for on every push; the bring-up one is kept because the transactions
 recorded under *Bringing it up* uploaded exactly that code, and deleting it would
@@ -83,6 +84,84 @@ Current event wasm hash: `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687
 State survived both upgrades — `reputation.get_score()` still returns
 `{ shows: 1, no_shows: 0 }` for the guest who checked in, and the factory still
 lists its events.
+
+
+## Upgraded again — admission on-chain (23.09.2026)
+
+Four admission modes and co-hosting, live at the **same factory address**. No
+address anywhere changed, which is the second time the upgrade path built in the
+first engagement has paid for itself.
+
+**This was two upgrades, not one, and that is the part worth reading.**
+`create_event` gained an `admission` argument — so the change is not only in the
+event contract. The factory is what calls the event's `initialize`, so the
+factory's own code had to move with it. Pointing the factory at the new event
+wasm and stopping there would have left every create failing: a factory sending
+ten arguments into an `initialize` that wants eleven. Both halves ship together
+or neither does.
+
+| Step | Transaction |
+| :-- | :-- |
+| upload the event revision | [`21a454b355ee617a3f6d0a5663785e39085983845948ef130f31088bab316861`](https://stellar.expert/explorer/testnet/tx/21a454b355ee617a3f6d0a5663785e39085983845948ef130f31088bab316861) |
+| `factory.set_event_wasm_hash` → that revision | [`87964713d0d8bcc95f23b0be1f676f3c1f876d0f07a8d0481cdb8678961a927a`](https://stellar.expert/explorer/testnet/tx/87964713d0d8bcc95f23b0be1f676f3c1f876d0f07a8d0481cdb8678961a927a) |
+| upload the factory revision | [`507d26431a2f75b35761a512e750621e323392464fddc47db397f87d1438aeb6`](https://stellar.expert/explorer/testnet/tx/507d26431a2f75b35761a512e750621e323392464fddc47db397f87d1438aeb6) |
+| `factory.upgrade` → that revision | [`875a22206204a98adc9fd72e8b1580f6ddc0a0eac9b64602305524fe027ba2a6`](https://stellar.expert/explorer/testnet/tx/875a22206204a98adc9fd72e8b1580f6ddc0a0eac9b64602305524fe027ba2a6) |
+
+- Event wasm hash now deployed: `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754`
+- Factory wasm hash now running: `f52faeeb6c605e33d4f99c75112d5ab2eb02e592c4e80af54b978610926a3490`
+
+Both read back off the chain rather than off these notes: `get_event_wasm_hash`
+returns the first, and `stellar contract info interface` on the factory now shows
+`create_event` taking `admission: Admission`. That second check is the only one
+that tells a whole deploy from a half one, and it is free and needs no key.
+
+### The gate, proved on Testnet
+
+A `Score(1)` event created through the upgraded factory:
+[`CAA3T2YD…L23RQLD5LO`](https://stellar.expert/explorer/testnet/contract/CAA3T2YDD2HIX7EMBTVOG7IN2PGPRJGKZ22U6YT5QCWWF3L23RQLD5LO).
+`get_terms` reads back `{"admission":{"Score":1},"hosts":["GDL3H646…OZKI5"]}`.
+
+| Wallet | Record | `rsvp` on that event |
+| :-- | :-- | :-- |
+| `GDEM74TE…UYJWCWWV` | `{shows: 0, no_shows: 0}` | **refused, `Error(Contract, #17)` — `ScoreTooLow`** |
+| `GB7TWPUD…MYXLVNKCL` | `{shows: 1, no_shows: 0}` | admitted — [`031029855aea87393e964c9cef1b5d9a8e6f596afe9659b5e0f36b2aeeecf319`](https://stellar.expert/explorer/testnet/tx/031029855aea87393e964c9cef1b5d9a8e6f596afe9659b5e0f36b2aeeecf319) |
+
+Same event, same gate, two wallets, and the only thing separating them is a show
+recorded by a different event contract entirely. The second wallet earned its one
+show by actually attending a warm-up event first:
+[`rsvp`](https://stellar.expert/explorer/testnet/tx/896279038728aed610dded3e3aaed3bb4e64e440845cb5492d77b736d37fd77d) →
+[`open_checkin`](https://stellar.expert/explorer/testnet/tx/dc461251d8cac88c970172ebfb9733e8e906a39695f1a6dbd105187be9bb1ab5) →
+[`check_in`](https://stellar.expert/explorer/testnet/tx/1194c69724e2c59370345271ebbc2d49a26af22f32fbd6845dc49170e87f85b6).
+
+**A refusal has no transaction hash, and cannot have one.** Soroban simulates a
+call before it is submitted, so a contract error means the transaction is never
+built — there is nothing to open on Stellar Expert. This is the same way the
+phase-machine rejections were recorded for Deliverable 1 in the first
+engagement: by the error code the contract returns, reproducible by anyone with
+the CLI and no key:
+
+```bash
+stellar contract invoke --network testnet \
+  --id CAA3T2YDD2HIX7EMBTVOG7IN2PGPRJGKZ22U6YT5QCWWF3L23RQLD5LO \
+  --source <a wallet with no shows> -- rsvp --guest <that wallet>
+# error: HostError: Error(Contract, #17)
+```
+
+### Events deployed before this revision still run
+
+`set_event_wasm_hash` changes what the factory deploys **next**; every event
+already on the chain keeps running the code it was deployed from. Checked rather
+than assumed — a reservation on an event created under the previous revision,
+after the upgrade:
+[`0432a76506cb426767138b794c17badc05af470b8784fee847300d1183e0c45c`](https://stellar.expert/explorer/testnet/tx/0432a76506cb426767138b794c17badc05af470b8784fee847300d1183e0c45c).
+The deposit moved, the guest is on the list, nine spots left.
+
+This is also why `Config` could not simply grow an `admission` field: those
+events hold a `Config` written by an older wasm, and adding a field to the struct
+made every client generated from the new spec fail to decode them. The admission
+mode and the host list are keyed separately and read through `get_terms`, which
+an older event answers with "function not found" — a failure a caller can
+recognise and answer for itself.
 
 **One thing worth knowing before upgrading anything:** `upgrade` runs the *old*
 code. `update_current_contract_wasm` swaps the code for the *next* invocation, so
