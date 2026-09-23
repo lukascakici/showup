@@ -1324,3 +1324,171 @@ fn the_creator_is_the_first_host() {
     assert_eq!(terms.hosts.get(0), Some(f.organizer.clone()));
     assert!(f.client.is_host(&f.organizer));
 }
+
+/* -------------------------------------------------------------------------- */
+/* Every admission mode against every phase                                   */
+/* -------------------------------------------------------------------------- */
+
+// Three days of feature work each added a mode or a transition and tested its
+// own happy path against its own gate. What none of them tested is the other
+// gates: `apply` was written for Approval and refused on Open, and nobody asked
+// what it does on a Score event. These are the boxes in that grid that nothing
+// had ever called, written before the revision goes onto a chain where it holds
+// other people's deposits.
+
+#[test]
+fn applying_to_a_score_gated_event_is_wrong_mode() {
+    let f = gated(2);
+    let guest = f.guest(DEPOSIT);
+    f.give_shows(&guest, 5);
+
+    // A qualifying wallet, so the refusal is about the mode and not the score.
+    // There is nothing to approve here: the gate is the ledger's answer, and a
+    // host saying yes on top of it would be a second gate nobody documented.
+    assert_eq!(
+        f.client.try_apply(&guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(
+        f.client.try_approve(&f.organizer, &guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(
+        f.client.try_decline(&f.organizer, &guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(f.client.get_attendance(&guest), None);
+}
+
+#[test]
+fn applying_to_a_vouch_gated_event_is_wrong_mode() {
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Real,
+        Admission::Vouch(1),
+    );
+    let guest = f.guest(DEPOSIT);
+
+    // A mode this revision cannot enforce is closed on every entrance, not just
+    // on `rsvp`. Without this, `apply` would be a way to write a record into an
+    // event whose gate does not exist yet.
+    assert_eq!(
+        f.client.try_apply(&guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(
+        f.client.try_approve(&f.organizer, &guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(
+        f.client.try_decline(&f.organizer, &guest),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+    assert_eq!(f.client.get_attendance(&guest), None);
+}
+
+#[test]
+fn reserving_without_ever_applying_is_refused() {
+    let f = by_approval();
+    let stranger = f.guest(DEPOSIT);
+
+    // Never asked, so there is nothing that could have been answered. The gate
+    // wants a yes on record, and the absence of a record is not one.
+    assert_eq!(f.client.try_rsvp(&stranger), Err(Ok(Error::NotApplied)));
+    assert_eq!(f.balance(&stranger), DEPOSIT);
+}
+
+#[test]
+fn a_reserved_guest_cannot_be_declined_out_of_their_deposit() {
+    let f = by_approval();
+    let guest = f.guest(DEPOSIT);
+    f.client.apply(&guest);
+    f.client.approve(&f.organizer, &guest);
+    f.client.rsvp(&guest);
+
+    // The one combination in this grid that is about money. Once the deposit is
+    // locked the guest's standing is `Reserved`, and `answer` only ever moves a
+    // record that is still `Applied` — so a host cannot reach back and turn a
+    // paid-up guest into a declined one, which would stand their deposit up
+    // against a gate they can no longer pass.
+    assert_eq!(
+        f.client.try_decline(&f.organizer, &guest),
+        Err(Ok(Error::NotApplied))
+    );
+    assert_eq!(
+        f.client.try_approve(&f.organizer, &guest),
+        Err(Ok(Error::NotApplied))
+    );
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Reserved));
+
+    // And the deposit still comes back at the door.
+    f.client.open_checkin(&f.organizer);
+    f.client.check_in(&guest, &f.secret);
+    assert_eq!(f.balance(&guest), DEPOSIT + FEE_ALLOWANCE);
+}
+
+#[test]
+fn an_approval_granted_during_check_in_opens_nothing() {
+    let f = by_approval();
+    let guest = f.guest(DEPOSIT);
+    f.client.apply(&guest);
+    f.client.open_checkin(&f.organizer);
+
+    // Answering a pending application is still allowed here, because a host
+    // clearing their queue after the doors open is not a mistake. What it must
+    // not do is become a late reservation: the phase closed the till, and an
+    // approval is not a key to it.
+    f.client.approve(&f.organizer, &guest);
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Approved));
+    assert_eq!(
+        f.client.try_rsvp(&guest),
+        Err(Ok(Error::ReservationsClosed))
+    );
+    assert_eq!(f.balance(&guest), DEPOSIT);
+}
+
+#[test]
+fn applications_cannot_be_opened_or_answered_after_finalize() {
+    let f = by_approval();
+    let applicant = f.guest(DEPOSIT);
+    f.client.apply(&applicant);
+    f.client.finalize(&f.organizer);
+
+    // `actions_after_finalize_are_rejected` covers the money and the phase
+    // calls. These three are the approval path, and they were the ones left
+    // outside it: a settled event must not still be taking or answering asks.
+    let latecomer = f.guest(DEPOSIT);
+    assert_eq!(
+        f.client.try_apply(&latecomer),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+    assert_eq!(
+        f.client.try_approve(&f.organizer, &applicant),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+    assert_eq!(
+        f.client.try_decline(&f.organizer, &applicant),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+    assert_eq!(
+        f.client.get_attendance(&applicant),
+        Some(Attendance::Applied)
+    );
+}
+
+#[test]
+fn hosts_can_still_be_named_after_an_event_has_settled() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    f.client.finalize(&f.organizer);
+    let latecomer = Address::generate(&f.env);
+
+    // Deliberately allowed rather than overlooked. Every power a host has is
+    // already refused by the phase, so the roster is the one thing left that
+    // can be tidied on a finished event, and refusing it would buy nothing.
+    f.client.add_host(&f.organizer, &latecomer);
+    assert!(f.client.is_host(&latecomer));
+    assert_eq!(
+        f.client.try_open_checkin(&latecomer),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+}
