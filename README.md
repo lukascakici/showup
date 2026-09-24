@@ -259,7 +259,7 @@ as the money it describes, so the score and the settlement can never disagree.
 | :-- | :-- |
 | **Event factory** | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | **Reputation ledger** | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| **Event wasm hash** | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
+| **Event wasm hash** | `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5` |
 | **Native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
 That wasm hash is checked against the live factory by CI on every push, so it

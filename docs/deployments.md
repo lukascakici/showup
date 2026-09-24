@@ -14,18 +14,26 @@ proof.
 | :-- | :-- |
 | Event factory | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | Reputation ledger | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| Event wasm hash — **current** | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
-| Event wasm hash — at the admission upgrade | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
+| Event wasm hash — **current** | `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5` |
+| Event wasm hash — at the admission upgrade | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
+| Event wasm hash — at the titles upgrade | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
 | Event wasm hash — at v2 bring-up | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
+| Reputation wasm hash — **current** | `bef89aa051523067c0f720f118bbddf47f055e867865bdd785e6c067ebaec9ff` |
+| Factory wasm hash — **current** | `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
-Three wasm hashes because the factory has been pointed at a new event revision
-twice, on 08.08.2026 and again on 23.09.2026 — see *Upgraded in place* below, which records the transaction that
-did it. The **current** one is the value `scripts/check-wasm-hash.mjs` asks the
-live factory for on every push; the bring-up one is kept because the transactions
-recorded under *Bringing it up* uploaded exactly that code, and deleting it would
-make that record unverifiable.
+Four event wasm hashes because the factory has been pointed at a new event
+revision three times — 08.08.2026, 23.09.2026 and 24.09.2026 — each recorded
+below with the transaction that did it. The **current** one is the value
+`scripts/check-wasm-hash.mjs` asks the live factory for on every push; the older
+ones are kept because the transactions recorded under *Bringing it up* and the two
+upgrade sections uploaded exactly that code, and deleting them would make those
+records unverifiable.
+
+The factory and reputation hashes are listed from 24.09.2026 onward, the point at
+which it became worth tracking them here too. Both contracts have been upgraded in
+place more than once — first on 08.08.2026 — and neither address has ever moved.
 
 ### Why a new factory address
 
@@ -79,7 +87,7 @@ the admin setters added on day two.
 | `reputation.upgrade` → new ledger code | [`a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588`](https://stellar.expert/explorer/testnet/tx/a3cc5193197e9a0ba5ab76d083555eca1c6dcee9e9ae33b348d9ee9518983588) |
 | extend the D2 event's lease from outside | [`30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44`](https://stellar.expert/explorer/testnet/tx/30f4193f2e81aaa1ad5f39aee1586fb426a69ceab99c2297a45731eaf869eb44) |
 
-Current event wasm hash: `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949`
+Event wasm hash after this upgrade: `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949`
 
 State survived both upgrades — `reputation.get_score()` still returns
 `{ shows: 1, no_shows: 0 }` for the guest who checked in, and the factory still
@@ -107,8 +115,8 @@ or neither does.
 | upload the factory revision | [`507d26431a2f75b35761a512e750621e323392464fddc47db397f87d1438aeb6`](https://stellar.expert/explorer/testnet/tx/507d26431a2f75b35761a512e750621e323392464fddc47db397f87d1438aeb6) |
 | `factory.upgrade` → that revision | [`875a22206204a98adc9fd72e8b1580f6ddc0a0eac9b64602305524fe027ba2a6`](https://stellar.expert/explorer/testnet/tx/875a22206204a98adc9fd72e8b1580f6ddc0a0eac9b64602305524fe027ba2a6) |
 
-- Event wasm hash now deployed: `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754`
-- Factory wasm hash now running: `f52faeeb6c605e33d4f99c75112d5ab2eb02e592c4e80af54b978610926a3490`
+- Event wasm hash after this upgrade: `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754`
+- Factory wasm hash after this upgrade: `f52faeeb6c605e33d4f99c75112d5ab2eb02e592c4e80af54b978610926a3490`
 
 Both read back off the chain rather than off these notes: `get_event_wasm_hash`
 returns the first, and `stellar contract info interface` on the factory now shows
@@ -257,6 +265,109 @@ after the wallet prompt.
 Events created before this revision — including the D2 event below — have no
 title at all. They still work, still settle, and are still listed; they show
 their address, exactly as every event did until now.
+
+## Upgraded a third time — vouching, and a record that grew (24.09.2026)
+
+Three contracts moved, and **no address anywhere changed** — including the
+reputation ledger, which has held the first engagement's results at
+`CDFGVEIJ…A3DJ` since the first week it existed.
+
+| Step | Transaction |
+| :-- | :-- |
+| upload the reputation revision | [`2b77626019925091c1cf4799e4c36d8c58515b54ff41e0bf22fca285f55dfa3a`](https://stellar.expert/explorer/testnet/tx/2b77626019925091c1cf4799e4c36d8c58515b54ff41e0bf22fca285f55dfa3a) |
+| `reputation.upgrade` → that revision | [`b20f9b39cdac2bd597e6a324868f00991401b205bc29f963accacf09722c9a3a`](https://stellar.expert/explorer/testnet/tx/b20f9b39cdac2bd597e6a324868f00991401b205bc29f963accacf09722c9a3a) |
+| upload the event revision | [`2b1e12fffe56f0d8df0dd56144763656abc5c776556aa6ab49a3802db02600d6`](https://stellar.expert/explorer/testnet/tx/2b1e12fffe56f0d8df0dd56144763656abc5c776556aa6ab49a3802db02600d6) |
+| `factory.set_event_wasm_hash` → that revision | [`338cd1d51e3afa60f64918a9cf83290d576263feb740919c46732e195234d728`](https://stellar.expert/explorer/testnet/tx/338cd1d51e3afa60f64918a9cf83290d576263feb740919c46732e195234d728) |
+| upload the factory revision | [`a66cfece92d56cf2709fcc556dab4acfdcc0bb3f1490b102583daca72619f762`](https://stellar.expert/explorer/testnet/tx/a66cfece92d56cf2709fcc556dab4acfdcc0bb3f1490b102583daca72619f762) |
+| `factory.upgrade` → that revision | [`b00500ec11758a128e796443c97b327b2791559120e077182530599034f436b2`](https://stellar.expert/explorer/testnet/tx/b00500ec11758a128e796443c97b327b2791559120e077182530599034f436b2) |
+
+- Reputation wasm hash after this upgrade: `bef89aa051523067c0f720f118bbddf47f055e867865bdd785e6c067ebaec9ff`
+- Event wasm hash after this upgrade: `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5`
+- Factory wasm hash after this upgrade: `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10`
+
+### The order was forced, not chosen
+
+Reputation first. The event contract's new `vouch` reads `get_record`, and that
+read is deliberately **not** a `try_` call: an unanswerable read has no safe
+default, and defaulting to a clean record would let anybody vouch for anybody. So
+an event contract that knows about vouching, pointed at a ledger that does not,
+fails at the gate. The reverse order is harmless — a ledger that can answer
+`get_record` before anything asks is simply a ledger nobody is using yet.
+
+### The published scores were checked before and after
+
+The reputation ledger holds fourteen records earned in the first engagement, and
+this repository publishes them as Deliverable 2 evidence. An upgrade is the one
+moment that claim could quietly stop being true, so it was not eyeballed:
+
+```bash
+node scripts/reputation-snapshot.mjs --out before.json   # before the upgrade
+node scripts/reputation-snapshot.mjs --against before.json   # after
+# ok     every record is exactly as before.json left it
+```
+
+Fourteen of fourteen, unchanged. The script reads *storage* rather than calling
+`get_score`, which means it needs **no key, no funded account and no signature** —
+a reviewer can re-derive every number in this file from the addresses it names.
+
+The same record then read back through the new entry point, which is what the site
+will call:
+
+```bash
+stellar contract invoke --network testnet --id CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ \
+  --source <any funded account> -- \
+  get_record --member GBAW4G42254EEXDLUQ5X5GSZ6H7E46PM5AL364H2EVKRMMANDQCUFQXF
+# {"events_organised":0,"no_shows":0,"shows":1,"vouches_broken":0,"vouches_given":0}
+```
+
+`shows: 1` is from the first engagement. The three new counters read `0` because
+this member predates them entirely — and that is the design working, not a
+coincidence. `Score` was **frozen**: it could not grow a field, because every
+entry in the ledger was written by an older wasm and a client generated from a
+wider struct cannot decode them. So the new counters live in a separately keyed
+`Extras` entry that a member is allowed not to have, and the reader defaults
+instead of unwrapping. `Record` is assembled from both at read time and never
+stored.
+
+### What each contract gained, diffed against the chain
+
+Not against the repository. Each was `stellar contract info interface` on the live
+contract before the upgrade, compared with the built wasm, and **every diff was a
+pure addition** — nothing removed, nothing renamed, no error code renumbered:
+
+| Contract | Gained |
+| :-- | :-- |
+| Reputation | `renew`, `get_record`, `record_organised`, `record_vouch_given`, `record_vouch_broken`; `Extras`, `Record`; `RecordRenewed`, `VouchRecorded` |
+| Event | `vouch`, `get_vouches`, `DataKey::Vouchers`, errors **24–27**, the `Vouched` event |
+| Factory | the `Record` struct in its published spec, and nothing else |
+
+Error codes 24–27 are numbered after every existing one, so **no deployed value
+changed meaning**. An event contract created last week still returns `#17` for the
+same refusal it always did.
+
+The factory upgrade was **cosmetic and optional**: not one function signature
+moved. It carries every `#[contracttype]` declared in `interfaces`, which is the
+known price of the shared-trait design, so `Record` appearing there made the
+repository's generated factory bindings describe a spec the chain did not serve.
+One transaction closed that gap.
+
+### Verified from the chain afterwards, not from these notes
+
+```bash
+stellar contract invoke --id CD5AEMRB…7FCE --network testnet -- get_event_wasm_hash
+# "f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5"
+stellar contract invoke --id CD5AEMRB…7FCE --network testnet -- get_event_count
+# 8
+```
+
+The second is the one worth running. An upgrade replaces a contract's code and
+keeps its storage; a factory that came back having forgotten its eight events
+would have been a catastrophe that the first command cannot see.
+
+All three live specs were then compared line by line against the wasms built here
+and came back **identical** — 94 lines for the factory, 112 for the reputation
+ledger, 243 for the event contract. That comparison is the only check that tells a
+whole deploy from a half one, and it costs nothing and needs no key.
 
 ## Deliverable 1 evidence — the app itself moves money
 
