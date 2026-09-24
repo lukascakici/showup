@@ -482,6 +482,87 @@ fn a_broken_vouch_costs_the_voucher_their_standing() {
 }
 
 #[test]
+fn several_vouchers_for_one_absentee_are_all_charged() {
+    let f = by_vouch(2);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let first = f.guest(DEPOSIT);
+    let second = f.guest(DEPOSIT);
+    f.give_shows(&first, 1);
+    f.give_shows(&second, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&first, &newcomer);
+    f.client.vouch(&second, &newcomer);
+    f.client.rsvp(&newcomer);
+    f.client.finalize(&f.organizer);
+
+    // The charge walks the whole voucher list. Charging only the first would
+    // make every vouch after it free, and a threshold of two cheaper per head
+    // than a threshold of one.
+    assert_eq!(rep.get_record(&first).vouches_broken, 1);
+    assert_eq!(rep.get_record(&second).vouches_broken, 1);
+}
+
+#[test]
+fn a_voucher_who_was_also_a_no_show_gets_both_counters() {
+    let f = by_vouch(1);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let member = f.guest(DEPOSIT);
+    let backer = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    f.give_shows(&backer, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    // The member backs the newcomer, and is themselves backed in — under this
+    // mode a record alone is not admission, however good it is.
+    f.client.vouch(&member, &newcomer);
+    f.client.vouch(&backer, &member);
+    f.client.rsvp(&member);
+    f.client.rsvp(&newcomer);
+    f.client.finalize(&f.organizer);
+
+    // Two failures, two numbers. Missing your own event and backing somebody
+    // who missed theirs are different things, and a record that folded them
+    // together could not answer either question afterwards.
+    let record = rep.get_record(&member);
+    assert_eq!(record.shows, 1);
+    assert_eq!(record.no_shows, 1);
+    assert_eq!(record.vouches_given, 1);
+    assert_eq!(record.vouches_broken, 1);
+}
+
+#[test]
+fn broken_vouch_and_settlement_happen_in_one_invocation() {
+    let f = by_vouch(1);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&member, &newcomer);
+    f.client.rsvp(&newcomer);
+
+    let organizer_before = f.balance(&f.organizer);
+    assert_eq!(rep.get_record(&member).vouches_broken, 0);
+
+    f.client.finalize(&f.organizer);
+
+    // One call moves both. There is no ordering of transactions in which the
+    // deposit has been forfeited and the voucher's record still says nothing
+    // went wrong, because there is only ever one transaction.
+    //
+    // The organizer gets the forfeited deposit and the fee pool nobody drew
+    // from, since nobody checked in.
+    let unspent_pool = FEE_ALLOWANCE * i128::from(CAPACITY);
+    assert_eq!(
+        f.balance(&f.organizer),
+        organizer_before + DEPOSIT + unspent_pool
+    );
+    assert_eq!(f.balance(&f.client.address), 0);
+    assert_eq!(rep.get_record(&member).vouches_broken, 1);
+}
+
+#[test]
 fn one_broken_vouch_closes_the_door_on_vouching_at_any_show_count() {
     let f = by_vouch(1);
     let member = f.guest(DEPOSIT);
