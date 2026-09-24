@@ -37,11 +37,58 @@ pub enum Error {
 }
 
 /// A member's attendance record, counted rather than scored.
+///
+/// **This struct is frozen.** It is the *stored* type at `DataKey::Score`, and
+/// every entry in the live ledger was written by an older wasm — so adding a
+/// field to it does not give those entries the field, it makes every client
+/// generated from the new spec fail to decode them. The first engagement's
+/// scores are graded evidence and have to stay readable at the same address.
+///
+/// It is also what the event contract reads through `interfaces::Score` to
+/// enforce a `Score` gate, and *that* contract is deployed. Changing the shape
+/// here would break admission on every gated event already on the factory.
+///
+/// Everything the record has grown since lives under its own key and is
+/// assembled at read time by `get_record`. See `Extras`.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Score {
     pub shows: u32,
     pub no_shows: u32,
+}
+
+/// What a record carries beyond turning up, stored separately so it can grow.
+///
+/// One key rather than three, because these are always read together and a
+/// Soroban storage entry is rented individually: three keys per member would be
+/// three leases to renew for a record that is one thing.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Extras {
+    /// Vouches this member has signed for other people.
+    pub vouches_given: u32,
+    /// How many of those turned out to be for somebody who never showed up.
+    ///
+    /// The half of vouching that makes it cost something: a vouch is a public
+    /// statement with the voucher's own record behind it.
+    pub vouches_broken: u32,
+    /// Events this member created, counted when each one settles.
+    pub events_organised: u32,
+}
+
+/// The whole record, assembled at read time.
+///
+/// A return-only struct, never stored — which is exactly why it is allowed to
+/// keep growing where `Score` is not. A client built against an older spec
+/// simply does not call this.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Record {
+    pub shows: u32,
+    pub no_shows: u32,
+    pub vouches_given: u32,
+    pub vouches_broken: u32,
+    pub events_organised: u32,
 }
 
 #[contracttype]
@@ -52,6 +99,17 @@ pub enum DataKey {
     /// Allowlist membership for one event contract.
     Event(Address),
     Score(Address),
+    /// Added after the first revision, and keyed separately for that reason —
+    /// see `Score`. A member who predates it has no such entry, which is why
+    /// the reader below defaults rather than unwraps.
+    Extras(Address),
+}
+
+/// Published when a lease is renewed, so a record kept alive by a stranger is
+/// visible as exactly that rather than looking like it never expired.
+#[contractevent]
+pub struct RecordRenewed {
+    pub member: Address,
 }
 
 #[contractevent]
@@ -135,8 +193,76 @@ impl ReputationContract {
     }
 
     /// A member's record. Unknown addresses read as `{0, 0}`.
+    ///
+    /// Deliberately unchanged, and it must stay that way: this is what the
+    /// deployed event contract calls to enforce a `Score` gate, without a
+    /// `try_`. A different shape here would trap every gated `rsvp` on the
+    /// factory rather than refusing it.
     pub fn get_score(env: Env, member: Address) -> Score {
         Self::score_of(&env, &member)
+    }
+
+    /// The whole record: turning up, vouching, and organising.
+    ///
+    /// Everything `get_score` returns and everything added since, in one read,
+    /// because a profile page needs all of it and each extra call is latency in
+    /// front of somebody deciding whether to vouch for a stranger.
+    pub fn get_record(env: Env, member: Address) -> Record {
+        let score = Self::score_of(&env, &member);
+        let extras = Self::extras_of(&env, &member);
+        Record {
+            shows: score.shows,
+            no_shows: score.no_shows,
+            vouches_given: extras.vouches_given,
+            vouches_broken: extras.vouches_broken,
+            events_organised: extras.events_organised,
+        }
+    }
+
+    /// Count an event against the address that created it. Registered events only.
+    ///
+    /// Called by the event contract when it settles, so the count means "ran an
+    /// event to the end" rather than "deployed a contract once". An organizer
+    /// who abandons an event never earns the line.
+    pub fn record_organised(env: Env, event: Address, organizer: Address) -> Result<(), Error> {
+        Self::require_event(&env, &event)?;
+        event.require_auth();
+
+        let mut extras = Self::extras_of(&env, &organizer);
+        extras.events_organised = extras.events_organised.saturating_add(1);
+        Self::put_extras(&env, &organizer, &extras);
+        Ok(())
+    }
+
+    /// Renew a record's lease. **Anyone may call this, and anyone pays.**
+    ///
+    /// Soroban rents state: an entry nobody touches for long enough is archived
+    /// and stops being readable. Every write here already extends the lease of
+    /// what it wrote, which quietly means a record only survives while its owner
+    /// keeps attending things — so a reputation would expire precisely for the
+    /// person who stopped needing to prove it, and the only way back would be
+    /// through us.
+    ///
+    /// So this takes no auth and no admin. A record is a claim its owner should
+    /// not have to ask permission to keep, and anyone who cares about it — the
+    /// member, a friend, an organizer who wants to admit them next month — can
+    /// pay the few stroops to keep it alive. That is what makes the ledger
+    /// outlive our goodwill, which is the durability the SOW scopes explicitly.
+    ///
+    /// Renewing a record nobody has ever written is a no-op rather than an
+    /// error: there is no lease to extend, and creating an empty one to renew
+    /// would let anybody fill the ledger with blank entries at our expense.
+    pub fn renew(env: Env, member: Address) {
+        for key in [
+            DataKey::Score(member.clone()),
+            DataKey::Extras(member.clone()),
+        ] {
+            if env.storage().persistent().has(&key) {
+                Self::bump(&env, &key);
+            }
+        }
+        Self::bump_instance(&env);
+        RecordRenewed { member }.publish(&env);
     }
 
     /// Whether the gate is open for `event` — the one read that lets a reviewer
@@ -194,14 +320,7 @@ impl ReputationContract {
         shows: u32,
         no_shows: u32,
     ) -> Result<(), Error> {
-        Self::require_initialized(env)?;
-        if !env
-            .storage()
-            .persistent()
-            .has(&DataKey::Event(event.clone()))
-        {
-            return Err(Error::NotAnEvent);
-        }
+        Self::require_event(env, event)?;
         event.require_auth();
 
         let current = Self::score_of(env, &member);
@@ -225,6 +344,34 @@ impl ReputationContract {
         }
         .publish(env);
         Ok(())
+    }
+
+    fn extras_of(env: &Env, member: &Address) -> Extras {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Extras(member.clone()))
+            .unwrap_or_default()
+    }
+
+    fn put_extras(env: &Env, member: &Address, extras: &Extras) {
+        let key = DataKey::Extras(member.clone());
+        env.storage().persistent().set(&key, extras);
+        Self::bump(env, &key);
+        Self::bump_instance(env);
+    }
+
+    /// The allowlist half of the write gate, shared by every writer.
+    fn require_event(env: &Env, event: &Address) -> Result<(), Error> {
+        Self::require_initialized(env)?;
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Event(event.clone()))
+        {
+            Ok(())
+        } else {
+            Err(Error::NotAnEvent)
+        }
     }
 
     fn score_of(env: &Env, member: &Address) -> Score {

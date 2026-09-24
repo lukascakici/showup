@@ -629,6 +629,14 @@ impl EventContract {
             }
         }
 
+        // The organizer's own line, written here rather than at creation: an
+        // event that was deployed and abandoned is not an event anybody ran.
+        // Through `try_` like every other ledger write — see `record_score`.
+        if let Some(reputation) = &config.reputation {
+            let _ = ReputationClient::new(&env, reputation)
+                .try_record_organised(&env.current_contract_address(), &config.organizer);
+        }
+
         // Only now, with every transfer done, does anyone's score move. The
         // count above is enough to settle the money; lowering scores needs the
         // identities, so this reads each reserved guest's attendance back.

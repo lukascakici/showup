@@ -276,3 +276,125 @@ fn upgrade_is_admin_only() {
     let hash: BytesN<32> = BytesN::from_array(&env, &[7u8; 32]);
     assert!(reputation.try_upgrade(&hash).is_err());
 }
+
+/* -------------------------------------------------------------------------- */
+/* The record beyond turning up                                               */
+/* -------------------------------------------------------------------------- */
+
+#[test]
+fn an_unknown_member_has_an_empty_record_rather_than_no_record() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+
+    // Same contract as `get_score`: a newcomer is a zero, not an error, so no
+    // caller has to special-case the first time it sees somebody.
+    assert_eq!(
+        f.reputation.get_record(&stranger),
+        Record {
+            shows: 0,
+            no_shows: 0,
+            vouches_given: 0,
+            vouches_broken: 0,
+            events_organised: 0,
+        }
+    );
+}
+
+#[test]
+fn a_record_written_before_the_extras_existed_still_reads() {
+    let f = setup();
+    let event = f.registered_event();
+    let member = Address::generate(&f.env);
+
+    // This is the whole reason `Score` was left alone. A member with shows and
+    // no extras entry is exactly the state of every wallet in the live ledger:
+    // written by the previous wasm, and it has to keep reading after an upgrade
+    // rather than decoding into nothing.
+    f.reputation.record_checkin(&event, &member);
+    f.reputation.record_no_show(&event, &member);
+
+    assert_eq!(
+        f.reputation.get_record(&member),
+        Record {
+            shows: 1,
+            no_shows: 1,
+            vouches_given: 0,
+            vouches_broken: 0,
+            events_organised: 0,
+        }
+    );
+    // And the old read is untouched, which is what the deployed event contract
+    // calls to enforce a score gate — without a `try_`.
+    assert_eq!(
+        f.reputation.get_score(&member),
+        Score {
+            shows: 1,
+            no_shows: 1
+        }
+    );
+}
+
+#[test]
+fn organising_is_counted_when_an_event_settles() {
+    let f = setup();
+    let first = f.registered_event();
+    let second = f.registered_event();
+    let organizer = Address::generate(&f.env);
+
+    f.reputation.record_organised(&first, &organizer);
+    f.reputation.record_organised(&second, &organizer);
+
+    assert_eq!(f.reputation.get_record(&organizer).events_organised, 2);
+    // Organising is not attending. Somebody who runs ten events and turns up to
+    // none has a record that says exactly that.
+    assert_eq!(f.reputation.get_score(&organizer), zero());
+}
+
+#[test]
+fn organising_is_refused_from_an_address_that_is_not_an_event() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+    let organizer = Address::generate(&f.env);
+
+    // The same gate as a score write, and for the same reason: a count anybody
+    // could raise is a count nobody can read anything into.
+    assert_eq!(
+        f.reputation.try_record_organised(&stranger, &organizer),
+        Err(Ok(Error::NotAnEvent))
+    );
+    assert_eq!(f.reputation.get_record(&organizer).events_organised, 0);
+}
+
+#[test]
+fn anyone_can_renew_a_record_they_do_not_own() {
+    let f = setup();
+    let event = f.registered_event();
+    let member = Address::generate(&f.env);
+    f.reputation.record_checkin(&event, &member);
+
+    // No auth, no admin, no ownership. This is the point: a lease that only the
+    // owner could extend would expire for exactly the person who stopped needing
+    // to prove anything, and the only way back would be through us.
+    f.reputation.renew(&member);
+
+    assert_eq!(f.reputation.get_score(&member).shows, 1);
+}
+
+#[test]
+fn renewing_a_record_that_was_never_written_changes_nothing() {
+    let f = setup();
+    let stranger = Address::generate(&f.env);
+
+    // No entry means no lease to extend. Creating one to renew would let anybody
+    // fill the ledger with blank records at our expense, on a call that takes no
+    // authorization by design.
+    f.reputation.renew(&stranger);
+
+    assert_eq!(f.reputation.get_record(&stranger).shows, 0);
+    assert!(!f.env.as_contract(&f.reputation.address, || {
+        f.env
+            .storage()
+            .persistent()
+            .has(&DataKey::Score(stranger.clone()))
+    }));
+}

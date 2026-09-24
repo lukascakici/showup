@@ -30,6 +30,9 @@ impl PanickingReputation {
     pub fn record_no_show(_env: Env, _event: Address, _member: Address) {
         panic!("reputation is down");
     }
+    pub fn record_organised(_env: Env, _event: Address, _organizer: Address) {
+        panic!("reputation is down");
+    }
 }
 
 /// What the event under test is wired to.
@@ -1490,5 +1493,58 @@ fn hosts_can_still_be_named_after_an_event_has_settled() {
     assert_eq!(
         f.client.try_open_checkin(&latecomer),
         Err(Ok(Error::AlreadyFinalized))
+    );
+}
+
+#[test]
+fn finalizing_counts_the_event_against_its_creator() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    assert_eq!(rep.get_record(&f.organizer).events_organised, 0);
+
+    f.client.finalize(&f.organizer);
+
+    // Written at settlement rather than at creation: deploying a contract and
+    // walking away is not running an event, and a count that included it would
+    // be the easiest number on the whole ledger to inflate.
+    assert_eq!(rep.get_record(&f.organizer).events_organised, 1);
+    // And it is the creator's line, not the caller's — `finalize` takes a host.
+    assert_eq!(f.score(&f.organizer), (0, 0));
+}
+
+#[test]
+fn a_co_host_finalizing_still_credits_the_creator() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let cohost = Address::generate(&f.env);
+    f.client.add_host(&f.organizer, &cohost);
+
+    f.client.finalize(&cohost);
+
+    // Same rule as the money: a co-host can run the event, and running it does
+    // not make it theirs.
+    assert_eq!(rep.get_record(&f.organizer).events_organised, 1);
+    assert_eq!(rep.get_record(&cohost).events_organised, 0);
+}
+
+#[test]
+fn a_broken_ledger_cannot_stop_an_event_from_settling() {
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Panicking,
+        Admission::Open,
+    );
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    let opening = f.balance(&f.organizer);
+
+    // The ledger traps on every write, including the organised count added
+    // today. Settlement is where the money moves, and no number about anybody's
+    // reputation is worth holding a deposit hostage for.
+    f.client.finalize(&f.organizer);
+
+    assert_eq!(
+        f.balance(&f.organizer),
+        opening + DEPOSIT + FEE_ALLOWANCE * i128::from(CAPACITY)
     );
 }

@@ -127,5 +127,7 @@ pub trait Reputation {
     fn register_event(env: Env, event: Address);
     fn record_checkin(env: Env, event: Address, member: Address);
     fn record_no_show(env: Env, event: Address, member: Address);
+    /// Counted when the event settles, so it means "ran one to the end".
+    fn record_organised(env: Env, event: Address, organizer: Address);
     fn get_score(env: Env, member: Address) -> Score;
 }
