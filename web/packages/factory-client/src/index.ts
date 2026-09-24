@@ -31,6 +31,8 @@ if (typeof window !== "undefined") {
 }
 
 
+
+
 export const networks = {
   testnet: {
     networkPassphrase: "Test SDF Network ; September 2015",
@@ -46,6 +48,7 @@ export const Errors = {
 export type DataKey = {tag: "Admin", values: void} | {tag: "EventWasmHash", values: void} | {tag: "Events", values: void} | {tag: "Count", values: void} | {tag: "Reputation", values: void};
 
 
+
 /**
  * A member's attendance record, as the event contract reads it.
  * 
@@ -58,6 +61,23 @@ export type DataKey = {tag: "Admin", values: void} | {tag: "EventWasmHash", valu
 export interface Score {
   no_shows: u32;
   shows: u32;
+}
+
+
+/**
+ * What an event needs to know about a would-be voucher.
+ * 
+ * Mirrors the reputation ledger's `Record` field for field, and copied rather
+ * than shared for the same reason as `Score` — see below. Only the fields a
+ * gate reads are here: `events_organised` is a profile-page number and putting
+ * it on this trait would publish it into the event contract's spec for nothing.
+ */
+export interface Record {
+  events_organised: u32;
+  no_shows: u32;
+  shows: u32;
+  vouches_broken: u32;
+  vouches_given: u32;
 }
 
 /**
@@ -178,6 +198,7 @@ export class Client extends ContractClient {
         "AAAAAAAAAINXaGljaCBldmVudCByZXZpc2lvbiBuZXcgZXZlbnRzIGdldC4gTGV0cyBhIHJldmlld2VyIGNoZWNrIHRoYXQgdGhlCmRlcGxveWVkIGZhY3RvcnkgcmVhbGx5IGlzIHBvaW50aW5nIGF0IHRoZSB3YXNtIHRoZSBkb2NzIGNsYWltLgAAAAATZ2V0X2V2ZW50X3dhc21faGFzaAAAAAAAAAAAAQAAA+kAAAPuAAAAIAAAAAM=",
         "AAAAAAAAAQ1Qb2ludCBuZXcgZXZlbnRzIGF0IGEgbmV3IGV2ZW50IHdhc20uIEFkbWluIG9ubHkuCgpSZWFkIGF0IGRlcGxveSB0aW1lIG9uIGV2ZXJ5IGBjcmVhdGVfZXZlbnRgLCBzbyB0aGlzIHRha2VzIGVmZmVjdCBvbiB0aGUKbmV4dCBldmVudCBhbmQgbGVhdmVzIGV2ZXJ5IGV4aXN0aW5nIG9uZSBleGFjdGx5IGFzIGl0IHdhcyDigJQgYW4gZXZlbnQKcGVvcGxlIGhhdmUgYWxyZWFkeSBsb2NrZWQgZGVwb3NpdHMgaW4gbXVzdCBuZXZlciBjaGFuZ2UgdW5kZXJuZWF0aCB0aGVtLgAAAAAAABNzZXRfZXZlbnRfd2FzbV9oYXNoAAAAAAEAAAAAAAAAD2V2ZW50X3dhc21faGFzaAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAQAAAatBIG1lbWJlcidzIGF0dGVuZGFuY2UgcmVjb3JkLCBhcyB0aGUgZXZlbnQgY29udHJhY3QgcmVhZHMgaXQuCgpNaXJyb3JzIHRoZSByZXB1dGF0aW9uIGNvbnRyYWN0J3Mgb3duIGBTY29yZWAgZmllbGQgZm9yIGZpZWxkLiBJdCBpcyBjb3BpZWQKcmF0aGVyIHRoYW4gc2hhcmVkIGJlY2F1c2UgdGhhdCBjb250cmFjdCBkZWxpYmVyYXRlbHkgZG9lcyBub3QgbGluayB0aGlzCmNyYXRlIOKAlCBkb2luZyBzbyB3b3VsZCBwdWJsaXNoIGEgYEZvcmZlaXRQb2xpY3lgIHR5cGUgb24gYSByZXB1dGF0aW9uCmxlZGdlcidzIHNwZWMg4oCUIGFuZCBhIGAjW2NvbnRyYWN0dHlwZV1gIHN0cnVjdCBlbmNvZGVzIGFzIGEgbWFwIGtleWVkIGJ5CmZpZWxkIG5hbWUsIHNvIHR3byBpZGVudGljYWwgZGVjbGFyYXRpb25zIGRlY29kZSBlYWNoIG90aGVyIGV4YWN0bHkuAAAAAAAAAAAFU2NvcmUAAAAAAAACAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAABXNob3dzAAAAAAAABA==",
+        "AAAAAQAAAWlXaGF0IGFuIGV2ZW50IG5lZWRzIHRvIGtub3cgYWJvdXQgYSB3b3VsZC1iZSB2b3VjaGVyLgoKTWlycm9ycyB0aGUgcmVwdXRhdGlvbiBsZWRnZXIncyBgUmVjb3JkYCBmaWVsZCBmb3IgZmllbGQsIGFuZCBjb3BpZWQgcmF0aGVyCnRoYW4gc2hhcmVkIGZvciB0aGUgc2FtZSByZWFzb24gYXMgYFNjb3JlYCDigJQgc2VlIGJlbG93LiBPbmx5IHRoZSBmaWVsZHMgYQpnYXRlIHJlYWRzIGFyZSBoZXJlOiBgZXZlbnRzX29yZ2FuaXNlZGAgaXMgYSBwcm9maWxlLXBhZ2UgbnVtYmVyIGFuZCBwdXR0aW5nCml0IG9uIHRoaXMgdHJhaXQgd291bGQgcHVibGlzaCBpdCBpbnRvIHRoZSBldmVudCBjb250cmFjdCdzIHNwZWMgZm9yIG5vdGhpbmcuAAAAAAAAAAAAAAZSZWNvcmQAAAAAAAUAAAAAAAAAEGV2ZW50c19vcmdhbmlzZWQAAAAEAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAABXNob3dzAAAAAAAABAAAAAAAAAAOdm91Y2hlc19icm9rZW4AAAAAAAQAAAAAAAAADXZvdWNoZXNfZ2l2ZW4AAAAAAAAE",
         "AAAAAgAAAN1XaG8gaXMgYWxsb3dlZCB0byByZXNlcnZlIGEgc3BvdC4KCkZpeGVkIGF0IGNyZWF0aW9uIGFuZCBlbmZvcmNlZCBpbnNpZGUgdGhlIGV2ZW50IGNvbnRyYWN0IHJhdGhlciB0aGFuIGJ5IGEKc2NyZWVuLCBiZWNhdXNlIGEgZ2F0ZSBhIGZyb250ZW5kIGFwcGxpZXMgaXMgYSBzdWdnZXN0aW9uOiBhbnlvbmUgY2FuIGNhbGwKYHJzdnBgIGRpcmVjdGx5IGFnYWluc3QgdGhlIGNvbnRyYWN0LgAAAAAAAAAAAAAJQWRtaXNzaW9uAAAAAAAABAAAAAAAAABEQW55b25lLCBmaXJzdCBjb21lIGZpcnN0IHNlcnZlZC4gV2hhdCBldmVyeSBldmVudCBjcmVhdGVkIHNvIGZhciBpcy4AAAAET3BlbgAAAAEAAABCQW55b25lIHdob3NlIHJlcHV0YXRpb24gcmVjb3JkIHNob3dzIGF0IGxlYXN0IHRoaXMgbWFueSBjaGVjay1pbnMuAAAAAAAFU2NvcmUAAAAAAAABAAAABAAAAAAAAAAwQW55b25lIHRoZSBvcmdhbml6ZXIgc2F5cyB5ZXMgdG8sIG9uZSBhdCBhIHRpbWUuAAAACEFwcHJvdmFsAAAAAQAAAENBbnlvbmUgdm91Y2hlZCBmb3IgYnkgdGhpcyBtYW55IG1lbWJlcnMgd2l0aCBhIHJlY29yZCBvZiB0aGVpciBvd24uAAAAAAVWb3VjaAAAAAAAAAEAAAAE",
         "AAAAAgAAAD1XaGVyZSB0aGUgZGVwb3NpdHMgb2Ygbm8tc2hvd3MgZ28gd2hlbiBhbiBldmVudCBpcyBmaW5hbGl6ZWQuAAAAAAAAAAAAAA1Gb3JmZWl0UG9saWN5AAAAAAAAAgAAAAAAAAAaU3RyYWlnaHQgdG8gdGhlIG9yZ2FuaXplci4AAAAAAAtUb09yZ2FuaXplcgAAAAAAAAAAK1NwbGl0IGV2ZW5seSBhbW9uZyBldmVyeW9uZSB3aG8gY2hlY2tlZCBpbi4AAAAAE1NwbGl0QW1vbmdBdHRlbmRlZXMA" ]),
       options

@@ -33,6 +33,12 @@ impl PanickingReputation {
     pub fn record_organised(_env: Env, _event: Address, _organizer: Address) {
         panic!("reputation is down");
     }
+    pub fn record_vouch_given(_env: Env, _event: Address, _voucher: Address) {
+        panic!("reputation is down");
+    }
+    pub fn record_vouch_broken(_env: Env, _event: Address, _voucher: Address) {
+        panic!("reputation is down");
+    }
 }
 
 /// What the event under test is wired to.
@@ -173,6 +179,17 @@ impl Fixture {
         for _ in 0..shows {
             ledger.record_checkin(&self.client.address, who);
         }
+    }
+
+    /// Charge somebody a broken vouch directly, the way a *previous* event
+    /// would have. One fixture is one `Env` with one ledger, so a second event
+    /// cannot be stood up to break the vouch at — and the rule under test is
+    /// precisely that the charge follows the member across events.
+    fn break_a_vouch(&self, who: &Address) {
+        self.reputation
+            .as_ref()
+            .expect("this fixture has no real ledger")
+            .record_vouch_broken(&self.client.address, who);
     }
 
     /// `(shows, no_shows)` as the ledger has them.
@@ -334,20 +351,232 @@ fn score_gate_without_a_reputation_address_refuses_cleanly() {
     assert_eq!(f.client.try_rsvp(&guest), Err(Ok(Error::NoReputation)));
 }
 
-#[test]
-fn a_gate_this_revision_cannot_enforce_admits_nobody() {
-    let f = setup_gated(
+/* -------------------------------------------------------------------------- */
+/* Vouching                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/// An event admitted by `n` vouches, with a live ledger.
+fn by_vouch(needed: u32) -> Fixture {
+    setup_gated(
         ForfeitPolicy::ToOrganizer,
         Ledger::Real,
+        Admission::Vouch(needed),
+    )
+}
+
+#[test]
+fn a_vouch_opens_the_door_for_somebody_with_no_record() {
+    let f = by_vouch(1);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    // Before: a wallet the ledger has never seen, refused.
+    assert_eq!(f.score(&newcomer), (0, 0));
+    assert_eq!(
+        f.client.try_rsvp(&newcomer),
+        Err(Ok(Error::NotEnoughVouches))
+    );
+
+    f.client.vouch(&member, &newcomer);
+    f.client.rsvp(&newcomer);
+
+    // This is the whole point of the mode: somebody with nothing of their own
+    // gets in on another member's record.
+    assert_eq!(
+        f.client.get_attendance(&newcomer),
+        Some(Attendance::Reserved)
+    );
+    assert_eq!(f.client.get_vouches(&newcomer), 1);
+}
+
+#[test]
+fn one_short_of_the_threshold_is_still_refused() {
+    let f = by_vouch(2);
+    let first = f.guest(DEPOSIT);
+    f.give_shows(&first, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&first, &newcomer);
+
+    // The boundary is `<`, like the score gate. One vouch short is a refusal,
+    // not a rounding.
+    assert_eq!(
+        f.client.try_rsvp(&newcomer),
+        Err(Ok(Error::NotEnoughVouches))
+    );
+
+    let second = f.guest(DEPOSIT);
+    f.give_shows(&second, 1);
+    f.client.vouch(&second, &newcomer);
+    f.client.rsvp(&newcomer);
+    assert_eq!(f.client.get_vouches(&newcomer), 2);
+}
+
+#[test]
+fn a_member_cannot_meet_a_threshold_alone() {
+    let f = by_vouch(2);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&member, &newcomer);
+    // Without this, "two members vouched" means "one member clicked twice" and
+    // the threshold is decoration.
+    assert_eq!(
+        f.client.try_vouch(&member, &newcomer),
+        Err(Ok(Error::AlreadyVouched))
+    );
+    assert_eq!(f.client.get_vouches(&newcomer), 1);
+}
+
+#[test]
+fn nobody_vouches_for_themselves() {
+    let f = by_vouch(1);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+
+    // The same hole as vouching twice, one step shorter.
+    assert_eq!(
+        f.client.try_vouch(&member, &member),
+        Err(Ok(Error::CannotVouchForYourself))
+    );
+}
+
+#[test]
+fn a_stranger_cannot_vouch() {
+    let f = by_vouch(1);
+    let stranger = f.guest(DEPOSIT);
+    let newcomer = f.guest(DEPOSIT);
+
+    // A vouch from a record with nothing in it would make the gate a formality:
+    // anybody could make a second wallet and wave themselves through.
+    assert_eq!(f.score(&stranger), (0, 0));
+    assert_eq!(
+        f.client.try_vouch(&stranger, &newcomer),
+        Err(Ok(Error::CannotVouch))
+    );
+}
+
+#[test]
+fn a_broken_vouch_costs_the_voucher_their_standing() {
+    let f = by_vouch(1);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&member, &newcomer);
+    assert_eq!(rep.get_record(&member).vouches_given, 1);
+
+    f.client.rsvp(&newcomer);
+    // And then they don't turn up.
+    f.client.finalize(&f.organizer);
+
+    let record = rep.get_record(&member);
+    assert_eq!(record.vouches_broken, 1);
+    // The voucher's own attendance is untouched: they went to everything they
+    // went to, and rewriting that would make `shows` mean two things at once.
+    assert_eq!(record.shows, 1);
+    assert_eq!(record.no_shows, 0);
+}
+
+#[test]
+fn one_broken_vouch_closes_the_door_on_vouching_at_any_show_count() {
+    let f = by_vouch(1);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 50);
+    let newcomer = f.guest(DEPOSIT);
+
+    // Fifty shows is far past any threshold, and the rule is not a threshold —
+    // which is what stops somebody buying the right to keep waving strangers in
+    // by attending a lot of their own events.
+    f.break_a_vouch(&member);
+
+    assert_eq!(f.score(&member), (50, 0));
+    assert_eq!(
+        f.client.try_vouch(&member, &newcomer),
+        Err(Ok(Error::CannotVouch))
+    );
+}
+
+#[test]
+fn showing_up_leaves_the_voucher_clean() {
+    let f = by_vouch(1);
+    let rep = f.reputation.as_ref().expect("a live ledger");
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&member, &newcomer);
+    f.client.rsvp(&newcomer);
+    f.client.open_checkin(&f.organizer);
+    f.client.check_in(&newcomer, &f.secret);
+    f.client.finalize(&f.organizer);
+
+    // The vouch was good. Nothing is charged, and the member may vouch again.
+    assert_eq!(rep.get_record(&member).vouches_broken, 0);
+    assert_eq!(rep.get_record(&member).vouches_given, 1);
+}
+
+#[test]
+fn a_vouch_moves_no_money_and_takes_no_spot() {
+    let f = by_vouch(1);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+
+    f.client.vouch(&member, &newcomer);
+
+    // Permission to reserve, not a reservation. Both wallets still hold every
+    // stroop they started with and the event still has all its capacity.
+    assert_eq!(f.balance(&member), DEPOSIT);
+    assert_eq!(f.balance(&newcomer), DEPOSIT);
+    assert_eq!(f.client.get_reserved().len(), 0);
+    assert_eq!(f.client.get_attendance(&newcomer), None);
+}
+
+#[test]
+fn vouching_at_an_event_that_does_not_ask_for_it_is_wrong_mode() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let member = f.guest(DEPOSIT);
+    let newcomer = f.guest(DEPOSIT);
+
+    assert_eq!(
+        f.client.try_vouch(&member, &newcomer),
+        Err(Ok(Error::WrongAdmissionMode))
+    );
+}
+
+#[test]
+fn vouching_closes_when_check_in_opens() {
+    let f = by_vouch(1);
+    let member = f.guest(DEPOSIT);
+    f.give_shows(&member, 1);
+    let newcomer = f.guest(DEPOSIT);
+    f.client.open_checkin(&f.organizer);
+
+    assert_eq!(
+        f.client.try_vouch(&member, &newcomer),
+        Err(Ok(Error::ReservationsClosed))
+    );
+}
+
+#[test]
+fn a_vouch_gate_without_a_ledger_refuses_cleanly() {
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::None,
         Admission::Vouch(1),
     );
-    let guest = f.guest(DEPOSIT);
+    let member = f.guest(DEPOSIT);
+    let newcomer = f.guest(DEPOSIT);
 
-    // Vouching lands in Block B; until it does, an event created with it is
-    // closed rather than open.
+    // There is nothing to check a voucher against. It says so rather than
+    // letting anybody through or trapping.
     assert_eq!(
-        f.client.try_rsvp(&guest),
-        Err(Ok(Error::WrongAdmissionMode))
+        f.client.try_vouch(&member, &newcomer),
+        Err(Ok(Error::NoReputation))
     );
 }
 

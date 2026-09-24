@@ -40,9 +40,9 @@ pub const TTL_THRESHOLD: u32 = LEDGERS_PER_DAY * 30;
 ///
 /// One is enough on purpose: the point of vouching is to let a newcomer in on
 /// somebody else's record, so a threshold high enough to be scarce would close
-/// the door it exists to open. The other half of the rule is not a number — a
-/// voucher whose past vouches were broken does not qualify at any show count —
-/// and it lives with the vouch bookkeeping in Block B.
+/// the door it exists to open. The other half of the rule is not a number: a
+/// voucher whose past vouches were broken does not qualify at any show count.
+/// Both halves are enforced in `Event::vouch`.
 pub const VOUCH_QUALIFY_SHOWS: u32 = 1;
 
 /// Who is allowed to reserve a spot.
@@ -61,6 +61,22 @@ pub enum Admission {
     Approval,
     /// Anyone vouched for by this many members with a record of their own.
     Vouch(u32),
+}
+
+/// What an event needs to know about a would-be voucher.
+///
+/// Mirrors the reputation ledger's `Record` field for field, and copied rather
+/// than shared for the same reason as `Score` — see below. Only the fields a
+/// gate reads are here: `events_organised` is a profile-page number and putting
+/// it on this trait would publish it into the event contract's spec for nothing.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Record {
+    pub shows: u32,
+    pub no_shows: u32,
+    pub vouches_given: u32,
+    pub vouches_broken: u32,
+    pub events_organised: u32,
 }
 
 /// A member's attendance record, as the event contract reads it.
@@ -129,5 +145,12 @@ pub trait Reputation {
     fn record_no_show(env: Env, event: Address, member: Address);
     /// Counted when the event settles, so it means "ran one to the end".
     fn record_organised(env: Env, event: Address, organizer: Address);
+    /// Signed a vouch for somebody.
+    fn record_vouch_given(env: Env, event: Address, voucher: Address);
+    /// Somebody they vouched for reserved a spot and never turned up.
+    fn record_vouch_broken(env: Env, event: Address, voucher: Address);
     fn get_score(env: Env, member: Address) -> Score;
+    /// The whole record. Read when deciding whether somebody may vouch, where
+    /// `shows` alone is not the rule: a broken vouch disqualifies at any count.
+    fn get_record(env: Env, member: Address) -> Record;
 }

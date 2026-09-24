@@ -118,6 +118,7 @@ export type DataKey = {tag: "Admin", values: void} | {tag: "Factory", values: vo
 
 
 
+
 export interface Client {
   /**
    * Construct and simulate a renew transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -241,6 +242,24 @@ export interface Client {
    */
   record_organised: ({event, organizer}: {event: string, organizer: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
+  /**
+   * Construct and simulate a record_vouch_given transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Record that `voucher` put their name behind somebody. Registered events only.
+   */
+  record_vouch_given: ({event, voucher}: {event: string, voucher: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate a record_vouch_broken transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Record that somebody they vouched for never turned up. Registered events only.
+   * 
+   * This is what makes a vouch cost something. It is deliberately not a
+   * deduction from `shows`: the voucher did turn up to everything they turned
+   * up to, and rewriting that would make the attendance count mean two things
+   * at once. It is its own number, and `Event::vouch` refuses anybody whose
+   * is above zero.
+   */
+  record_vouch_broken: ({event, voucher}: {event: string, voucher: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -266,6 +285,7 @@ export class Client extends ContractClient {
         "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAACxUaGUgb25seSBhZGRyZXNzIGFsbG93ZWQgdG8gcmVnaXN0ZXIgZXZlbnRzLgAAAAdGYWN0b3J5AAAAAAEAAAAsQWxsb3dsaXN0IG1lbWJlcnNoaXAgZm9yIG9uZSBldmVudCBjb250cmFjdC4AAAAFRXZlbnQAAAAAAAABAAAAEwAAAAEAAAAAAAAABVNjb3JlAAAAAAAAAQAAABMAAAABAAAAvUFkZGVkIGFmdGVyIHRoZSBmaXJzdCByZXZpc2lvbiwgYW5kIGtleWVkIHNlcGFyYXRlbHkgZm9yIHRoYXQgcmVhc29uIOKAlApzZWUgYFNjb3JlYC4gQSBtZW1iZXIgd2hvIHByZWRhdGVzIGl0IGhhcyBubyBzdWNoIGVudHJ5LCB3aGljaCBpcyB3aHkKdGhlIHJlYWRlciBiZWxvdyBkZWZhdWx0cyByYXRoZXIgdGhhbiB1bndyYXBzLgAAAAAAAAZFeHRyYXMAAAAAAAEAAAAT",
         "AAAABQAAAJNQdWJsaXNoZWQgb24gZXZlcnkgd3JpdGUsIHNvIGEgcmV2aWV3ZXIgY2FuIHdhdGNoIGEgc2NvcmUgcmlzZSBvbiBhIGNoZWNrLWluCmFuZCBmYWxsIG9uIGEgZmluYWxpemVkIG5vLXNob3cgd2l0aG91dCByZWFkaW5nIGNvbnRyYWN0IHN0YXRlIGF0IGFsbC4AAAAAAAAAAAxTY29yZUNoYW5nZWQAAAABAAAADXNjb3JlX2NoYW5nZWQAAAAAAAADAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAAAAAAVzaG93cwAAAAAAAAQAAAAAAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAAAg==",
         "AAAABQAAAI1QdWJsaXNoZWQgd2hlbiBhIGxlYXNlIGlzIHJlbmV3ZWQsIHNvIGEgcmVjb3JkIGtlcHQgYWxpdmUgYnkgYSBzdHJhbmdlciBpcwp2aXNpYmxlIGFzIGV4YWN0bHkgdGhhdCByYXRoZXIgdGhhbiBsb29raW5nIGxpa2UgaXQgbmV2ZXIgZXhwaXJlZC4AAAAAAAAAAAAADVJlY29yZFJlbmV3ZWQAAAAAAAABAAAADnJlY29yZF9yZW5ld2VkAAAAAAABAAAAAAAAAAZtZW1iZXIAAAAAABMAAAAAAAAAAg==",
+        "AAAABQAAAHRQdWJsaXNoZWQgb24gYm90aCBoYWx2ZXMgb2YgYSB2b3VjaCdzIGxpZmUsIHNvIHRoZSBjb3N0IG9mIGEgYnJva2VuIG9uZSBpcwp3YXRjaGFibGUgd2l0aG91dCByZWFkaW5nIGNvbnRyYWN0IHN0YXRlLgAAAAAAAAANVm91Y2hSZWNvcmRlZAAAAAAAAAEAAAAOdm91Y2hfcmVjb3JkZWQAAAAAAAIAAAAAAAAAB3ZvdWNoZXIAAAAAEwAAAAAAAAAAAAAABmJyb2tlbgAAAAAAAQAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAAD0V2ZW50UmVnaXN0ZXJlZAAAAAABAAAAEGV2ZW50X3JlZ2lzdGVyZWQAAAABAAAAAAAAAAVldmVudAAAAAAAABMAAAAAAAAAAg==",
         "AAAAAAAAA/dSZW5ldyBhIHJlY29yZCdzIGxlYXNlLiAqKkFueW9uZSBtYXkgY2FsbCB0aGlzLCBhbmQgYW55b25lIHBheXMuKioKClNvcm9iYW4gcmVudHMgc3RhdGU6IGFuIGVudHJ5IG5vYm9keSB0b3VjaGVzIGZvciBsb25nIGVub3VnaCBpcyBhcmNoaXZlZAphbmQgc3RvcHMgYmVpbmcgcmVhZGFibGUuIEV2ZXJ5IHdyaXRlIGhlcmUgYWxyZWFkeSBleHRlbmRzIHRoZSBsZWFzZSBvZgp3aGF0IGl0IHdyb3RlLCB3aGljaCBxdWlldGx5IG1lYW5zIGEgcmVjb3JkIG9ubHkgc3Vydml2ZXMgd2hpbGUgaXRzIG93bmVyCmtlZXBzIGF0dGVuZGluZyB0aGluZ3Mg4oCUIHNvIGEgcmVwdXRhdGlvbiB3b3VsZCBleHBpcmUgcHJlY2lzZWx5IGZvciB0aGUKcGVyc29uIHdobyBzdG9wcGVkIG5lZWRpbmcgdG8gcHJvdmUgaXQsIGFuZCB0aGUgb25seSB3YXkgYmFjayB3b3VsZCBiZQp0aHJvdWdoIHVzLgoKU28gdGhpcyB0YWtlcyBubyBhdXRoIGFuZCBubyBhZG1pbi4gQSByZWNvcmQgaXMgYSBjbGFpbSBpdHMgb3duZXIgc2hvdWxkCm5vdCBoYXZlIHRvIGFzayBwZXJtaXNzaW9uIHRvIGtlZXAsIGFuZCBhbnlvbmUgd2hvIGNhcmVzIGFib3V0IGl0IOKAlCB0aGUKbWVtYmVyLCBhIGZyaWVuZCwgYW4gb3JnYW5pemVyIHdobyB3YW50cyB0byBhZG1pdCB0aGVtIG5leHQgbW9udGgg4oCUIGNhbgpwYXkgdGhlIGZldyBzdHJvb3BzIHRvIGtlZXAgaXQgYWxpdmUuIFRoYXQgaXMgd2hhdCBtYWtlcyB0aGUgbGVkZ2VyCm91dGxpdmUgb3VyIGdvb2R3aWxsLCB3aGljaCBpcyB0aGUgZHVyYWJpbGl0eSB0aGUgU09XIHNjb3BlcyBleHBsaWNpdGx5LgoKUmVuZXdpbmcgYSByZWNvcmQgbm9ib2R5IGhhcyBldmVyIHdyaXR0ZW4gaXMgYSBuby1vcCByYXRoZXIgdGhhbiBhbgplcnJvcjogdGhlcmUgaXMgbm8gbGVhc2UgdG8gZXh0ZW5kLCBhbmQgY3JlYXRpbmcgYW4gZW1wdHkgb25lIHRvIHJlbmV3CndvdWxkIGxldCBhbnlib2R5IGZpbGwgdGhlIGxlZGdlciB3aXRoIGJsYW5rIGVudHJpZXMgYXQgb3VyIGV4cGVuc2UuAAAAAAVyZW5ldwAAAAAAAAEAAAAAAAAABm1lbWJlcgAAAAAAEwAAAAA=",
         "AAAAAAAAAFBSZXBsYWNlIHRoaXMgY29udHJhY3QncyBvd24gY29kZSwga2VlcGluZyBpdHMgYWRkcmVzcyBhbmQgaXRzIHN0YXRlLgpBZG1pbiBvbmx5LgAAAAd1cGdyYWRlAAAAAAEAAAAAAAAADW5ld193YXNtX2hhc2gAAAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
@@ -279,7 +299,9 @@ export class Client extends ContractClient {
         "AAAAAAAAACpSZWNvcmQgdGhhdCBgbWVtYmVyYCBzaG93ZWQgdXAgdG8gYGV2ZW50YC4AAAAAAA5yZWNvcmRfY2hlY2tpbgAAAAAAAgAAAAAAAAAFZXZlbnQAAAAAAAATAAAAAAAAAAZtZW1iZXIAAAAAABMAAAABAAAD6QAAAAIAAAAD",
         "AAAAAAAAAEVSZWNvcmQgdGhhdCBgbWVtYmVyYCByZXNlcnZlZCBhIHNwb3QgYXQgYGV2ZW50YCBhbmQgbmV2ZXIgY2hlY2tlZCBpbi4AAAAAAAAOcmVjb3JkX25vX3Nob3cAAAAAAAIAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAAAAAAGbWVtYmVyAAAAAAATAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAAQdMZXQgYW4gZXZlbnQgY29udHJhY3Qgd3JpdGUgc2NvcmVzLiBGYWN0b3J5IG9ubHksIGlkZW1wb3RlbnQuCgpUaGlzIGlzIHRoZSB3aG9sZSBnYXRlLiBUaGUgZmFjdG9yeSBjYWxscyBpdCBpbiB0aGUgc2FtZSB0cmFuc2FjdGlvbiB0aGF0CmRlcGxveXMgdGhlIGV2ZW50LCBzbyB0aGUgYWxsb3dsaXN0IGNhbiBvbmx5IGV2ZXIgY29udGFpbiBjb250cmFjdHMgdGhlCmZhY3RvcnkgaXRzZWxmIGJ1aWx0IGZyb20gYSB3YXNtIGhhc2ggdGhlIGFkbWluIGNob3NlLgAAAAAOcmVnaXN0ZXJfZXZlbnQAAAAAAAEAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAEAAAPpAAAAAgAAAAM=",
-        "AAAAAAAAAQhDb3VudCBhbiBldmVudCBhZ2FpbnN0IHRoZSBhZGRyZXNzIHRoYXQgY3JlYXRlZCBpdC4gUmVnaXN0ZXJlZCBldmVudHMgb25seS4KCkNhbGxlZCBieSB0aGUgZXZlbnQgY29udHJhY3Qgd2hlbiBpdCBzZXR0bGVzLCBzbyB0aGUgY291bnQgbWVhbnMgInJhbiBhbgpldmVudCB0byB0aGUgZW5kIiByYXRoZXIgdGhhbiAiZGVwbG95ZWQgYSBjb250cmFjdCBvbmNlIi4gQW4gb3JnYW5pemVyCndobyBhYmFuZG9ucyBhbiBldmVudCBuZXZlciBlYXJucyB0aGUgbGluZS4AAAAQcmVjb3JkX29yZ2FuaXNlZAAAAAIAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAAAAAAJb3JnYW5pemVyAAAAAAAAEwAAAAEAAAPpAAAAAgAAAAM=" ]),
+        "AAAAAAAAAQhDb3VudCBhbiBldmVudCBhZ2FpbnN0IHRoZSBhZGRyZXNzIHRoYXQgY3JlYXRlZCBpdC4gUmVnaXN0ZXJlZCBldmVudHMgb25seS4KCkNhbGxlZCBieSB0aGUgZXZlbnQgY29udHJhY3Qgd2hlbiBpdCBzZXR0bGVzLCBzbyB0aGUgY291bnQgbWVhbnMgInJhbiBhbgpldmVudCB0byB0aGUgZW5kIiByYXRoZXIgdGhhbiAiZGVwbG95ZWQgYSBjb250cmFjdCBvbmNlIi4gQW4gb3JnYW5pemVyCndobyBhYmFuZG9ucyBhbiBldmVudCBuZXZlciBlYXJucyB0aGUgbGluZS4AAAAQcmVjb3JkX29yZ2FuaXNlZAAAAAIAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAAAAAAJb3JnYW5pemVyAAAAAAAAEwAAAAEAAAPpAAAAAgAAAAM=",
+        "AAAAAAAAAE1SZWNvcmQgdGhhdCBgdm91Y2hlcmAgcHV0IHRoZWlyIG5hbWUgYmVoaW5kIHNvbWVib2R5LiBSZWdpc3RlcmVkIGV2ZW50cyBvbmx5LgAAAAAAABJyZWNvcmRfdm91Y2hfZ2l2ZW4AAAAAAAIAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAAAAAAHdm91Y2hlcgAAAAATAAAAAQAAA+kAAAACAAAAAw==",
+        "AAAAAAAAAX5SZWNvcmQgdGhhdCBzb21lYm9keSB0aGV5IHZvdWNoZWQgZm9yIG5ldmVyIHR1cm5lZCB1cC4gUmVnaXN0ZXJlZCBldmVudHMgb25seS4KClRoaXMgaXMgd2hhdCBtYWtlcyBhIHZvdWNoIGNvc3Qgc29tZXRoaW5nLiBJdCBpcyBkZWxpYmVyYXRlbHkgbm90IGEKZGVkdWN0aW9uIGZyb20gYHNob3dzYDogdGhlIHZvdWNoZXIgZGlkIHR1cm4gdXAgdG8gZXZlcnl0aGluZyB0aGV5IHR1cm5lZAp1cCB0bywgYW5kIHJld3JpdGluZyB0aGF0IHdvdWxkIG1ha2UgdGhlIGF0dGVuZGFuY2UgY291bnQgbWVhbiB0d28gdGhpbmdzCmF0IG9uY2UuIEl0IGlzIGl0cyBvd24gbnVtYmVyLCBhbmQgYEV2ZW50Ojp2b3VjaGAgcmVmdXNlcyBhbnlib2R5IHdob3NlCmlzIGFib3ZlIHplcm8uAAAAAAATcmVjb3JkX3ZvdWNoX2Jyb2tlbgAAAAACAAAAAAAAAAVldmVudAAAAAAAABMAAAAAAAAAB3ZvdWNoZXIAAAAAEwAAAAEAAAPpAAAAAgAAAAM=" ]),
       options
     )
   }
@@ -296,6 +318,8 @@ export class Client extends ContractClient {
         record_checkin: this.txFromJSON<Result<void>>,
         record_no_show: this.txFromJSON<Result<void>>,
         register_event: this.txFromJSON<Result<void>>,
-        record_organised: this.txFromJSON<Result<void>>
+        record_organised: this.txFromJSON<Result<void>>,
+        record_vouch_given: this.txFromJSON<Result<void>>,
+        record_vouch_broken: this.txFromJSON<Result<void>>
   }
 }

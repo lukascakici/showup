@@ -36,7 +36,9 @@
 //! both pocket the fee allowance and dilute the real attendees' share of the
 //! forfeited deposits.
 
-use interfaces::{ReputationClient, MAX_TITLE_BYTES, TTL_EXTEND_TO, TTL_THRESHOLD};
+use interfaces::{
+    ReputationClient, MAX_TITLE_BYTES, TTL_EXTEND_TO, TTL_THRESHOLD, VOUCH_QUALIFY_SHOWS,
+};
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
     BytesN, Env, String, Vec,
@@ -84,6 +86,15 @@ pub enum Error {
     NoReputation = 22,
     /// `remove_host` aimed at the creator, who is permanent.
     CannotRemoveCreator = 23,
+    /// A vouch from a record that cannot carry one: too few shows, or a vouch
+    /// of their own already broken.
+    CannotVouch = 24,
+    /// A second vouch for the same guest from the same member.
+    AlreadyVouched = 25,
+    /// A vouch for yourself, which would make the whole gate a formality.
+    CannotVouchForYourself = 26,
+    /// Not enough members have vouched for this guest yet.
+    NotEnoughVouches = 27,
 }
 
 #[contracttype]
@@ -200,6 +211,12 @@ pub enum DataKey {
     /// both readers below have a default rather than an `unwrap`.
     Admission,
     Hosts,
+    /// Everyone who has vouched for this guest, at this event.
+    ///
+    /// A list rather than a counter because `finalize` has to charge them by
+    /// name when the guest does not turn up — a number could say how many were
+    /// wrong but not which.
+    Vouchers(Address),
 }
 
 #[contractevent]
@@ -237,6 +254,15 @@ pub struct HostAdded {
 #[contractevent]
 pub struct HostRemoved {
     pub host: Address,
+}
+
+/// Published when somebody puts their record behind a guest.
+#[contractevent]
+pub struct Vouched {
+    pub voucher: Address,
+    pub guest: Address,
+    /// How many this guest now has, so a watcher can see the gate open.
+    pub vouches: u32,
 }
 
 #[contractevent]
@@ -447,6 +473,84 @@ impl EventContract {
         Ok(())
     }
 
+    /// Put your own record behind somebody else. `Admission::Vouch` only.
+    ///
+    /// This is the mechanism that makes a vouch more than a whitelist entry: it
+    /// is a signed, public statement by a member with a record, and it costs
+    /// them if the person they backed does not turn up — see `finalize`.
+    ///
+    /// Three refusals, each closing a different hole:
+    ///
+    /// - **A voucher must qualify.** `VOUCH_QUALIFY_SHOWS` shows, *and* no
+    ///   broken vouch of their own. Without the second half, somebody could
+    ///   wave in strangers forever at the cost of a record that never moves.
+    /// - **Nobody vouches twice for the same guest.** Otherwise one member
+    ///   meets a threshold of five on their own and the count means nothing.
+    /// - **Nobody vouches for themselves.** The same hole, one step shorter.
+    ///
+    /// It moves no money and takes no spot. The guest still has to `rsvp`, and
+    /// that is where the deposit goes — a vouch is permission to reserve, not a
+    /// reservation.
+    pub fn vouch(env: Env, voucher: Address, guest: Address) -> Result<(), Error> {
+        let config = Self::config(&env)?;
+        match Self::phase(&env) {
+            Phase::Reserving => {}
+            Phase::CheckingIn => return Err(Error::ReservationsClosed),
+            Phase::Finalized => return Err(Error::AlreadyFinalized),
+        }
+        if !matches!(Self::admission(&env), Admission::Vouch(_)) {
+            return Err(Error::WrongAdmissionMode);
+        }
+        if voucher == guest {
+            return Err(Error::CannotVouchForYourself);
+        }
+        voucher.require_auth();
+
+        let reputation = config.reputation.as_ref().ok_or(Error::NoReputation)?;
+        let client = ReputationClient::new(&env, reputation);
+        // Not a `try_` call, exactly like the score gate: a read that cannot be
+        // answered has no safe default. Assuming a good record would let anyone
+        // vouch while the ledger is unreachable.
+        let record = client.get_record(&voucher);
+        if record.shows < VOUCH_QUALIFY_SHOWS || record.vouches_broken > 0 {
+            return Err(Error::CannotVouch);
+        }
+
+        let key = DataKey::Vouchers(guest.clone());
+        let mut vouchers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&env));
+        if vouchers.contains(&voucher) {
+            return Err(Error::AlreadyVouched);
+        }
+        vouchers.push_back(voucher.clone());
+        let vouches = vouchers.len();
+        env.storage().persistent().set(&key, &vouchers);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        Self::bump_instance(&env);
+
+        // Through `try_` — the ledger's bookkeeping must never be able to trap a
+        // vouch that the event has already accepted.
+        let _ = client.try_record_vouch_given(&env.current_contract_address(), &voucher);
+
+        Vouched {
+            voucher,
+            guest,
+            vouches,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// How many members have vouched for `guest` at this event.
+    pub fn get_vouches(env: Env, guest: Address) -> u32 {
+        Self::vouchers(&env, &guest).len()
+    }
+
     /// Let an applicant reserve. Any host.
     pub fn approve(env: Env, host: Address, applicant: Address) -> Result<(), Error> {
         Self::answer(&env, host, applicant, true)
@@ -651,6 +755,13 @@ impl EventContract {
                 .get::<_, Attendance>(&DataKey::Attendance(guest.clone()));
             if attendance == Some(Attendance::Reserved) {
                 Self::record_score(&env, &config, &guest, ScoreKind::NoShow);
+                // And everyone who put their name behind them. This is the
+                // whole cost of a vouch: the voucher turned up to everything
+                // they turned up to, so their attendance is untouched — what
+                // moves is a separate number, and `vouch` refuses anybody whose
+                // is above zero. One bad call closes the door on vouching, and
+                // nothing else.
+                Self::charge_vouchers(&env, &config, &guest);
             }
         }
 
@@ -756,6 +867,30 @@ impl EventContract {
         }
     }
 
+    /// Charge a no-show's vouchers, if anybody backed them.
+    ///
+    /// Through `try_` for the same reason every other ledger write here is: this
+    /// runs inside `finalize`, which is where deposits are paid out, and no
+    /// number about anybody's reputation is worth trapping a settlement for.
+    fn charge_vouchers(env: &Env, config: &Config, guest: &Address) {
+        let Some(reputation) = &config.reputation else {
+            return;
+        };
+        let client = ReputationClient::new(env, reputation);
+        let this = env.current_contract_address();
+        for voucher in Self::vouchers(env, guest).iter() {
+            let _ = client.try_record_vouch_broken(&this, &voucher);
+        }
+    }
+
+    /// Everyone who has vouched for `guest` at this event.
+    fn vouchers(env: &Env, guest: &Address) -> Vec<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Vouchers(guest.clone()))
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
     /// Who may run the event. Defaults to the creator alone.
     fn hosts(env: &Env, config: &Config) -> Vec<Address> {
         env.storage()
@@ -852,10 +987,16 @@ impl EventContract {
                 Some(Attendance::Approved) => Ok(()),
                 _ => Err(Error::NotApplied),
             },
-            // Enforcement does not exist yet. A mode that cannot be enforced
-            // admits nobody rather than everybody: an event created with a gate
-            // this revision does not understand is closed, not open.
-            Admission::Vouch(_) => Err(Error::WrongAdmissionMode),
+            // The count is of *members who signed*, not of anything the guest
+            // did. A threshold of zero would be an open event with extra steps,
+            // so it is treated as one rather than refused: `>=` against zero is
+            // always true.
+            Admission::Vouch(needed) => {
+                if Self::vouchers(env, guest).len() < needed {
+                    return Err(Error::NotEnoughVouches);
+                }
+                Ok(())
+            }
         }
     }
 

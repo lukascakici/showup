@@ -105,6 +105,14 @@ pub enum DataKey {
     Extras(Address),
 }
 
+/// Published on both halves of a vouch's life, so the cost of a broken one is
+/// watchable without reading contract state.
+#[contractevent]
+pub struct VouchRecorded {
+    pub voucher: Address,
+    pub broken: bool,
+}
+
 /// Published when a lease is renewed, so a record kept alive by a stranger is
 /// visible as exactly that rather than looking like it never expired.
 #[contractevent]
@@ -231,6 +239,44 @@ impl ReputationContract {
         let mut extras = Self::extras_of(&env, &organizer);
         extras.events_organised = extras.events_organised.saturating_add(1);
         Self::put_extras(&env, &organizer, &extras);
+        Ok(())
+    }
+
+    /// Record that `voucher` put their name behind somebody. Registered events only.
+    pub fn record_vouch_given(env: Env, event: Address, voucher: Address) -> Result<(), Error> {
+        Self::require_event(&env, &event)?;
+        event.require_auth();
+
+        let mut extras = Self::extras_of(&env, &voucher);
+        extras.vouches_given = extras.vouches_given.saturating_add(1);
+        Self::put_extras(&env, &voucher, &extras);
+        VouchRecorded {
+            voucher,
+            broken: false,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Record that somebody they vouched for never turned up. Registered events only.
+    ///
+    /// This is what makes a vouch cost something. It is deliberately not a
+    /// deduction from `shows`: the voucher did turn up to everything they turned
+    /// up to, and rewriting that would make the attendance count mean two things
+    /// at once. It is its own number, and `Event::vouch` refuses anybody whose
+    /// is above zero.
+    pub fn record_vouch_broken(env: Env, event: Address, voucher: Address) -> Result<(), Error> {
+        Self::require_event(&env, &event)?;
+        event.require_auth();
+
+        let mut extras = Self::extras_of(&env, &voucher);
+        extras.vouches_broken = extras.vouches_broken.saturating_add(1);
+        Self::put_extras(&env, &voucher, &extras);
+        VouchRecorded {
+            voucher,
+            broken: true,
+        }
+        .publish(&env);
         Ok(())
     }
 
