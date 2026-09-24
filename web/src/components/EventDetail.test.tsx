@@ -34,6 +34,7 @@ const state = vi.hoisted(() => ({
   status: "idle" as string,
   openPicker: vi.fn(),
   standing: null as string | null,
+  applicants: null as string[] | null,
 }));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
@@ -55,6 +56,7 @@ vi.mock("@/lib/events", async (importOriginal) => ({
     refresh: vi.fn(),
   }),
   useStanding: () => ({ data: state.standing, refresh: vi.fn() }),
+  useApplicants: () => ({ data: state.applicants, refresh: vi.fn() }),
   // `null` is "we couldn't ask the factory either" — a rejection, not a no.
   // Collapsing it to `false` here is exactly the bug the component guards
   // against, so the mock must not do it.
@@ -331,5 +333,73 @@ describe("an event that admits people one at a time", () => {
 
     expect(await screen.findByRole("button", { name: /reserve/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /ask to come/i })).toBeNull();
+  });
+});
+
+/**
+ * The host's side of the same gate.
+ *
+ * The queue is assembled from an event history that is allowed to be
+ * incomplete, so what these guard is that the page never offers an answer the
+ * contract will refuse — and never implies a decision can be walked back, when
+ * on-chain neither one can.
+ */
+describe("the host's queue of people asking to come", () => {
+  const approvalEvent = (over: Partial<EventState> = {}) =>
+    anEvent({ admission: { tag: "Approval", values: undefined }, ...over });
+
+  beforeEach(() => {
+    state.standing = null;
+    state.applicants = [];
+    state.address = ORGANIZER;
+  });
+
+  it("shows nothing to answer as nothing to answer", async () => {
+    state.event = approvalEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/nobody is waiting/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+  });
+
+  it("offers both answers per applicant, and says they are final", async () => {
+    state.event = approvalEvent();
+    state.applicants = [GUEST];
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByRole("button", { name: /approve/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /decline/i })).toBeInTheDocument();
+    // A host reading "Decline" as "not yet" is reading it as something the
+    // contract will not let them take back.
+    expect(screen.getByText(/final on-chain/i)).toBeInTheDocument();
+  });
+
+  it("warns before an approval that has no spot behind it", async () => {
+    state.event = approvalEvent({ reserved: Array.from({ length: 10 }, (_, i) => `G${i}`) });
+    state.applicants = [GUEST];
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // Matched on the host-specific half of the sentence: a host who has not
+    // reserved also sees the guest panel, which says its own version of "full".
+    expect(await screen.findByText(/reserve one that does not exist/i)).toBeInTheDocument();
+  });
+
+  it("is absent on an open event, where nobody can ask", async () => {
+    state.event = anEvent();
+    state.applicants = [GUEST];
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    await screen.findByRole("button", { name: /start check-in/i });
+    expect(screen.queryByText(/people asking to come/i)).toBeNull();
+  });
+
+  it("is absent for somebody who is not a host", async () => {
+    state.event = approvalEvent();
+    state.applicants = [GUEST];
+    state.address = GUEST;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    await screen.findByRole("button", { name: /ask to come/i });
+    expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
   });
 });

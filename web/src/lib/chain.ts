@@ -143,6 +143,38 @@ export async function loadStanding(id: string, guest: string): Promise<string | 
   return tx.result?.tag ?? null;
 }
 
+/**
+ * Which of these addresses are still waiting on an answer.
+ *
+ * The contract has no `get_applicants`: it publishes an event when somebody
+ * applies and stores the answer per address, so a host's queue has to be
+ * assembled from the history and then checked. Both halves are needed.
+ *
+ * The history alone is not enough because it is not guaranteed complete —
+ * Soroban RPC keeps about a week and the archive only reaches as far back as it
+ * has been swept, so a feed that has lost an `answered` row would show a host an
+ * applicant they have already turned down, with a button to turn them down
+ * again. The contract alone is not enough either, because nothing on it can
+ * enumerate who ever asked.
+ *
+ * So: candidates from the feed, truth from the contract. Only `Applied`
+ * survives, which is also exactly the set `approve` and `decline` will accept.
+ */
+export async function loadApplicants(id: string, candidates: string[]): Promise<string[]> {
+  const settled = await Promise.all(
+    candidates.map(async (guest) => {
+      try {
+        return (await loadStanding(id, guest)) === "Applied" ? guest : null;
+      } catch {
+        // One unreadable address must not empty a queue. Dropping it shows the
+        // host a shorter list; failing the lot shows them none at all.
+        return null;
+      }
+    }),
+  );
+  return settled.filter((a): a is string => a !== null);
+}
+
 export function spotsLeft(e: EventState): number {
   return e.capacity - e.reserved.length;
 }

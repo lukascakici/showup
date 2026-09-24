@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CalendarClock,
@@ -37,6 +37,7 @@ import {
   isKnownEvent,
   spotsLeft,
   useActivity,
+  useApplicants,
   useEvent,
   useStanding,
   type EventState,
@@ -65,7 +66,7 @@ import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
 import { EventPoster } from "./EventPoster";
 import { FaucetButton } from "./Faucet";
-import { AvatarStack } from "./Identicon";
+import { AvatarStack, Identicon } from "./Identicon";
 import { QrCode } from "./QrCode";
 
 type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
@@ -83,10 +84,26 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // Only read for approval-gated events: everywhere else the answer is already
   // in the reserved and checked-in lists above. `refresh` runs after `apply`,
   // so the panel moves on without waiting for the next poll.
+  // Everyone the history has seen apply, newest first. Answered or not: the
+  // contract decides that below, and an answered applicant simply drops out.
+  const candidates = useMemo(() => {
+    const rows = activityResult?.activity ?? [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (row.kind === "applied") seen.add(row.applicant);
+    }
+    return [...seen];
+  }, [activityResult]);
+
   const { data: standing, refresh: refreshStanding } = useStanding(
     id,
     address,
     event?.admission.tag === "Approval",
+  );
+  const { data: applicants, refresh: refreshApplicants } = useApplicants(
+    id,
+    candidates,
+    !!address && event?.admission.tag === "Approval" && event.hosts.includes(address),
   );
   // null while unasked or unanswerable; only `false` is a confirmed "no such event".
   const [known, setKnown] = useState<boolean | null>(null);
@@ -130,13 +147,19 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // every action on this page — all of which move XLM — left the number in the
   // top bar quietly wrong until someone thought to refresh it.
   const after = useCallback(async () => {
-    await Promise.all([refresh(), refreshActivity(), refreshBalance(), refreshStanding()]);
+    await Promise.all([
+      refresh(),
+      refreshActivity(),
+      refreshBalance(),
+      refreshStanding(),
+      refreshApplicants(),
+    ]);
     // Something just happened on chain, so the archive is one row behind. Not
     // awaited: the sync re-reads everything from the contract itself, so it can
     // arrive whenever it arrives.
     void requestSync(id);
     setAction({ kind: "idle" });
-  }, [id, refresh, refreshActivity, refreshBalance, refreshStanding]);
+  }, [id, refresh, refreshActivity, refreshBalance, refreshStanding, refreshApplicants]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setAction({ kind: "busy" });
@@ -222,6 +245,15 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const applyToCome = () =>
     run(async () => {
       const tx = await eventClient(id, signer).apply({ guest: signer.publicKey! });
+      await tx.signAndSend();
+    });
+
+  const answer = (applicant: string, approved: boolean) =>
+    run(async () => {
+      const client = eventClient(id, signer);
+      const tx = await (approved
+        ? client.approve({ host: signer.publicKey!, applicant })
+        : client.decline({ host: signer.publicKey!, applicant }));
       await tx.signAndSend();
     });
 
@@ -433,6 +465,18 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         {action.kind === "error" && (
           <div className="mt-4">
             <ErrorNote>{action.message}</ErrorNote>
+          </div>
+        )}
+
+        {isHost && byApproval && (
+          <div className="mt-8">
+            <Applicants
+              pending={applicants ?? null}
+              left={left}
+              busy={busy}
+              truncated={activityResult?.truncated ?? false}
+              onAnswer={answer}
+            />
           </div>
         )}
 
@@ -687,6 +731,97 @@ function Application({
         Ask to come
       </Button>
     </>
+  );
+}
+
+/**
+ * The host's queue: who has asked, and the two answers.
+ *
+ * Every row here was verified against the contract before it rendered — see
+ * `loadApplicants`. That matters because the *candidates* come from an event
+ * history that is allowed to be incomplete, and a host offered an "Approve"
+ * button for somebody they already turned down would sign a transaction the
+ * contract refuses with `NotApplied`, after the wallet prompt.
+ *
+ * Both answers are final on-chain and the panel says so, because a host reading
+ * "Decline" as "not yet" would be reading it as something the contract will not
+ * let them take back.
+ */
+function Applicants({
+  pending,
+  left,
+  busy,
+  truncated,
+  onAnswer,
+}: {
+  pending: string[] | null;
+  left: number;
+  busy: boolean;
+  truncated: boolean;
+  onAnswer: (applicant: string, approved: boolean) => void;
+}) {
+  return (
+    <Panel title="People asking to come" meta={pending ? `${pending.length} waiting` : undefined}>
+      {pending === null ? (
+        <div className="flex flex-col gap-2" role="status" aria-label="Loading applications">
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+        </div>
+      ) : pending.length === 0 ? (
+        <p className="text-sm text-muted">
+          Nobody is waiting. Anyone who opens this event can ask for a spot, and they
+          appear here the moment they do.
+        </p>
+      ) : (
+        <>
+          <p className="mb-4 text-sm text-muted">
+            Approving doesn&apos;t take anything from them — they reserve afterwards,
+            and that is when the deposit moves. Both answers are final on-chain.
+          </p>
+          {left <= 0 && (
+            <p className="mb-4 text-sm text-danger">
+              Every spot is taken. Approving somebody now gives them permission to
+              reserve one that does not exist.
+            </p>
+          )}
+          <ul className="flex flex-col divide-y divide-border">
+            {pending.map((applicant) => (
+              <li
+                key={applicant}
+                className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <Identicon address={applicant} />
+                <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                  {shortAddr(applicant, 6, 6)}
+                </span>
+                <span className="flex shrink-0 gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => onAnswer(applicant, false)}
+                    disabled={busy}
+                  >
+                    Decline
+                  </Button>
+                  <Button onClick={() => onAnswer(applicant, true)} disabled={busy}>
+                    Approve
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* The queue is built from a history that reaches back about a week on
+          RPC. Silence about that would read as "nobody else asked". */}
+      {truncated && (
+        <p className="mt-4 border-t border-border pt-3 text-xs text-muted-2">
+          This event&apos;s history goes back further than we can read, so an
+          application older than that won&apos;t be listed. The applicant can still be
+          approved — the contract remembers, even when the feed doesn&apos;t.
+        </p>
+      )}
+    </Panel>
   );
 }
 

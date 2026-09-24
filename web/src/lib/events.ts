@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchActivity,
   listEventIds,
+  loadApplicants,
   loadEvent,
   loadStanding,
   type Activity,
@@ -35,6 +36,7 @@ export {
   forfeitPool,
   isKnownEvent,
   listEventIds,
+  loadApplicants,
   loadEvent,
   loadStanding,
   server,
@@ -192,6 +194,27 @@ export function useStanding(
   const load = useCallback(
     () => (address && enabled ? loadStanding(id, address) : Promise.resolve(null)),
     [id, address, enabled],
+  );
+  return usePolled(load, intervalMs);
+}
+
+/**
+ * The host's pending queue, polled while there is somebody in it to poll for.
+ *
+ * `candidates` is a fresh array on every render, so the key is what it contains
+ * rather than its identity — otherwise the callback changes every tick and the
+ * poll restarts forever.
+ */
+export function useApplicants(
+  id: string,
+  candidates: string[],
+  enabled: boolean,
+  intervalMs = 10_000,
+) {
+  const key = candidates.join(",");
+  const load = useCallback(
+    () => (enabled && key ? loadApplicants(id, key.split(",")) : Promise.resolve([])),
+    [id, key, enabled],
   );
   return usePolled(load, intervalMs);
 }
