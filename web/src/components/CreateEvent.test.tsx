@@ -257,20 +257,65 @@ describe("who can reserve a spot", () => {
     });
   });
 
-  it("never lets the threshold reach zero", async () => {
+  it("carries the threshold with a Vouch gate too", async () => {
+    chainSucceeds();
+    render(<CreateEvent />);
+    await fill(/event name/i, "Bring a newcomer");
+    await userEvent.click(screen.getByRole("radio", { name: /somebody vouches for/i }));
+    await userEvent.click(screen.getByRole("button", { name: /require one more voucher/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    // `Vouch(0)` needs nobody, so the gate the organizer picked would do nothing.
+    expect(chain.createEvent.mock.calls[0][0].admission).toEqual({
+      tag: "Vouch",
+      values: [2],
+    });
+  });
+
+  it("never lets either threshold reach zero", async () => {
     chainSucceeds();
     render(<CreateEvent />);
     await userEvent.click(screen.getByRole("radio", { name: /shown up before/i }));
-    const fewer = screen.getByRole("button", { name: /require one fewer check-in/i });
-    expect(fewer).toBeDisabled();
+    expect(screen.getByRole("button", { name: /require one fewer check-in/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("radio", { name: /somebody vouches for/i }));
+    expect(screen.getByRole("button", { name: /require one fewer voucher/i })).toBeDisabled();
   });
 
-  it("offers no mode the contract cannot enforce", async () => {
+  it("keeps the two thresholds apart when the mode changes", async () => {
+    chainSucceeds();
     render(<CreateEvent />);
-    // `Vouch` is a variant the contract knows and refuses everybody under. An
-    // organizer choosing it would be choosing an event nobody can join, and
-    // would find out from their guests.
-    expect(screen.queryByRole("radio", { name: /vouch/i })).toBeNull();
-    expect(screen.getAllByRole("radio", { name: /anyone|approve|shown up/i })).toHaveLength(3);
+    await fill(/event name/i, "Bring a newcomer");
+
+    // Three check-ins asked for, then the organizer changes their mind about the
+    // whole mode. "Three check-ins" and "three members must vouch" are different
+    // asks, and carrying the number over would set a gate nobody chose.
+    await userEvent.click(screen.getByRole("radio", { name: /shown up before/i }));
+    const more = screen.getByRole("button", { name: /require one more check-in/i });
+    await userEvent.click(more);
+    await userEvent.click(more);
+
+    await userEvent.click(screen.getByRole("radio", { name: /somebody vouches for/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    expect(chain.createEvent.mock.calls[0][0].admission).toEqual({
+      tag: "Vouch",
+      values: [1],
+    });
+  });
+
+  it("offers every mode the contract enforces, and no others", async () => {
+    render(<CreateEvent />);
+    // `Vouch` was held back while the contract refused everybody under it. It is
+    // enforced and deployed now, so all four are here — and a fifth appearing
+    // here before it works is the failure this guards against.
+    expect(
+      screen.getAllByRole("radio", { name: /anyone|approve|shown up|vouches for/i }),
+    ).toHaveLength(4);
+    // By the group's own name, so a fifth mode added without a label this test
+    // recognises still fails here rather than passing unnoticed.
+    expect(document.querySelectorAll('input[name="admission"]')).toHaveLength(4);
   });
 });

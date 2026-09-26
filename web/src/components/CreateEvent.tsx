@@ -91,15 +91,55 @@ function Stepper({
 }
 
 /**
+ * The number an admission mode is gated on, edited in place inside its option.
+ *
+ * One below is the floor for both modes that use this. `Score(0)` admits
+ * everybody and `Vouch(0)` needs nobody, so either would be a gate the organizer
+ * picked and the contract ignores — worse than not offering the choice.
+ */
+function Threshold({
+  value,
+  onChange,
+  copy,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  copy: { less: string; more: string; unit: (n: number) => string };
+}) {
+  return (
+    <span className="mt-3 flex items-center gap-2">
+      <Stepper label={copy.less} onClick={() => onChange(Math.max(1, value - 1))} disabled={value <= 1}>
+        −
+      </Stepper>
+      <span className="flex h-12 min-w-14 items-center justify-center rounded-xl border border-border-strong bg-surface px-3 font-medium tabular-nums">
+        {value}
+      </span>
+      <Stepper label={copy.more} onClick={() => onChange(value + 1)}>
+        +
+      </Stepper>
+      <span className="text-xs text-muted">{copy.unit(value)}</span>
+    </span>
+  );
+}
+
+type AdmissionMode = "Open" | "Score" | "Approval" | "Vouch";
+
+/**
  * The admission modes an organizer can actually pick.
  *
- * `Vouch` is missing on purpose. The contract knows the variant and **refuses
- * everybody** under it, because the vouching mechanism it needs is not built
- * yet — so offering it here would be a setting whose only effect is an event
- * nobody can join, discovered by the guests. A mode reaches this list when it
- * is enforced, not when it is named.
+ * All four of them now. `Vouch` was held back while the contract knew the
+ * variant and refused everybody under it — a setting whose only effect would
+ * have been an event nobody could join, discovered by the guests. It went in when
+ * the mechanism was enforced on-chain and deployed, which is the bar: a mode
+ * reaches this list when it works, not when it is named.
  */
-const ADMISSIONS: { value: "Open" | "Score" | "Approval"; label: string; hint: string }[] = [
+const ADMISSIONS: {
+  value: AdmissionMode;
+  label: string;
+  hint: string;
+  /** Set for the two modes that carry a number, and this is where it is edited. */
+  threshold?: { less: string; more: string; unit: (n: number) => string };
+}[] = [
   {
     value: "Open",
     label: "Anyone",
@@ -109,16 +149,34 @@ const ADMISSIONS: { value: "Open" | "Score" | "Approval"; label: string; hint: s
     value: "Score",
     label: "People who have shown up before",
     hint: "Their record has to carry at least this many check-ins, counted on-chain by the events they attended.",
+    threshold: {
+      less: "Require one fewer check-in",
+      more: "Require one more check-in",
+      unit: (n) => `${n === 1 ? "check-in" : "check-ins"} needed`,
+    },
   },
   {
     value: "Approval",
     label: "People I approve",
     hint: "They ask to come and you decide. Nothing is taken from them until you say yes.",
   },
+  {
+    value: "Vouch",
+    label: "People somebody vouches for",
+    hint: "A newcomer with no record gets in when a member puts theirs behind them. If the newcomer doesn't turn up, it is counted against whoever vouched, and one broken vouch closes vouching for them for good.",
+    threshold: {
+      less: "Require one fewer voucher",
+      more: "Require one more voucher",
+      unit: (n) => `${n === 1 ? "member" : "members"} must vouch`,
+    },
+  },
 ];
 
 /** The default threshold: one attended event is enough to not be a stranger. */
 const DEFAULT_MIN_SHOWS = 1;
+
+/** And one member's word is enough to let a newcomer in. */
+const DEFAULT_VOUCHES = 1;
 
 const POLICIES: { value: ForfeitPolicy["tag"]; label: string; hint: string }[] = [
   {
@@ -140,8 +198,12 @@ export function CreateEvent() {
   const [deposit, setDeposit] = useState("10");
   const [capacity, setCapacity] = useState("10");
   const [policy, setPolicy] = useState<ForfeitPolicy["tag"]>("SplitAmongAttendees");
-  const [admission, setAdmission] = useState<"Open" | "Score" | "Approval">("Open");
+  const [admission, setAdmission] = useState<AdmissionMode>("Open");
+  // Two numbers rather than one shared threshold: "three check-ins" and "three
+  // members must vouch" are different asks, and carrying one over when the mode
+  // changes would set a gate the organizer never chose.
   const [minShows, setMinShows] = useState(DEFAULT_MIN_SHOWS);
+  const [vouchesNeeded, setVouchesNeeded] = useState(DEFAULT_VOUCHES);
   const [state, setState] = useState<State>({ kind: "idle" });
 
   /**
@@ -217,7 +279,9 @@ export function CreateEvent() {
         // moment it can be chosen — and the only place it is ever set.
         admission: (admission === "Score"
           ? { tag: "Score", values: [minShows] }
-          : { tag: admission, values: undefined }) as Admission,
+          : admission === "Vouch"
+            ? { tag: "Vouch", values: [vouchesNeeded] }
+            : { tag: admission, values: undefined }) as Admission,
       });
       // Everything above was a simulation against the RPC. From here the wallet
       // opens and the ledger has to close, which is where the time goes.
@@ -367,29 +431,15 @@ export function CreateEvent() {
                   <span className="mt-0.5 block text-xs text-muted">{a.hint}</span>
 
                   {/* Inside the option it belongs to, so the number is visibly
-                      part of the choice rather than a field that outlives it. */}
-                  {a.value === "Score" && admission === "Score" && (
-                    <span className="mt-3 flex items-center gap-2">
-                      <Stepper
-                        label="Require one fewer check-in"
-                        onClick={() => setMinShows(Math.max(1, minShows - 1))}
-                        disabled={minShows <= 1}
-                      >
-                        −
-                      </Stepper>
-                      <span className="flex h-12 min-w-14 items-center justify-center rounded-xl border border-border-strong bg-surface px-3 font-medium tabular-nums">
-                        {minShows}
-                      </span>
-                      <Stepper
-                        label="Require one more check-in"
-                        onClick={() => setMinShows(minShows + 1)}
-                      >
-                        +
-                      </Stepper>
-                      <span className="text-xs text-muted">
-                        {minShows === 1 ? "check-in" : "check-ins"} needed
-                      </span>
-                    </span>
+                      part of the choice rather than a field that outlives it.
+                      Two modes carry one now, and both read their own state:
+                      switching between them must not inherit the other's gate. */}
+                  {a.threshold && admission === a.value && (
+                    <Threshold
+                      value={a.value === "Score" ? minShows : vouchesNeeded}
+                      onChange={a.value === "Score" ? setMinShows : setVouchesNeeded}
+                      copy={a.threshold}
+                    />
                   )}
                 </span>
               </label>
