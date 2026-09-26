@@ -29,9 +29,15 @@ disappears from it.
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
 | **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | shipped |
 
-Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** has one short page per
-deliverable, written against SOW §6.1 and readable without a technical
-background. The sections below are the same record with the engineering in it.
+Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** and
+**[docs/SOW2](docs/SOW2/)** have one short page per deliverable, written against
+each SOW's §6.1 and readable without a technical background. The sections below are
+the same record with the engineering in it.
+
+The second engagement's contracts were upgraded **in place**, so nothing in the
+first engagement's evidence has been invalidated: every address on those pages is
+still the address, and the fourteen scores earned then were compared before and
+after the upgrade and are unchanged.
 
 ---
 
