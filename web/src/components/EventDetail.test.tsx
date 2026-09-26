@@ -35,6 +35,7 @@ const state = vi.hoisted(() => ({
   openPicker: vi.fn(),
   standing: null as string | null,
   applicants: null as string[] | null,
+  vouches: null as number | null,
 }));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
@@ -57,6 +58,8 @@ vi.mock("@/lib/events", async (importOriginal) => ({
   }),
   useStanding: () => ({ data: state.standing, refresh: vi.fn() }),
   useApplicants: () => ({ data: state.applicants, refresh: vi.fn() }),
+  // `null` is "the count hasn't arrived", never zero — see the tests below.
+  useVouches: () => ({ data: state.vouches, refresh: vi.fn() }),
   // `null` is "we couldn't ask the factory either" — a rejection, not a no.
   // Collapsing it to `false` here is exactly the bug the component guards
   // against, so the mock must not do it.
@@ -109,6 +112,9 @@ beforeEach(() => {
   state.balance = null;
   state.status = "idle";
   state.openPicker = vi.fn();
+  state.standing = null;
+  state.applicants = null;
+  state.vouches = null;
   localStorage.clear();
 });
 
@@ -401,5 +407,115 @@ describe("the host's queue of people asking to come", () => {
 
     await screen.findByRole("button", { name: /ask to come/i });
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+  });
+});
+
+/**
+ * The vouch-gated door.
+ *
+ * Its whole point is admitting somebody the ledger has no record of, so the
+ * states worth pinning are the ones where the page could accidentally tell a
+ * newcomer they are shut out when they are not.
+ */
+describe("EventDetail — a vouch-gated event", () => {
+  const vouchEvent = (needed = 1, over: Partial<EventState> = {}): EventState =>
+    anEvent({
+      admission: { tag: "Vouch", values: [needed] } as EventState["admission"],
+      ...over,
+    });
+
+  it("never shows a newcomer a zero it has not been told", async () => {
+    // `null` is "the count hasn't arrived". Rendering it as 0/1 would tell a
+    // guest who has already been vouched for that nobody has vouched for them,
+    // and they would go and ask again.
+    state.event = vouchEvent();
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = null;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/checking/i)).toBeInTheDocument();
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
+  it("shows the count against the threshold once it knows", async () => {
+    state.event = vouchEvent(2);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = 1;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/2 members to vouch for you/i)).toBeInTheDocument();
+    expect(screen.getByText(/\/ 2/)).toBeInTheDocument();
+    // One short is a refusal, not a rounding — the same boundary the contract
+    // uses — so there must be nothing here to reserve with.
+    expect(screen.queryByRole("button", { name: /reserve/i })).toBeNull();
+  });
+
+  it("hands a vouched-in guest the ordinary reservation panel", async () => {
+    state.event = vouchEvent();
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = 1;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/a member has vouched for you/i)).toBeInTheDocument();
+    // And from here it is an ordinary deposit, described by the panel that
+    // already knows how to talk about somebody's money.
+    expect(screen.getByRole("button", { name: /reserve/i })).toBeInTheDocument();
+  });
+
+  it("offers the vouch form to any member, not only hosts", async () => {
+    state.event = vouchEvent();
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = 0;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // The contract owns the "may this wallet vouch" rule. Hiding the form from
+    // people who turn out to qualify would be us guessing at it.
+    expect(await screen.findByText(/vouch for somebody/i)).toBeInTheDocument();
+  });
+
+  it("refuses to submit a vouch for yourself before asking the chain", async () => {
+    state.event = vouchEvent();
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = 0;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    const field = await screen.findByLabelText(/their wallet address/i);
+    await userEvent.type(field, GUEST);
+
+    expect(screen.getByText(/refuses a vouch for yourself/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /put my record behind them/i })).toBeDisabled();
+  });
+
+  it("will not submit something that is not an address", async () => {
+    state.event = vouchEvent();
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    state.vouches = 0;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    const field = await screen.findByLabelText(/their wallet address/i);
+    await userEvent.type(field, "GBEDUGG");
+
+    // Cheap to check here and it saves a wallet prompt. Every other refusal is
+    // the contract's to make.
+    expect(screen.getByRole("button", { name: /put my record behind them/i })).toBeDisabled();
+  });
+
+  it("is absent once check-in has opened, like vouching itself", async () => {
+    state.event = vouchEvent(1, { phase: "CheckingIn" });
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.vouches = 0;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    await screen.findByText(/no new spots can be taken/i);
+    // The contract closes vouching with reservations, so a form that was still
+    // here would be one the chain refuses with `ReservationsClosed`.
+    expect(screen.queryByText(/vouch for somebody/i)).toBeNull();
   });
 });

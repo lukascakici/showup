@@ -175,6 +175,19 @@ export async function loadApplicants(id: string, candidates: string[]): Promise<
   return settled.filter((a): a is string => a !== null);
 }
 
+/**
+ * How many members have put their record behind `guest` at this event.
+ *
+ * Per event, not per person: a vouch is a decision about one door, and somebody
+ * vouched into a coffee morning has not been vouched into anything else. The
+ * count is the contract's own, so it is the number `rsvp` will compare against
+ * the threshold rather than the number a feed happens to have seen.
+ */
+export async function loadVouches(id: string, guest: string): Promise<number> {
+  const tx = await eventClient(id).get_vouches({ guest });
+  return Number(tx.result);
+}
+
 export function spotsLeft(e: EventState): number {
   return e.capacity - e.reserved.length;
 }

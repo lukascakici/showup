@@ -11,6 +11,7 @@ import {
   Flag,
   Globe,
   Hand,
+  HeartHandshake,
   Hourglass,
   Info,
   Link2,
@@ -41,6 +42,7 @@ import {
   useApplicants,
   useEvent,
   useStanding,
+  useVouches,
   type EventState,
 } from "@/lib/events";
 import {
@@ -51,6 +53,7 @@ import {
   type Funding,
 } from "@/lib/funding";
 import { shortAddr } from "@/lib/format";
+import { isAccountAddress } from "@/lib/record";
 import { checkInUrl, inviteUrl } from "@/lib/links";
 import {
   Button,
@@ -106,6 +109,14 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     candidates,
     !!address && event?.admission.tag === "Approval" && event.hosts.includes(address),
   );
+  // Only on a vouch-gated event, and only for the wallet reading the page: this
+  // is how many members have backed *them*, which is the one number between them
+  // and a reservation.
+  const { data: vouches, refresh: refreshVouches } = useVouches(
+    id,
+    address,
+    event?.admission.tag === "Vouch",
+  );
   // null while unasked or unanswerable; only `false` is a confirmed "no such event".
   const [known, setKnown] = useState<boolean | null>(null);
   const [action, setAction] = useState<Action>({ kind: "idle" });
@@ -154,13 +165,22 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
       refreshBalance(),
       refreshStanding(),
       refreshApplicants(),
+      refreshVouches(),
     ]);
     // Something just happened on chain, so the archive is one row behind. Not
     // awaited: the sync re-reads everything from the contract itself, so it can
     // arrive whenever it arrives.
     void requestSync(id);
     setAction({ kind: "idle" });
-  }, [id, refresh, refreshActivity, refreshBalance, refreshStanding, refreshApplicants]);
+  }, [
+    id,
+    refresh,
+    refreshActivity,
+    refreshBalance,
+    refreshStanding,
+    refreshApplicants,
+    refreshVouches,
+  ]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setAction({ kind: "busy" });
@@ -228,6 +248,11 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   // chain would have accepted.
   const isHost = !!address && event.hosts.includes(address);
   const byApproval = event.admission.tag === "Approval";
+  const byVouch = event.admission.tag === "Vouch";
+  // `values` is a union across the variants, so it is read the way the sync route
+  // reads Score's: optionally, with a floor. A threshold that arrived missing must
+  // not become 0, which would be a gate that admits everybody.
+  const vouchesNeeded = byVouch ? Number(event.admission.values?.[0] ?? 1) : 0;
   const mine = attendanceOf(event, address);
   const left = spotsLeft(event);
   const refund = event.deposit + event.feeAllowance;
@@ -246,6 +271,18 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const applyToCome = () =>
     run(async () => {
       const tx = await eventClient(id, signer).apply({ guest: signer.publicKey! });
+      await tx.signAndSend();
+    });
+
+  // The signer is the voucher, always. `vouch` takes both addresses, and the
+  // contract demands the voucher's own signature — so there is no arrangement in
+  // which somebody's record gets spent by anyone but them.
+  const vouchFor = (guest: string) =>
+    run(async () => {
+      const tx = await eventClient(id, signer).vouch({
+        voucher: signer.publicKey!,
+        guest,
+      });
       await tx.signAndSend();
     });
 
@@ -432,6 +469,19 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
                 onApply={applyToCome}
                 onReserve={rsvp}
               />
+            ) : reserving && byVouch && mine === "none" ? (
+              <Vouched
+                vouches={vouches}
+                needed={vouchesNeeded}
+                address={address}
+                deposit={event.deposit}
+                refund={refund}
+                feeAllowance={event.feeAllowance}
+                funding={funding}
+                left={left}
+                busy={busy}
+                onReserve={rsvp}
+              />
             ) : reserving && mine === "none" ? (
               <Offer
                 deposit={event.deposit}
@@ -471,6 +521,22 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         {action.kind === "error" && (
           <div className="mt-4">
             <ErrorNote>{action.message}</ErrorNote>
+          </div>
+        )}
+
+        {/* Not gated on being a host. Vouching is the one thing on this page any
+            member can do for somebody else, and the contract decides whether
+            their record is good enough — so hiding the form from people who turn
+            out to qualify would be us guessing at it. */}
+        {reserving && byVouch && (
+          <div className="mt-8">
+            <VouchFor
+              address={address}
+              needed={vouchesNeeded}
+              busy={busy}
+              onVouch={vouchFor}
+              onConnect={openPicker}
+            />
           </div>
         )}
 
@@ -737,6 +803,210 @@ function Application({
         Ask to come
       </Button>
     </>
+  );
+}
+
+/**
+ * A guest at a vouch-gated door: how many members have backed them, and what
+ * happens when enough have.
+ *
+ * `vouches` is `null` while the count has not arrived, and that is rendered as
+ * "checking" rather than as zero. A guest who has already been vouched for,
+ * shown a screen that says nobody has vouched for them, would go and ask again.
+ */
+function Vouched({
+  vouches,
+  needed,
+  address,
+  deposit,
+  refund,
+  feeAllowance,
+  funding,
+  left,
+  busy,
+  onReserve,
+}: {
+  vouches: number | null;
+  needed: number;
+  address: string | null;
+  deposit: bigint;
+  refund: bigint;
+  feeAllowance: bigint;
+  funding: ReturnType<typeof fundingFor>;
+  left: number;
+  busy: boolean;
+  onReserve: () => void;
+}) {
+  if (vouches !== null && vouches >= needed) {
+    // Past the gate, this is an ordinary reservation, and `Offer` is the panel
+    // that already knows how to talk about somebody's money.
+    return (
+      <>
+        <p className="mb-4 flex items-center gap-2 text-sm text-success">
+          <CheckCircle2 className="size-4 shrink-0" />
+          {vouches === 1
+            ? "A member has vouched for you."
+            : `${vouches} members have vouched for you.`}{" "}
+          Your spot isn&apos;t held until you reserve it.
+        </p>
+        <Offer
+          deposit={deposit}
+          refund={refund}
+          feeAllowance={feeAllowance}
+          funding={funding}
+          left={left}
+          busy={busy}
+          onReserve={onReserve}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h3 className="font-display text-lg font-bold tracking-tight">
+        You need {needed === 1 ? "a member to vouch for you" : `${needed} members to vouch for you`}
+      </h3>
+      <p className="mt-1 text-sm text-muted">
+        This event is open to people nobody has a record for, on one condition:
+        somebody who does have one puts it behind you.{" "}
+        <strong className="font-medium text-foreground-2">
+          It costs them nothing up front
+        </strong>{" "}
+        and costs you nothing at all. If you reserve and then don&apos;t turn up, it
+        is counted against them, and one broken vouch closes vouching for them for
+        good.
+      </p>
+
+      <div className="mt-4 rounded-xl border border-border-strong bg-surface px-4 py-3">
+        <div className="text-xs text-muted-2">Vouches so far</div>
+        <div className="mt-1 font-mono text-2xl leading-none">
+          {vouches === null ? (
+            <span className="text-muted-2">checking…</span>
+          ) : (
+            <>
+              {vouches}
+              <span className="text-muted-2"> / {needed}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {address && (
+        <div className="mt-4">
+          {/* The member who vouches needs this exact string, and a truncated one
+              is worse than none: `vouch` takes the address, not a name. */}
+          <CopyLink url={address} label="Send this to somebody who can vouch for you" />
+        </div>
+      )}
+
+      <p className="mt-4 text-xs leading-relaxed text-muted-2">
+        A member vouches from this page, with your address. Nothing is taken from
+        your wallet until you reserve a spot yourself, and the {fromStroops(deposit)}{" "}
+        XLM deposit comes back to you when you check in.
+      </p>
+    </>
+  );
+}
+
+/**
+ * The form a member vouches from.
+ *
+ * Shown to every connected wallet, not only ones we have decided qualify. The
+ * contract owns that rule — at least one show and no broken vouches — and it is
+ * the one that will answer, so the honest thing is to let it. What this does
+ * instead is name the refusals in advance, so a member who is turned down reads
+ * an explanation rather than an error code.
+ *
+ * Validated before submission for exactly one thing: whether the input is an
+ * address at all. That check costs nothing and saves a wallet prompt; every other
+ * refusal is the chain's to make.
+ */
+function VouchFor({
+  address,
+  needed,
+  busy,
+  onVouch,
+  onConnect,
+}: {
+  address: string | null;
+  needed: number;
+  busy: boolean;
+  onVouch: (guest: string) => void;
+  onConnect: () => void;
+}) {
+  const [guest, setGuest] = useState("");
+  const trimmed = guest.trim();
+  const valid = isAccountAddress(trimmed);
+  const itsYou = !!address && trimmed === address;
+
+  return (
+    <Panel title="Vouch for somebody" meta="ANY MEMBER">
+      <p className="text-sm leading-relaxed text-muted">
+        Somebody with no record of their own can reserve a spot here if{" "}
+        {needed === 1 ? "a member vouches" : `${needed} members vouch`} for them. If
+        they don&apos;t turn up it is counted against whoever vouched, on its own
+        counter — your own attendance is never rewritten, and one broken vouch closes
+        vouching for you permanently.
+      </p>
+
+      {!address ? (
+        <Button variant="secondary" fullWidth className="mt-4" onClick={onConnect}>
+          <Wallet className="size-4" />
+          Connect a wallet to vouch
+        </Button>
+      ) : (
+        <>
+          <div className="mt-4">
+            {/* `Field`, not a bare Label: the input is the first labelable control
+                inside it, so the words are clickable and the label is associated
+                without an id to keep in sync. */}
+            <Field
+              label="Their wallet address"
+              hint={
+                itsYou
+                  ? "That's your own address. The contract refuses a vouch for yourself, which is what stops a second wallet waving itself through."
+                  : trimmed.length > 0 && !valid
+                    ? "A Stellar account address is 56 characters and starts with G."
+                    : "Ask them for it from their wallet, in full."
+              }
+            >
+              <Input
+                value={guest}
+                onChange={(e) => setGuest(e.target.value)}
+                placeholder="G…"
+                spellCheck={false}
+                autoComplete="off"
+                className="font-mono"
+              />
+            </Field>
+          </div>
+
+          <Button
+            fullWidth
+            className="mt-4"
+            disabled={!valid || itsYou}
+            loading={busy}
+            onClick={() => onVouch(trimmed)}
+          >
+            <HeartHandshake className="size-4" />
+            Put my record behind them
+          </Button>
+
+          <p className="mt-3 text-xs leading-relaxed text-muted-2">
+            This moves no money and takes no spot: it is permission to reserve, not
+            a reservation. They still lock their own deposit.{" "}
+            <Link
+              href={`/u/${address}`}
+              className="underline decoration-border-hover underline-offset-2"
+            >
+              Check your own record
+            </Link>{" "}
+            if you want to know whether you qualify before signing.
+          </p>
+        </>
+      )}
+    </Panel>
   );
 }
 

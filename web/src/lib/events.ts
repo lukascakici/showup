@@ -7,6 +7,7 @@ import {
   loadApplicants,
   loadEvent,
   loadStanding,
+  loadVouches,
   type Activity,
   type ActivityFeedResult,
   type EventState,
@@ -193,6 +194,26 @@ export function useStanding(
 ) {
   const load = useCallback(
     () => (address && enabled ? loadStanding(id, address) : Promise.resolve(null)),
+    [id, address, enabled],
+  );
+  return usePolled(load, intervalMs);
+}
+
+/**
+ * How many vouches this wallet has at this event, polled while it needs them.
+ *
+ * `null` until the first answer, and `null` again for a wallet that isn't
+ * connected — never 0, because "nobody has vouched for you" and "we haven't
+ * asked yet" would otherwise both render as a gate the guest cannot pass.
+ */
+export function useVouches(
+  id: string,
+  address: string | null,
+  enabled: boolean,
+  intervalMs = 5_000,
+) {
+  const load = useCallback(
+    () => (address && enabled ? loadVouches(id, address) : Promise.resolve(null)),
     [id, address, enabled],
   );
   return usePolled(load, intervalMs);
