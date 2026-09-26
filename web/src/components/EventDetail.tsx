@@ -474,6 +474,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
                   deposit={event.deposit}
                   refund={refund}
                   feeAllowance={event.feeAllowance}
+                  admission={event.admission}
                   onConnect={openPicker}
                   connecting={status === "connecting"}
                 />
@@ -888,6 +889,35 @@ function Application({
       </Button>
     </>
   );
+}
+
+/**
+ * The step that comes before reserving, when this event has a door on it.
+ *
+ * Without this, somebody arriving at an approval- or vouch-gated event read a
+ * three-step explanation that began "Reserve" — a flow that does not apply to
+ * them, and whose first step the contract will refuse. The home page card says the
+ * event is gated; the event's own page did not, until they connected a wallet.
+ *
+ * `null` for an open event, which has no step to add and should not gain a
+ * sentence saying so.
+ */
+function admissionStep(admission: EventState["admission"]): string | null {
+  const needed = Number(admission.values?.[0] ?? 1);
+  if (admission.tag === "Score") {
+    return needed === 1
+      ? "Have shown up before. This event admits people whose on-chain record carries at least one check-in, counted by the events they attended."
+      : `Have shown up ${needed} times. This event admits people whose on-chain record carries at least ${needed} check-ins, counted by the events they attended.`;
+  }
+  if (admission.tag === "Approval") {
+    return "Ask to come. The organizer decides, and nothing is taken from you until they say yes.";
+  }
+  if (admission.tag === "Vouch") {
+    return needed === 1
+      ? "Get a vouch. A member puts their own record behind you, which is what admits somebody the ledger has never seen."
+      : `Get ${needed} vouches. That many members put their own record behind you, which is what admits somebody the ledger has never seen.`;
+  }
+  return null;
 }
 
 /**
@@ -1332,16 +1362,20 @@ function ColdStart({
   deposit,
   refund,
   feeAllowance,
+  admission,
   onConnect,
   connecting,
 }: {
   deposit: bigint;
   refund: bigint;
   feeAllowance: bigint;
+  admission: EventState["admission"];
   onConnect: () => void;
   connecting: boolean;
 }) {
+  const gate = admissionStep(admission);
   const steps = [
+    ...(gate ? [gate] : []),
     `Reserve. ${fromStroops(deposit)} XLM leaves your wallet and is locked in this event's own contract. Nobody can take it — not the organizer, not us.`,
     "Show up. The organizer opens check-in and shares a code or a link at the event.",
     `Check in. You get ${fromStroops(refund)} XLM back: your deposit plus ${fromStroops(feeAllowance)} XLM the organizer put up so attending costs you nothing.`,

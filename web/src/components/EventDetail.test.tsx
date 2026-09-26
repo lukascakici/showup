@@ -699,3 +699,31 @@ describe("EventDetail — the deposit explained before it is asked for", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("EventDetail — the gate is legible before you connect", () => {
+  it("names the step a gated event adds, to somebody with no wallet", async () => {
+    // The home card says an event is gated; its own page did not, until you
+    // connected. So an approval-gated event explained a three-step flow beginning
+    // "Reserve" — the one step the contract would refuse first.
+    state.event = anEvent({
+      admission: { tag: "Approval", values: undefined } as EventState["admission"],
+    });
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(await screen.findByText(/ask to come.*organizer decides/i)).toBeInTheDocument();
+  });
+
+  it("counts the vouches the event actually asks for", async () => {
+    state.event = anEvent({
+      admission: { tag: "Vouch", values: [2] } as EventState["admission"],
+    });
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(await screen.findByText(/get 2 vouches/i)).toBeInTheDocument();
+  });
+
+  it("adds nothing to an open event, which has no door to describe", async () => {
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    await screen.findByText(/how this works/i);
+    expect(screen.queryByText(/ask to come|get a vouch|have shown up before/i)).toBeNull();
+  });
+});
