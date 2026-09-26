@@ -102,5 +102,12 @@ jobs:
       - name: Test
         run: npm run test:run
 
+      # Three measurable mobile faults, checked every push rather than the once
+      # somebody remembers to look at a phone. It needs no browser and no install,
+      # which is the whole reason it can run here at all — see the script for what
+      # it deliberately cannot see.
+      - name: Mobile audit
+        run: node ../scripts/mobile-audit.mjs
+
       - name: Build
         run: npm run build
