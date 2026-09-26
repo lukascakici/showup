@@ -13,9 +13,92 @@ people who have a spot.
 
 Everything below is on Stellar **Testnet**. No real money is involved.
 
-**Every screen described here is live at [showup.click](https://showup.click).** The
-screenshots, the onboarding recording and the demo video are filmed on the event run
-itself, so each section says where its recording comes from.
+**Every screen below is live at [showup.click](https://showup.click)**, and every
+image is a capture of it taken by `scripts/capture-screens.mjs` — the same script,
+the same widths, the same waits, so a "before" and an "after" differ only by the
+product. The demo video is filmed on the event run itself.
+
+---
+
+## Before and after
+
+The first engagement's screens, and the same screens now.
+
+### The home page
+
+| Before | After |
+| :-- | :-- |
+| ![The home page in the first engagement](../screenshots/home.png) | ![The home page now](../screenshots/sow2/home-desktop.png) |
+
+The list is the ecosystem's real calendar, grouped by day, and **every card says
+whether you can get in at all** — `Regulars only`, `By approval`, `Needs a vouch`.
+That is the single most important thing about an event now, and before this it was
+not on the card.
+
+### Connecting a wallet
+
+| Before | After |
+| :-- | :-- |
+| ![The wallet picker in the first engagement](../screenshots/wallets.png) | ![The wallet picker now](../screenshots/sow2/wallet-picker-desktop.png) |
+| ![Connected, first engagement](../screenshots/connected.png) | ![Connected now](../screenshots/sow2/connected-home-desktop.png) |
+
+### The wallet menu
+
+| Before | After |
+| :-- | :-- |
+| ![The balance, first engagement](../screenshots/balance.png) | ![The wallet menu now](../screenshots/sow2/wallet-menu-desktop.png) |
+
+It gained one row: a link to **your own show-up record**. The ledger had been
+readable from the chain since the first engagement and readable by a person since
+this one.
+
+---
+
+## The screens that have no "before"
+
+These did not exist in the first engagement, so there is nothing to pair them with.
+They are the engagement.
+
+### A gate that explains itself
+
+![A vouch-gated event, seen by somebody who needs one](../screenshots/sow2/event-vouch-connected-desktop.png)
+
+How many members have vouched for you, out of how many the event asks for, and a
+form for any member to vouch from — **before any button asks for a signature.**
+
+![A score-gated event](../screenshots/sow2/event-score-connected-desktop.png)
+
+Your own check-ins against the threshold, and the sentence that answers the real
+question: a refusal costs nothing, because the reservation is refused rather than
+taken and forfeited.
+
+### The organizer's own view
+
+![An approval-gated event as its organizer](../screenshots/sow2/event-approval-host-desktop.png)
+
+One screen carrying four things built this engagement: the **queue of people asking
+to come** with both answers, the **conversation** for the people holding a spot,
+**who can run this event** with co-hosts addable and removable, and the invite link
+with its QR.
+
+### A wallet's record, openable by anyone
+
+| It has one | It has none |
+| :-- | :-- |
+| ![A record with a broken vouch](../screenshots/sow2/record-desktop.png) | ![A wallet the ledger has never seen](../screenshots/sow2/record-empty-desktop.png) |
+
+The right-hand one is the careful case: **"no record" and "zero shows" are different
+claims**, and the page makes the one that is true.
+
+### The deposit, explained before it is asked for
+
+![First-run onboarding](../screenshots/sow2/first-run-desktop.png)
+
+### Creating an event
+
+![The create form](../screenshots/sow2/create-form-desktop.png)
+
+Four admission modes, and only the chosen mode's number appears.
 
 ---
 
@@ -102,7 +185,7 @@ about their money.
 3. **A wallet holds it.** Last, because it is the step and not the reason.
 
 Once per browser, dismissable from anywhere, and it still appears rather than
-crashing in a browser that refuses storage.
+crashing in a browser that refuses storage. Pictured above.
 
 The screen recording §6.1 asks for is filmed on the run, against a real event.
 
@@ -175,6 +258,43 @@ to leave a 320px screen. All three were real bugs here once.
 It is explicit about what it cannot see — overlapping text, a heading that wraps
 badly at 280px, a sheet that opens off-screen — because those still need somebody
 looking at a phone.
+
+---
+
+## Every screen, both widths
+
+20 screens, captured at **1280px and 390px** by
+`node scripts/capture-screens.mjs` — one run, one set, reproducible. The narrative
+above embeds the ones that carry the argument; this is the complete set §6.1 asks
+for.
+
+| Screen | | |
+| :-- | :-- | :-- |
+| Home, wallet connected | [desktop](../screenshots/sow2/connected-home-desktop.png) | [phone](../screenshots/sow2/connected-home-phone.png) |
+| Create, before a wallet is connected | [desktop](../screenshots/sow2/create-connect-desktop.png) | [phone](../screenshots/sow2/create-connect-phone.png) |
+| Create, all four admission modes | [desktop](../screenshots/sow2/create-form-desktop.png) | [phone](../screenshots/sow2/create-form-phone.png) |
+| An approval-gated event, no wallet | [desktop](../screenshots/sow2/event-approval-desktop.png) | [phone](../screenshots/sow2/event-approval-phone.png) |
+| An approval-gated event, as its organizer | [desktop](../screenshots/sow2/event-approval-host-desktop.png) | [phone](../screenshots/sow2/event-approval-host-phone.png) |
+| An address the factory never deployed to | [desktop](../screenshots/sow2/event-missing-desktop.png) | [phone](../screenshots/sow2/event-missing-phone.png) |
+| An open event, no wallet | [desktop](../screenshots/sow2/event-open-desktop.png) | [phone](../screenshots/sow2/event-open-phone.png) |
+| An open event, connected | [desktop](../screenshots/sow2/event-open-connected-desktop.png) | [phone](../screenshots/sow2/event-open-connected-phone.png) |
+| A score-gated event, no wallet | [desktop](../screenshots/sow2/event-score-desktop.png) | [phone](../screenshots/sow2/event-score-phone.png) |
+| A score-gated event: your record against the threshold | [desktop](../screenshots/sow2/event-score-connected-desktop.png) | [phone](../screenshots/sow2/event-score-connected-phone.png) |
+| A vouch-gated event, no wallet | [desktop](../screenshots/sow2/event-vouch-desktop.png) | [phone](../screenshots/sow2/event-vouch-phone.png) |
+| A vouch-gated event: your vouches, and the form to give one | [desktop](../screenshots/sow2/event-vouch-connected-desktop.png) | [phone](../screenshots/sow2/event-vouch-connected-phone.png) |
+| The deposit explained, before any signature | [desktop](../screenshots/sow2/first-run-desktop.png) | [phone](../screenshots/sow2/first-run-phone.png) |
+| Home, browsing events | [desktop](../screenshots/sow2/home-desktop.png) | [phone](../screenshots/sow2/home-phone.png) |
+| Home, the settled events | [desktop](../screenshots/sow2/home-past-desktop.png) | [phone](../screenshots/sow2/home-past-phone.png) |
+| A wallet's show-up record | [desktop](../screenshots/sow2/record-desktop.png) | [phone](../screenshots/sow2/record-phone.png) |
+| Something that is not a wallet address | [desktop](../screenshots/sow2/record-bad-address-desktop.png) | [phone](../screenshots/sow2/record-bad-address-phone.png) |
+| A wallet the ledger has never seen | [desktop](../screenshots/sow2/record-empty-desktop.png) | [phone](../screenshots/sow2/record-empty-phone.png) |
+| The wallet menu: balance, faucet, your record | [desktop](../screenshots/sow2/wallet-menu-desktop.png) | [phone](../screenshots/sow2/wallet-menu-phone.png) |
+| The wallet-selection dialog | [desktop](../screenshots/sow2/wallet-picker-desktop.png) | [phone](../screenshots/sow2/wallet-picker-phone.png) |
+
+The screens that need a wallet — a balance, the faucet, a gate telling you whether
+*you* qualify, an organizer's own panel — are captured with a wallet connected. The
+rest render without one and are captured that way, so the set says which is which
+rather than implying every visitor sees the same page.
 
 ---
 
