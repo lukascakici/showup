@@ -4,6 +4,8 @@ import { formatMoment, shortAddr } from "@/lib/format";
 import { Card, Chip, Panel, SectionLabel, Stat } from "@/components/ui";
 import { CopyLink } from "@/components/CopyLink";
 import { RefreshRecord } from "@/components/RefreshRecord";
+import { NameYourself } from "@/components/NameYourself";
+import { Who } from "@/components/Who";
 import { canVouch, hasRecord, loadRecord, reservations, turnout, type Record } from "@/lib/record";
 import { toRecord } from "@/lib/record-index";
 import { readIndexedRecordAdmin } from "@/lib/record-index.server";
@@ -54,8 +56,10 @@ export async function RecordBody({ address }: { address: string }) {
   return (
     <div className="mt-8">
       <SectionLabel>SHOW-UP RECORD</SectionLabel>
+      {/* The name if this wallet has one, the address if not. `Who` renders the
+          address first and swaps, so an unnamed wallet never shows a gap. */}
       <h1 className="mt-2 break-all font-display text-3xl tracking-tight text-foreground sm:text-4xl">
-        {shortAddr(address, 6, 6)}
+        <Who address={address} head={6} tail={6} />
       </h1>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -171,6 +175,8 @@ export async function RecordBody({ address }: { address: string }) {
           Read from the chain {formatMoment(readAt)}. Refreshing.
         </p>
       )}
+
+      <NameYourself address={address} />
 
       <RefreshRecord address={address} />
     </div>

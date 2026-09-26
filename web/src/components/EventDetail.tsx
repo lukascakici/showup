@@ -72,6 +72,7 @@ import {
 } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
+import { Who } from "./Who";
 import { EventPoster } from "./EventPoster";
 import { FaucetButton } from "./Faucet";
 import { AvatarStack, Identicon } from "./Identicon";
@@ -396,7 +397,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             href={`/u/${event.organizer}`}
             className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
           >
-            {shortAddr(event.organizer, 6, 6)}
+            <Who address={event.organizer} head={6} tail={6} />
           </Link>
           {isHost && <Chip tone="accent">You</Chip>}
         </div>
@@ -1244,7 +1245,7 @@ function Applicants({
                   href={`/u/${applicant}`}
                   className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
                 >
-                  {shortAddr(applicant, 6, 6)}
+                  <Who address={applicant} head={6} tail={6} />
                 </Link>
                 <span className="flex shrink-0 gap-2">
                   <Button
@@ -1664,7 +1665,7 @@ function Hosts({
               href={`/u/${host}`}
               className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
             >
-              {shortAddr(host, 6, 6)}
+              <Who address={host} head={6} tail={6} />
             </Link>
             {host === creator ? (
               <Chip>Creator</Chip>
