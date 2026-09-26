@@ -509,6 +509,28 @@ Both succeed and publish `RecordRenewed`. What they do *not* do is the point:
   make when a record is *near* archival, not a lever that does something every
   time it is pulled.
 
+**There is deliberately no button for this in the app**, and the reason is worth
+recording because it is the same fact from the other side. `renew` takes no auth
+and, above the threshold, writes nothing — so a simulated `renew` has zero
+authorization entries and an empty read-write footprint, and that is exactly how
+the Stellar SDK defines a *read call*:
+
+```js
+get isReadCall() {
+  const authsCount = this.simulationData.result.auth.length;
+  const writeLength = this.simulationData.transactionData.resources().footprint().readWrite().length;
+  return authsCount === 0 && writeLength === 0;
+}
+```
+
+`signAndSend()` refuses a read call unless it is forced. So a button would have sat
+there doing nothing useful and reporting *"This is a read call. It requires no
+signature or sending"* to anyone who pressed it. The transactions above were made
+with the CLI's `--send=yes`, which is that same override, and they are the right
+place for this capability to be demonstrated: it is a property of the contract,
+proven on the chain, not a control a guest needs. Restoring a record that has
+actually archived is a one-line CLI call anybody can run.
+
 The durability policy, in one paragraph for a non-technical reader: **Soroban rents
 state.** An entry nobody touches for long enough is archived — not deleted, and
 never lost, but no longer readable until somebody pays to restore it. Every write

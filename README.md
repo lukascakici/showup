@@ -260,6 +260,16 @@ as the money it describes, so the score and the settlement can never disagree.
 - **`record_organised`** — the organizer's own line, written at settlement rather
   than at creation, because an event that was deployed and abandoned is not an
   event anybody ran.
+- **Every decision reads the contract; every *display* reads a mirror of it.** A
+  record is backward-looking, and `get_record` is one RPC round trip per wallet on
+  pages that poll and want a dozen at once. So `/api/records/sync` reads records off
+  the chain and writes them to Firestore, and the pages that *show* a record read
+  from there with the time it was read printed underneath. Nothing that decides
+  anything goes through the mirror: admission, vouching and settlement all read the
+  contract at the moment they act. The mirror cannot become an editable second
+  version of a record either — the route accepts addresses and nothing else, there
+  is no code path from a request body to a stored number, and `firestore.rules`
+  denies client writes outright.
 - **`renew(member)` takes no auth and no admin.** Soroban rents state, and every
   write already extends what it wrote — which quietly meant a record survived only
   while its owner kept attending things, expiring precisely for the person who had
