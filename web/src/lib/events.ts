@@ -20,6 +20,7 @@ import {
   type IndexedEvent,
 } from "./event-index";
 import { hiddenIds } from "./listing";
+import { loadRecord } from "./record";
 import { usePolled } from "./polled";
 import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
 
@@ -195,6 +196,26 @@ export function useStanding(
   const load = useCallback(
     () => (address && enabled ? loadStanding(id, address) : Promise.resolve(null)),
     [id, address, enabled],
+  );
+  return usePolled(load, intervalMs);
+}
+
+/**
+ * This wallet's whole record on the show-up ledger.
+ *
+ * Not per event: the ledger is one address for all of them, which is the point of
+ * a score gate. `null` until it answers, and `null` again if it cannot — a wallet
+ * shown an empty record it never earned would be told it fails a gate it may well
+ * pass.
+ */
+export function useRecord(
+  address: string | null,
+  enabled: boolean,
+  intervalMs = 15_000,
+) {
+  const load = useCallback(
+    () => (address && enabled ? loadRecord(address) : Promise.resolve(null)),
+    [address, enabled],
   );
   return usePolled(load, intervalMs);
 }

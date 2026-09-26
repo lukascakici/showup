@@ -36,6 +36,7 @@ const state = vi.hoisted(() => ({
   standing: null as string | null,
   applicants: null as string[] | null,
   vouches: null as number | null,
+  record: null as unknown,
 }));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
@@ -60,6 +61,7 @@ vi.mock("@/lib/events", async (importOriginal) => ({
   useApplicants: () => ({ data: state.applicants, refresh: vi.fn() }),
   // `null` is "the count hasn't arrived", never zero — see the tests below.
   useVouches: () => ({ data: state.vouches, refresh: vi.fn() }),
+  useRecord: () => ({ data: state.record, refresh: vi.fn() }),
   // `null` is "we couldn't ask the factory either" — a rejection, not a no.
   // Collapsing it to `false` here is exactly the bug the component guards
   // against, so the mock must not do it.
@@ -115,6 +117,7 @@ beforeEach(() => {
   state.standing = null;
   state.applicants = null;
   state.vouches = null;
+  state.record = null;
   localStorage.clear();
 });
 
@@ -517,5 +520,87 @@ describe("EventDetail — a vouch-gated event", () => {
     // The contract closes vouching with reservations, so a form that was still
     // here would be one the chain refuses with `ReservationsClosed`.
     expect(screen.queryByText(/vouch for somebody/i)).toBeNull();
+  });
+});
+
+/**
+ * The score-gated door.
+ *
+ * This mode was enforced on-chain and unexplained in the interface for a while,
+ * so a guest below the threshold met it as a wallet prompt followed by a refusal.
+ * These pin the numbers being in front of the button instead.
+ */
+describe("EventDetail — a score-gated event", () => {
+  const scoreEvent = (needed = 1, over: Partial<EventState> = {}): EventState =>
+    anEvent({
+      admission: { tag: "Score", values: [needed] } as EventState["admission"],
+      ...over,
+    });
+
+  const aRecord = (shows: number) => ({
+    shows,
+    noShows: 0,
+    vouchesGiven: 0,
+    vouchesBroken: 0,
+    eventsOrganised: 0,
+  });
+
+  it("shows the threshold and the guest's own count before any button", async () => {
+    state.event = scoreEvent(3);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.record = aRecord(1);
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/asks for 3 check-ins/i)).toBeInTheDocument();
+    expect(screen.getByText(/\/ 3/)).toBeInTheDocument();
+    // The whole point: no signature is offered to somebody the contract will
+    // refuse. `ScoreTooLow` after a wallet prompt is what this replaces.
+    expect(screen.queryByRole("button", { name: /reserve/i })).toBeNull();
+  });
+
+  it("says a refusal costs nothing, because that is the question being asked", async () => {
+    state.event = scoreEvent(2);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.record = aRecord(0);
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/refused rather than taken and forfeited/i)).toBeInTheDocument();
+  });
+
+  it("never shows a record of nothing it has not been told", async () => {
+    // `null` is "the read is still out". Rendering it as 0 check-ins would tell a
+    // regular they fail a gate they pass.
+    state.event = scoreEvent(1);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.record = null;
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByText(/checking/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\/ 1/)).toBeNull();
+  });
+
+  it("hands a qualifying guest the ordinary reservation panel", async () => {
+    state.event = scoreEvent(2);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.record = aRecord(2);
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // Exactly at the threshold is admitted — the contract's boundary is `<`.
+    expect(await screen.findByText(/this event will admit you/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reserve/i })).toBeInTheDocument();
+  });
+
+  it("points a newcomer at the one door that has no gate", async () => {
+    state.event = scoreEvent(1);
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.record = aRecord(0);
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    expect(await screen.findByRole("link", { name: /find an open event/i })).toBeInTheDocument();
   });
 });

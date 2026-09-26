@@ -41,6 +41,7 @@ import {
   useActivity,
   useApplicants,
   useEvent,
+  useRecord,
   useStanding,
   useVouches,
   type EventState,
@@ -53,10 +54,11 @@ import {
   type Funding,
 } from "@/lib/funding";
 import { shortAddr } from "@/lib/format";
-import { isAccountAddress } from "@/lib/record";
+import { isAccountAddress, type Record as RecordType } from "@/lib/record";
 import { checkInUrl, inviteUrl } from "@/lib/links";
 import {
   Button,
+  ButtonLink,
   Card,
   Chip,
   ErrorNote,
@@ -117,6 +119,14 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     address,
     event?.admission.tag === "Vouch",
   );
+  // Only for a score-gated event. Without this the guest's first news of the gate
+  // was a wallet prompt followed by `ScoreTooLow` — the contract refusing them
+  // after they had signed, which is the one thing the vouch panel was built to
+  // avoid and this mode had been living with.
+  const { data: record, refresh: refreshRecord } = useRecord(
+    address,
+    event?.admission.tag === "Score",
+  );
   // null while unasked or unanswerable; only `false` is a confirmed "no such event".
   const [known, setKnown] = useState<boolean | null>(null);
   const [action, setAction] = useState<Action>({ kind: "idle" });
@@ -166,6 +176,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
       refreshStanding(),
       refreshApplicants(),
       refreshVouches(),
+      refreshRecord(),
     ]);
     // Something just happened on chain, so the archive is one row behind. Not
     // awaited: the sync re-reads everything from the contract itself, so it can
@@ -180,6 +191,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     refreshStanding,
     refreshApplicants,
     refreshVouches,
+    refreshRecord,
   ]);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -249,6 +261,10 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const isHost = !!address && event.hosts.includes(address);
   const byApproval = event.admission.tag === "Approval";
   const byVouch = event.admission.tag === "Vouch";
+  const byScore = event.admission.tag === "Score";
+  // Same optional read as the vouch threshold, and the same reason: a missing
+  // number must not become 0, which is a gate that admits everybody.
+  const showsNeeded = byScore ? Number(event.admission.values?.[0] ?? 1) : 0;
   // `values` is a union across the variants, so it is read the way the sync route
   // reads Score's: optionally, with a floor. A threshold that arrived missing must
   // not become 0, which would be a gate that admits everybody.
@@ -467,6 +483,18 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
                 left={left}
                 busy={busy}
                 onApply={applyToCome}
+                onReserve={rsvp}
+              />
+            ) : reserving && byScore && mine === "none" ? (
+              <ScoreGate
+                record={record}
+                needed={showsNeeded}
+                deposit={event.deposit}
+                refund={refund}
+                feeAllowance={event.feeAllowance}
+                funding={funding}
+                left={left}
+                busy={busy}
                 onReserve={rsvp}
               />
             ) : reserving && byVouch && mine === "none" ? (
@@ -802,6 +830,105 @@ function Application({
         <Hand className="size-4" />
         Ask to come
       </Button>
+    </>
+  );
+}
+
+/**
+ * A guest at a score-gated door: their own record against the threshold.
+ *
+ * This mode shipped enforced on-chain and unexplained in the interface, so the
+ * first a guest below the threshold heard of it was a wallet prompt followed by
+ * `ScoreTooLow` — the contract refusing them *after* they had signed. The error
+ * map made that readable; it could not make it not happen. The numbers are here
+ * now, before the button.
+ *
+ * `record` is `null` while the read is out, and that renders as "checking" rather
+ * than as a record of nothing. A wallet shown zero check-ins it has actually
+ * earned would be told it fails a gate it passes.
+ */
+function ScoreGate({
+  record,
+  needed,
+  deposit,
+  refund,
+  feeAllowance,
+  funding,
+  left,
+  busy,
+  onReserve,
+}: {
+  record: RecordType | null;
+  needed: number;
+  deposit: bigint;
+  refund: bigint;
+  feeAllowance: bigint;
+  funding: ReturnType<typeof fundingFor>;
+  left: number;
+  busy: boolean;
+  onReserve: () => void;
+}) {
+  if (record !== null && record.shows >= needed) {
+    return (
+      <>
+        <p className="mb-4 flex items-center gap-2 text-sm text-success">
+          <CheckCircle2 className="size-4 shrink-0" />
+          Your record carries {record.shows}{" "}
+          {record.shows === 1 ? "check-in" : "check-ins"}, so this event will admit
+          you.
+        </p>
+        <Offer
+          deposit={deposit}
+          refund={refund}
+          feeAllowance={feeAllowance}
+          funding={funding}
+          left={left}
+          busy={busy}
+          onReserve={onReserve}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h3 className="font-display text-lg font-bold tracking-tight">
+        {needed === 1
+          ? "This event is for people who have shown up before"
+          : `This event asks for ${needed} check-ins`}
+      </h3>
+      <p className="mt-1 text-sm text-muted">
+        The contract checks your record before it takes a deposit, so there is
+        nothing to lose by being short: a reservation is refused rather than taken
+        and forfeited. Check-ins are counted by the events themselves, across every
+        organizer on Showup.
+      </p>
+
+      <div className="mt-4 rounded-xl border border-border-strong bg-surface px-4 py-3">
+        <div className="text-xs text-muted-2">Your check-ins</div>
+        <div className="mt-1 font-mono text-2xl leading-none">
+          {record === null ? (
+            <span className="text-muted-2">checking…</span>
+          ) : (
+            <>
+              {record.shows}
+              <span className="text-muted-2"> / {needed}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-relaxed text-muted-2">
+        The way in is an event that doesn&apos;t ask: reserve, turn up, check in, and
+        the check-in that returns your deposit is the same transaction that writes
+        the first line of your record.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <ButtonLink href="/" variant="secondary">
+          Find an open event
+        </ButtonLink>
+      </div>
     </>
   );
 }
