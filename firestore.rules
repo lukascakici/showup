@@ -60,6 +60,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The invitation-to-attendance funnel, written by /api/funnel.
+    //
+    // **The one collection here that reads `false` as well as writes `false`**, and
+    // the exception is worth stating rather than leaving to be noticed. Everything
+    // else in this database is a copy of something already public on Stellar
+    // Testnet, so serving it to anybody costs nothing. These rows are visitor
+    // behaviour — which invitations were opened and went nowhere — and being
+    // pseudonymous is not a reason to hand them out. The funnel report is produced
+    // server-side with the Admin SDK, which needs no rule here at all.
+    match /funnel/{rowId} {
+      allow read, write: if false;
+    }
+
     // Anything not named above is denied outright, so a new collection cannot
     // be created by a client and quietly become writable.
     match /{document=**} {

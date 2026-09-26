@@ -11,6 +11,7 @@ import {
 } from "react";
 import { getKit, type ISupportedWallet } from "./kit";
 import { readWalletError } from "./wallet-errors";
+import { track } from "./funnel";
 import {
   NETWORK_PASSPHRASE,
   fetchAccountState,
@@ -264,6 +265,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setAddress(connected);
       setStatus("connected");
       setPickerOpen(false);
+      // Step two of the funnel, recorded here rather than wherever a wallet
+      // happens to be needed: this is the one line in the app that knows a
+      // connection just succeeded, as opposed to one already existing.
+      track("wallet_connected", { address: connected });
     } catch (e) {
       setStatus("idle");
       const failure = readWalletError(e);

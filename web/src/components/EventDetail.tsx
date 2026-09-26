@@ -33,6 +33,7 @@ import { useSigner } from "@/lib/signer";
 import { useWallet } from "@/lib/wallet";
 import { recallSecret, rememberSecret } from "@/lib/secrets";
 import { requestSync } from "@/lib/event-index";
+import { track } from "@/lib/funnel";
 import {
   attendanceOf,
   forfeitPool,
@@ -163,6 +164,10 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
    */
   useEffect(() => {
     void requestSync(id);
+    // Step one of the funnel. Deliberately here and not in `page.tsx`: this is
+    // somebody looking at an invitation, which is a browser opening a page rather
+    // than a crawler fetching HTML for a link preview.
+    track("invite_opened", { eventId: id });
   }, [id]);
 
   // The balance is otherwise fetched only on connect and on a manual click, so
@@ -282,6 +287,9 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
     run(async () => {
       const tx = await eventClient(id, signer).rsvp({ guest: signer.publicKey! });
       await tx.signAndSend();
+      // After the send, never before. A funnel that counted intentions would
+      // report a reservation for every wallet prompt somebody backed out of.
+      track("reserved", { eventId: id, address: signer.publicKey });
     });
 
   const applyToCome = () =>
@@ -318,6 +326,8 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         secret: secretToBuffer(code.trim()),
       });
       await tx.signAndSend();
+      // The last step, and the only one that means somebody physically turned up.
+      track("checked_in", { eventId: id, address: signer.publicKey });
       if (isHost) rememberSecret(id, code.trim());
     });
 
