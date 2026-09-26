@@ -73,6 +73,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Display names, written by /api/names after a wallet has proved it holds the
+    // address by signing a challenge transaction.
+    //
+    // **The only collection here holding something a person wrote**, which is why
+    // it is the only one where `write: if false` is not the whole story. It is not
+    // enough that a client cannot write: the *server* must not write one either
+    // unless the wallet proved control, because a name sits next to somebody's
+    // attendance record and in an organizer's approval queue, and a name claimed
+    // for a wallet you do not hold is an impersonation the interface would perform
+    // on your behalf. That check lives in the route, and this rule is what stops
+    // anybody bypassing the route.
+    //
+    // Reads are open because a display name exists to be shown.
+    match /names/{address} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // The one-use nonces those claims are proved against. Denied both ways: a
+    // readable challenge is one an attacker can watch for, and the only thing that
+    // ever needs to see one is the route that issued it.
+    match /nameChallenges/{nonce} {
+      allow read, write: if false;
+    }
+
     // Anything not named above is denied outright, so a new collection cannot
     // be created by a client and quietly become writable.
     match /{document=**} {
