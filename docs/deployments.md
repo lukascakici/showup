@@ -369,6 +369,156 @@ and came back **identical** — 94 lines for the factory, 112 for the reputation
 ledger, 243 for the event contract. That comparison is the only check that tells a
 whole deploy from a half one, and it costs nothing and needs no key.
 
+### A newcomer admitted on somebody else's record, proved on Testnet (26.09.2026)
+
+A `Vouch(1)` event created through the upgraded factory:
+[`CDCGNAG4…BNFTKJ43AO`](https://stellar.expert/explorer/testnet/contract/CDCGNAG4RTC3KFYIRX2WDLSDKZMQWXLBCNIF3MITT6CSIRBNFTKJ43AO),
+2 XLM deposit, capacity 3, forfeits to the organizer, created in
+[`84470cca8cdbfc51a36f5573578dbf717c4feab6d961ed7007bf11b50a033b86`](https://stellar.expert/explorer/testnet/tx/84470cca8cdbfc51a36f5573578dbf717c4feab6d961ed7007bf11b50a033b86).
+`get_terms` reads back `{"admission":{"Vouch":1},"hosts":["GDL3H646…OZKI5"]}`.
+
+The three wallets, and why each was chosen:
+
+| Role | Wallet | Record at the start |
+| :-- | :-- | :-- |
+| the newcomer | `GBEDUGGM…EXV3KACU` | minted for this, **all five counters zero** |
+| the voucher | `GB7TWPUD…MYXLVNKCL` | `shows: 1`, `vouches_broken: 0` — qualifies |
+| a stranger | `GBYT3TBN…BN7WOV52K` | minted for this, no record at all |
+
+The newcomer was generated the same day precisely so that "somebody with nothing
+of their own" is a fact and not a description.
+
+**The gate, then the four ways through it that are closed:**
+
+| Call | Result |
+| :-- | :-- |
+| newcomer `rsvp`, before any vouch | refused, `Error(Contract, #27)` — `NotEnoughVouches` |
+| the stranger tries to `vouch` | refused, `Error(Contract, #24)` — `CannotVouch` |
+| the voucher vouches for themselves | refused, `Error(Contract, #26)` — `CannotVouchForYourself` |
+| the voucher vouches a second time for the same guest | refused, `Error(Contract, #25)` — `AlreadyVouched` |
+| anyone vouches after `open_checkin` | refused, `Error(Contract, #12)` — `ReservationsClosed` |
+
+Refusals have no transaction hashes and cannot have them — Soroban simulates
+before submitting, so a contract error means the transaction is never built. Each
+is reproducible with the CLI and no key, exactly as the `ScoreTooLow` refusal
+above was recorded.
+
+**And the way through:**
+
+| Step | Transaction |
+| :-- | :-- |
+| the voucher's `vouch` | [`1f84ca6d9419f412187257b5b61fd72c29c8bae8ec99b6e8b07f618fd71bcad4`](https://stellar.expert/explorer/testnet/tx/1f84ca6d9419f412187257b5b61fd72c29c8bae8ec99b6e8b07f618fd71bcad4) |
+| the newcomer's `rsvp`, now admitted | [`a01715f5e9b93d0de130fea2d9cc7c55301a22e928635d2130a0d24bdb2cc633`](https://stellar.expert/explorer/testnet/tx/a01715f5e9b93d0de130fea2d9cc7c55301a22e928635d2130a0d24bdb2cc633) |
+| `open_checkin` | [`4226a1f8a73f45e28c2b5714af42beb3ee3adeafe95496a5af42f10799d719d4`](https://stellar.expert/explorer/testnet/tx/4226a1f8a73f45e28c2b5714af42beb3ee3adeafe95496a5af42f10799d719d4) |
+
+The `vouch` transaction moves **no money and takes no spot**: it publishes
+`Vouched { vouches: 1 }` on the event and `vouch_recorded { broken: false }` on
+the ledger, and that is all. The reservation is the next transaction, it is the
+newcomer's own, and it is where the 2 XLM moves — `Reserved { spots_left: 2 }`.
+A vouch is permission to reserve, not a reservation.
+
+### The cost of backing the wrong person, in one transaction
+
+The newcomer never checked in. `finalize`:
+[`bc35d8fe9daf9c2617d15e635f1ec6d3bd36a9adb6221e8eac284764c2bf6f3a`](https://stellar.expert/explorer/testnet/tx/bc35d8fe9daf9c2617d15e635f1ec6d3bd36a9adb6221e8eac284764c2bf6f3a)
+
+That **one** transaction carries all four of these:
+
+- `transfer` of 23 000 000 stroops to the organizer — the 2 XLM forfeited plus the
+  0.3 XLM fee pool nobody drew from
+- `score_changed { member: GBEDUGGM…, shows: 0, no_shows: 1 }` — the newcomer
+- `vouch_recorded { voucher: GB7TWPUD…, broken: true }` — the voucher
+- `Finalized { showed: 0, no_shows: 1, forfeited: "20000000" }`
+
+There is no ordering of transactions in which the deposit has been forfeited and
+the voucher's record still says nothing went wrong, because there is only ever one
+transaction.
+
+Records read straight afterwards:
+
+| Wallet | `get_record` |
+| :-- | :-- |
+| the voucher | `{shows: 1, no_shows: 0, vouches_given: 1, vouches_broken: 1, events_organised: 0}` |
+| the newcomer | `{shows: 0, no_shows: 1, vouches_given: 0, vouches_broken: 0, events_organised: 0}` |
+| the organizer | `{shows: 0, no_shows: 0, vouches_given: 0, vouches_broken: 0, events_organised: 1}` |
+
+**The voucher's `shows` is still 1 and their `no_shows` is still 0.** Backing
+somebody who did not turn up is not the same failure as not turning up yourself,
+and folding them into one number would leave the record unable to answer either
+question afterwards. The organizer's `events_organised: 1` is `record_organised`
+firing for the first time on the chain: a line written at settlement rather than at
+creation, because an event that was deployed and abandoned is not an event anybody
+ran.
+
+**The ledger's own storage metadata proves the separation**, without taking the
+paragraph above on trust. At ledger 4 878 340:
+
+| Entry | Last modified | Meaning |
+| :-- | :-- | :-- |
+| voucher's `Score` | 4 833 933 | untouched by `finalize` — last written when they checked in on 23.09 |
+| voucher's `Extras` | 4 878 318 | the `finalize` ledger: this is where the broken vouch went |
+| newcomer's `Score` | 4 878 318 | the `finalize` ledger |
+| newcomer's `Extras` | *does not exist* | they never gave, broke or organised anything |
+
+That last row is the frozen-struct design paying off in plain sight: `Extras` is a
+separately keyed entry a member is allowed not to have, so the ledger does not
+write down what did not happen.
+
+### One broken vouch closes the door, and it is not a show count
+
+A second `Vouch(1)` event,
+[`CBD3UFX3…OAZ2EZWWQ`](https://stellar.expert/explorer/testnet/contract/CBD3UFX3WP53JW2MDCOVX5QAPIROCHUU35M6TNKA7SMEHJDOAZ2EZWWQ),
+created in
+[`204d532e3aa41ac443065ccf84ea37dec51542ebe4155591b7d635471dd4f3fe`](https://stellar.expert/explorer/testnet/tx/204d532e3aa41ac443065ccf84ea37dec51542ebe4155591b7d635471dd4f3fe),
+exists to separate two members who look identical on paper:
+
+| Member | `shows` | `vouches_broken` | `vouch` at the new event |
+| :-- | :-- | :-- | :-- |
+| `GB7TWPUD…MYXLVNKCL` | 1 | 1 | **refused, `Error(Contract, #24)` — `CannotVouch`** |
+| `GA5TJJJC…W6KEVNGEO` | 1 | 0 | admitted — [`160a5e87a1929e320a0a2a0f2388b333ba5c637d585e84f247fe838000bd7c76`](https://stellar.expert/explorer/testnet/tx/160a5e87a1929e320a0a2a0f2388b333ba5c637d585e84f247fe838000bd7c76) |
+
+Same event, same gate, same attendance count. The only thing separating them is
+one bad call, made at a **different event contract entirely** — and it followed the
+member here. This is what stops somebody buying the right to keep waving strangers
+in by attending a lot of their own events: the rule is not a threshold, so no
+amount of showing up clears it.
+
+### A record kept alive by somebody who does not own it
+
+`renew` takes no auth and no admin, because a record is a claim its owner should
+not have to ask permission to keep. Proved by the wallet least entitled to do it —
+minted that morning, holding no record, neither the admin nor the factory:
+
+| Call | Transaction |
+| :-- | :-- |
+| the stranger renews the **voucher's** record | [`551bada3e826d5956a94465e5a61f5a7dfc1f66d24c2504a43a2b97d946ffa05`](https://stellar.expert/explorer/testnet/tx/551bada3e826d5956a94465e5a61f5a7dfc1f66d24c2504a43a2b97d946ffa05) |
+| the stranger renews a wallet the ledger has **never seen** | [`1d8f7bb15fb1ce492088000e05c38cabdf9d1e006f43a377bfc6b4c5d2f93b40`](https://stellar.expert/explorer/testnet/tx/1d8f7bb15fb1ce492088000e05c38cabdf9d1e006f43a377bfc6b4c5d2f93b40) |
+
+Both succeed and publish `RecordRenewed`. What they do *not* do is the point:
+
+- **The numbers do not move.** The voucher's record reads identically before and
+  after. `renew` extends a lease; it has no way to write a score.
+- **No entry is created for a stranger.** After the second transaction the ledger
+  still has nothing stored for that address — otherwise anybody could fill it with
+  blank records at our expense.
+- **The lease did not move either, and that is correct.** `extend_ttl` is a no-op
+  while an entry is already healthier than its threshold, and the voucher's
+  `Score` had 1 510 793 ledgers left — about **87 days** against a 30-day
+  threshold. Nothing needed extending yet. Re-extending a healthy entry would only
+  burn fees, so the host refuses to, and `renew` is honest about being the call you
+  make when a record is *near* archival, not a lever that does something every
+  time it is pulled.
+
+The durability policy, in one paragraph for a non-technical reader: **Soroban rents
+state.** An entry nobody touches for long enough is archived — not deleted, and
+never lost, but no longer readable until somebody pays to restore it. Every write
+already extends what it wrote, which quietly meant a record would survive only
+while its owner kept attending things, expiring precisely for the person who had
+stopped needing to prove anything. `renew` removes that: the member, a friend, or
+an organizer who wants to admit them next month can each pay a few stroops to keep
+the record alive, and none of them needs our permission. That is what makes the
+ledger outlive our goodwill.
+
 ## Deliverable 1 evidence — the app itself moves money
 
 SOW §6.1 asks Deliverable 1 for the live link, the repo with CI passing, and two

@@ -235,6 +235,37 @@ as the money it describes, so the score and the settlement can never disagree.
   on-chain with `NotAnEvent`.
 - **`get_score(member)`** returns `{ shows, no_shows }` — read by anyone, written
   by nobody outside that gate.
+- **`get_record(member)`** returns the whole record: `shows`, `no_shows`,
+  `vouches_given`, `vouches_broken`, `events_organised`. It is assembled at read
+  time and never stored, because **`Score` is frozen.** A `#[contracttype]` used as
+  a *stored* type cannot grow a field: every entry already in the ledger was
+  written by an older wasm, and a client generated from a wider struct cannot
+  decode them. So the new counters live in a separately keyed `Extras` entry that a
+  member is allowed not to have, and the reader defaults instead of unwrapping.
+- **Vouching** — `vouch(voucher, guest)` on an event lets a member put their own
+  record behind somebody who has none, which is the only answer to a score gate's
+  cold-start problem that does not amount to an allowlist. It refuses a voucher who
+  does not qualify (`CannotVouch`), a second vouch for the same guest
+  (`AlreadyVouched`, or "two members vouched" would mean "one member clicked
+  twice"), and vouching for yourself (`CannotVouchForYourself`). It moves no money
+  and takes no spot: it is permission to reserve, not a reservation.
+- **A broken vouch costs the voucher, on its own counter.** If a vouched-in guest
+  never turns up, `finalize` records it against whoever backed them — in the same
+  invocation as the settlement. It is **not** deducted from `shows`: the voucher did
+  turn up to everything they turned up to, and rewriting that would make the
+  attendance count mean two things at once. Qualifying to vouch requires
+  `vouches_broken == 0`, so one bad call closes the door permanently and **no amount
+  of attendance clears it** — which is what stops somebody buying the right to keep
+  waving strangers in.
+- **`record_organised`** — the organizer's own line, written at settlement rather
+  than at creation, because an event that was deployed and abandoned is not an
+  event anybody ran.
+- **`renew(member)` takes no auth and no admin.** Soroban rents state, and every
+  write already extends what it wrote — which quietly meant a record survived only
+  while its owner kept attending things, expiring precisely for the person who had
+  stopped needing to prove anything. Anyone who cares about a record can now pay to
+  keep it alive. Renewing a record that was never written is a no-op rather than an
+  error, so nobody can fill the ledger with blank entries at our expense.
 - **Written atomically with the settlement.** `check_in` refunds the deposit *and*
   raises the score in one invocation; `finalize` moves the forfeited deposits,
   returns the unspent fee pool *and* lowers the flakes' scores in one more. There
@@ -297,6 +328,45 @@ even reaches submission, because the simulation demands the admin's signature.
 The scores read back from the contract afterwards, the three account balances
 before and after, and a full re-verification of every claim above against the
 live chain are all in **[docs/deployments.md](docs/deployments.md)**.
+
+**The ledger was upgraded in place and kept every one of those scores.** On
+24.09.2026 the reputation contract gained the full record, vouching and `renew` —
+at [the same address it has always had](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ).
+The fourteen records earned earlier were snapshotted before the upgrade and
+compared after it, by machine rather than by eye:
+
+```bash
+node scripts/reputation-snapshot.mjs --out before.json      # before
+node scripts/reputation-snapshot.mjs --against before.json  # after
+# ok     every record is exactly as before.json left it
+```
+
+Fourteen of fourteen, unchanged. That script reads contract *storage* rather than
+calling `get_score`, so it needs **no key, no funded account and no signature** — a
+reviewer can re-derive every number this repository publishes from the addresses it
+names.
+
+**Vouching, proved end to end on 26.09.2026.** A wallet minted that morning with
+all five counters at zero was refused (`NotEnoughVouches`), admitted on a member's
+vouch, and then did not turn up — and a single `finalize` transaction moved the
+money *and* charged the voucher:
+
+| Step | Transaction | What the chain shows |
+| :-- | :-- | :-- |
+| `vouch` | [`1f84ca6d…1bcad4`](https://stellar.expert/explorer/testnet/tx/1f84ca6d9419f412187257b5b61fd72c29c8bae8ec99b6e8b07f618fd71bcad4) | `Vouched { vouches: 1 }` — and no money moves, no spot is taken |
+| `rsvp`, now admitted | [`a01715f5…2cc633`](https://stellar.expert/explorer/testnet/tx/a01715f5e9b93d0de130fea2d9cc7c55301a22e928635d2130a0d24bdb2cc633) | 2 XLM locked by a wallet with no record of its own |
+| **`finalize`** | [**`bc35d8fe…bf6f3a`**](https://stellar.expert/explorer/testnet/tx/bc35d8fe9daf9c2617d15e635f1ec6d3bd36a9adb6221e8eac284764c2bf6f3a) | 23 XLM settled, `score_changed { no_shows: 1 }` for the guest, `vouch_recorded { broken: true }` for the voucher, and `events_organised: 1` for the organizer — **one transaction** |
+| **`renew` by a stranger** | [**`551bada3…6ffa05`**](https://stellar.expert/explorer/testnet/tx/551bada3e826d5956a94465e5a61f5a7dfc1f66d24c2504a43a2b97d946ffa05) | a wallet that owns no record, and is neither admin nor factory, keeps somebody else's record alive |
+
+The voucher's `shows` stayed at 1 and their `no_shows` stayed at 0 — the ledger's
+own storage metadata shows their attendance entry was never rewritten, only their
+`Extras`. Then a second `Vouch` event separated two members with **identical**
+attendance: the one carrying a broken vouch was refused `CannotVouch`, the clean
+one went through. The rule is not a threshold, so no amount of showing up clears
+it.
+
+Every hash, every refusal code, the storage timestamps and the durability policy
+are in **[docs/deployments.md](docs/deployments.md)**.
 
 ---
 
