@@ -1,17 +1,12 @@
 import { CalendarCheck, HeartHandshake, UserX } from "lucide-react";
 import { EXPLORER_ACCOUNT } from "@/lib/stellar";
-import { shortAddr } from "@/lib/format";
+import { formatMoment, shortAddr } from "@/lib/format";
 import { Card, Chip, Panel, SectionLabel, Stat } from "@/components/ui";
 import { CopyLink } from "@/components/CopyLink";
-import { KeepAlive } from "@/components/KeepAlive";
-import {
-  canVouch,
-  hasRecord,
-  loadRecord,
-  reservations,
-  turnout,
-  type Record,
-} from "@/lib/record";
+import { RefreshRecord } from "@/components/RefreshRecord";
+import { canVouch, hasRecord, loadRecord, reservations, turnout, type Record } from "@/lib/record";
+import { toRecord } from "@/lib/record-index";
+import { readIndexedRecordAdmin } from "@/lib/record-index.server";
 
 /**
  * Read on the server so the numbers are in the HTML.
@@ -20,13 +15,37 @@ import {
  * client-side would mean the page arrives, shows nothing, and then fills in —
  * and on a record that turns out to be empty, the empty state would flash after
  * a spinner as though something had failed.
+ *
+ * **Any mirror at all beats the chain here, however old it is.** A record is a
+ * backward-looking thing; Firestore answers for it in one round trip that does not
+ * depend on Soroban RPC being quick today, and `RefreshRecord` re-reads the
+ * contract the moment the page is up. Gating the mirror on freshness — the first
+ * version of this — meant a record nobody had looked at for a minute went back to
+ * an RPC read on every view, which is the whole cost the mirror exists to remove.
+ *
+ * What makes serving a stale copy honest is not how stale it is but that the page
+ * says so. `readAt` is rendered underneath, always, and the refresh lands within a
+ * second or two.
  */
 export async function RecordBody({ address }: { address: string }) {
+  // Admin SDK, not the client one: see `record-index.server.ts`. The client
+  // Firestore SDK fails silently in this runtime and returns "no document".
+  const mirrored = await readIndexedRecordAdmin(address).catch(() => null);
+
   let record: Record;
-  try {
-    record = await loadRecord(address);
-  } catch {
-    return <Unreadable address={address} />;
+  let readAt: number | null = null;
+  if (mirrored) {
+    record = toRecord(mirrored);
+    readAt = mirrored.syncedAt;
+  } else {
+    // Nothing mirrored, so there is no copy to serve and the contract is the only
+    // thing that can tell "never synced" from "no record". This is also the only
+    // path that can fail, which is why it is the only one with a fallback.
+    try {
+      record = await loadRecord(address);
+    } catch {
+      return <Unreadable address={address} />;
+    }
   }
 
   const known = hasRecord(record);
@@ -144,7 +163,16 @@ export async function RecordBody({ address }: { address: string }) {
         <CopyLink url={address} label="Wallet address" />
       </div>
 
-      <KeepAlive member={address} known={known} />
+      {/* Said plainly when the numbers above came out of the mirror rather than
+          straight off the contract. A snapshot passed off as current is the one
+          dishonest thing a record page can do. */}
+      {readAt !== null && (
+        <p className="mt-4 text-xs text-muted-3">
+          Read from the chain {formatMoment(readAt)}. Refreshing.
+        </p>
+      )}
+
+      <RefreshRecord address={address} />
     </div>
   );
 }

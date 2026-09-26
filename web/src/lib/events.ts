@@ -20,7 +20,7 @@ import {
   type IndexedEvent,
 } from "./event-index";
 import { hiddenIds } from "./listing";
-import { loadRecord } from "./record";
+import { loadRecordForDisplay } from "./record-index";
 import { usePolled } from "./polled";
 import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
 
@@ -201,12 +201,18 @@ export function useStanding(
 }
 
 /**
- * This wallet's whole record on the show-up ledger.
+ * This wallet's whole record on the show-up ledger, for showing on screen.
  *
  * Not per event: the ledger is one address for all of them, which is the point of
  * a score gate. `null` until it answers, and `null` again if it cannot — a wallet
  * shown an empty record it never earned would be told it fails a gate it may well
  * pass.
+ *
+ * Goes through the mirror rather than the contract, because this poll is a
+ * *display*. The contract checks the real number inside `rsvp` and that is the
+ * only opinion that decides anything; polling RPC to render it would make an open
+ * tab cost a round trip every fifteen seconds for a figure that changes when
+ * somebody checks in. See `loadRecordForDisplay`.
  */
 export function useRecord(
   address: string | null,
@@ -214,7 +220,7 @@ export function useRecord(
   intervalMs = 15_000,
 ) {
   const load = useCallback(
-    () => (address && enabled ? loadRecord(address) : Promise.resolve(null)),
+    () => (address && enabled ? loadRecordForDisplay(address) : Promise.resolve(null)),
     [address, enabled],
   );
   return usePolled(load, intervalMs);

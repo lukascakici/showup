@@ -42,6 +42,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Show-up records, mirrored from the reputation contract by
+    // /api/records/sync. Read by the record pages and by the score gate, so that
+    // showing a number is a Firestore read rather than an RPC round trip on a
+    // poll.
+    //
+    // `write: if false` is doing more work here than anywhere else in this file.
+    // A reputation somebody could edit is not a reputation — it is the whole
+    // reason a score lives on a contract that only accepts writes from event
+    // contracts the factory deployed. If a client could write here, the mirror
+    // would become a second, editable version of a record whose entire value is
+    // that nobody can edit it. Every number in this collection is a copy of one
+    // the chain decided, and the contract stays the authority for every decision
+    // that admits anybody or moves any money.
+    match /records/{address} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Anything not named above is denied outright, so a new collection cannot
     // be created by a client and quietly become writable.
     match /{document=**} {
