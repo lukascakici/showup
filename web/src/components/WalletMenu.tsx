@@ -117,7 +117,7 @@ export function WalletMenu() {
                     Not funded yet
                   </span>
                   <p className="mt-1 text-xs text-muted">
-                    This account doesn&apos;t exist on Testnet until it holds some XLM.
+                    This account doesn’t exist on Testnet until it holds some XLM.
                     Use the faucet below.
                   </p>
                 </div>
@@ -175,7 +175,7 @@ export function WalletMenu() {
           {copyFailed && (
             <div className="mt-2">
               <p className="text-xs text-danger">
-                Couldn&apos;t reach the clipboard. Copy it by hand:
+                Couldn’t reach the clipboard. Copy it by hand:
               </p>
               <code className="mt-1 block select-all break-all rounded-lg border border-border bg-surface-2 p-2 font-mono text-[11px] text-foreground">
                 {address}

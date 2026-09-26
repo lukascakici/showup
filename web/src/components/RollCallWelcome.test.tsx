@@ -32,7 +32,7 @@ describe("the welcome", () => {
   it("closes on the button, and stays closed next time", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<RollCallWelcome call={call} />);
-    await user.click(screen.getByRole("button", { name: /let's go/i }));
+    await user.click(screen.getByRole("button", { name: /let['’]s go/i }));
     expect(screen.queryByRole("dialog")).toBeNull();
 
     unmount();
@@ -73,7 +73,7 @@ describe("the welcome", () => {
     const user = userEvent.setup();
     render(<RollCallWelcome call={call} />);
     expect(document.body.style.overflow).toBe("hidden");
-    await user.click(screen.getByRole("button", { name: /let's go/i }));
+    await user.click(screen.getByRole("button", { name: /let['’]s go/i }));
     // A modal that locks the body and forgets to unlock it leaves a page that
     // looks fine and cannot be scrolled, which reads as the site being broken.
     expect(document.body.style.overflow).not.toBe("hidden");

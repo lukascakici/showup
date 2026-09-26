@@ -148,7 +148,7 @@ export function RollCall({ call, post }: { call: Call; post?: ReactNode }) {
                   <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
                   <div className="min-w-0">
                     <h2 className="font-display text-lg font-bold tracking-tight">
-                      You&apos;re on the list
+                      You’re on the list
                     </h2>
                     <p className="mt-1 text-sm text-muted">
                       Nothing left to do. No deposit was taken and nothing was signed.
@@ -187,7 +187,7 @@ export function RollCall({ call, post }: { call: Call; post?: ReactNode }) {
               ) : (
                 <>
                   <h2 className="font-display text-lg font-bold tracking-tight">
-                    One tap and you&apos;re in
+                    One tap and you’re in
                   </h2>
                   <p className="mt-1 text-sm text-muted">
                     Connected as{" "}

@@ -112,7 +112,7 @@ export function FirstRun({ deposit, refund }: { deposit: bigint; refund: bigint 
 
         <ul className="mt-5 flex flex-col gap-4">
           <Step icon={<CircleDollarSign className="size-4 text-accent" />} title="You get it back">
-            Reserving locks {fromStroops(deposit)} XLM in the event&apos;s own contract.
+            Reserving locks {fromStroops(deposit)} XLM in the event’s own contract.
             Check in when you turn up and {fromStroops(refund)} XLM comes straight back
             to you, in the same transaction. Only a no-show forfeits theirs.
           </Step>
@@ -120,7 +120,7 @@ export function FirstRun({ deposit, refund }: { deposit: bigint; refund: bigint 
             icon={<FlaskConical className="size-4 text-muted" />}
             title="It isn't real money"
           >
-            This runs on Stellar&apos;s test network. The XLM is free, there is a faucet
+            This runs on Stellar’s test network. The XLM is free, there is a faucet
             in the app, and it is worth nothing anywhere. Nothing here can touch
             money you actually own.
           </Step>

@@ -52,7 +52,7 @@ export default function CreatePage() {
                 Connect first
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Your wallet is the event&apos;s organizer, so you need it connected to
+                Your wallet is the event’s organizer, so you need it connected to
                 create one.
               </p>
             </div>

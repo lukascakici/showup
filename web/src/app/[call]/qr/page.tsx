@@ -32,7 +32,7 @@ export default async function RollCallQrPage({
         <h1 className="font-display text-[34px] font-bold leading-[1.06] tracking-[-0.03em] text-balance sm:text-[44px]">
           {call.title}
         </h1>
-        <p className="mt-2 text-sm text-muted">Scan to say you&apos;re here</p>
+        <p className="mt-2 text-sm text-muted">Scan to say you’re here</p>
       </div>
 
       <QrCode value={url} size={320} label={`Roll call for ${call.title}`} />

@@ -64,7 +64,7 @@ describe("CreateEvent — when it corrects you", () => {
     render(<CreateEvent />);
     const title = await fill(/event name/i, "ş".repeat(51)); // 102 bytes, 51 chars
     await userEvent.tab();
-    expect(await screen.findByText(/that's 2 too long/i)).toBeInTheDocument();
+    expect(await screen.findByText(/that['’]s 2 too long/i)).toBeInTheDocument();
     expect(title).toHaveValue("ş".repeat(51));
   });
 

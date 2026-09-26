@@ -243,10 +243,10 @@ function Unreadable({ address }: { address: string }) {
       </h1>
       <Card className="mt-6">
         <h2 className="font-display text-lg font-bold tracking-tight text-foreground">
-          Couldn&apos;t read the ledger just now
+          Couldn’t read the ledger just now
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-foreground-2">
-          Soroban Testnet didn&apos;t answer. This wallet&apos;s record is untouched:
+          Soroban Testnet didn’t answer. This wallet’s record is untouched:
           nothing on this page failed except the question, and reloading usually
           gets it.
         </p>

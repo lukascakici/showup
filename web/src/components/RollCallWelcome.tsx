@@ -111,7 +111,7 @@ export function RollCallWelcome({ call }: { call: RollCall }) {
             into the dialog, which is the only thing standing between a screen
             reader and the list of addresses behind it. */}
         <Button autoFocus onClick={close} size="lg" fullWidth className="mt-6">
-          Let&apos;s go
+          Let’s go
         </Button>
       </div>
     </div>

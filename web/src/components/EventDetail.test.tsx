@@ -133,7 +133,7 @@ describe("EventDetail — not found versus couldn't ask", () => {
     state.error = "read failed";
     state.known = null; // the factory couldn't be reached either
     render(<EventDetail id={ID} linkSecret={null} />);
-    expect(await screen.findByText(/couldn't load this event/i)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn['’]t load this event/i)).toBeInTheDocument();
     expect(screen.queryByText(/no event here/i)).not.toBeInTheDocument();
   });
 
@@ -153,7 +153,7 @@ describe("EventDetail — not found versus couldn't ask", () => {
     state.loading = true;
     render(<EventDetail id={ID} linkSecret={null} />);
     expect(screen.getByRole("status", { name: /loading event/i })).toBeInTheDocument();
-    expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn['’]t load/i)).not.toBeInTheDocument();
   });
 });
 
@@ -207,7 +207,7 @@ describe("EventDetail — the funding pre-flight", () => {
     state.balance = { funded: false, xlm: "0" };
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
-    expect(screen.getByText(/isn't on testnet yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/isn['’]t on testnet yet/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /lock deposit and reserve/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /request test XLM/i })).toBeInTheDocument();
   });
@@ -260,7 +260,7 @@ describe("EventDetail — the organizer's links", () => {
     state.balance = funded("10000");
     state.event = anEvent();
     render(<EventDetail id={ID} linkSecret={null} />);
-    expect(screen.getByText(/isn't in this browser/i)).toBeInTheDocument();
+    expect(screen.getByText(/isn['’]t in this browser/i)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /copy the check-in link/i }),
     ).not.toBeInTheDocument();
@@ -310,7 +310,7 @@ describe("an event that admits people one at a time", () => {
     state.standing = "Applied";
     render(<EventDetail id={ID} linkSecret={null} />);
 
-    expect(await screen.findByText(/you've asked to come/i)).toBeInTheDocument();
+    expect(await screen.findByText(/you['’]ve asked to come/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /ask to come|reserve/i })).toBeNull();
   });
 

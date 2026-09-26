@@ -52,7 +52,7 @@ export function CopyLink({ url, label }: { url: string; label: string }) {
       </div>
       {state === "failed" && (
         <p className="text-xs text-danger">
-          Couldn&apos;t reach the clipboard. Select the link above and copy it.
+          Couldn’t reach the clipboard. Select the link above and copy it.
         </p>
       )}
     </div>

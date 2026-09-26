@@ -243,10 +243,10 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
         ) : (
           <>
             <h2 className="font-display text-lg font-bold tracking-tight">
-              Couldn&apos;t load this event
+              Couldn’t load this event
             </h2>
             <p className="mt-1 text-sm text-muted">
-              The chain didn&apos;t answer just now. Nothing has happened to the event or
+              The chain didn’t answer just now. Nothing has happened to the event or
               to any deposit in it — this is a failed read, and it usually passes.
             </p>
             {error && <p className="mt-2 font-mono text-xs text-muted-2">{error}</p>}
@@ -566,12 +566,12 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
               <p className="text-sm text-muted">
                 The organizer has started check-in, so no new spots can be taken. This
                 is what stops someone who was sent the link from joining on the spot
-                and taking a cut of the no-shows&apos; deposits.
+                and taking a cut of the no-shows’ deposits.
               </p>
             ) : (
               <p className="text-sm text-muted">
                 This event is closed. {event.checkedIn.length} showed up,{" "}
-                {event.reserved.length - event.checkedIn.length} didn&apos;t, and every
+                {event.reserved.length - event.checkedIn.length} didn’t, and every
                 deposit has been settled.
               </p>
             )}
@@ -658,7 +658,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
           </SectionLabel>
           <p className="mt-5 text-[15.5px] leading-[1.65] text-foreground-2 text-pretty">
             Every spot here is backed by {fromStroops(event.deposit)} XLM held in this
-            event&apos;s own contract on Stellar Testnet — not by the organizer, and not
+            event’s own contract on Stellar Testnet — not by the organizer, and not
             by us. Check in at the door and it comes straight back.
           </p>
           <div className="mt-4 grid gap-2.5 text-[15px] text-foreground-2">
@@ -679,7 +679,7 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
           <div className="mt-7 flex items-start gap-4 rounded-[14px] border border-border-strong bg-surface-2 px-5 py-4.5">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-lift" />
             <p className="text-sm leading-[1.6] text-[#9a9ba1]">
-              Reserving locks real Testnet XLM. If you don&apos;t check in,{" "}
+              Reserving locks real Testnet XLM. If you don’t check in,{" "}
               {splits
                 ? "your deposit stays in the pool and is shared out among the people who did"
                 : "your deposit goes to the organizer"}{" "}
@@ -814,7 +814,7 @@ function Application({
         <Hourglass className="mt-0.5 size-5 shrink-0 text-muted" />
         <div className="min-w-0">
           <h3 className="font-display text-lg font-bold tracking-tight">
-            You&apos;ve asked to come
+            You’ve asked to come
           </h3>
           <p className="mt-1 text-sm text-muted">
             The organizer decides who gets a spot. Nothing has been taken from you and
@@ -835,7 +835,7 @@ function Application({
           </h3>
           <p className="mt-1 text-sm text-muted">
             The organizer turned this request down. Nothing was taken from you. A
-            decision is final on-chain, so asking again isn&apos;t possible here.
+            decision is final on-chain, so asking again isn’t possible here.
           </p>
         </div>
       </div>
@@ -851,7 +851,7 @@ function Application({
       <>
         <p className="mb-4 flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="size-4 shrink-0" />
-          The organizer approved you. Your spot isn&apos;t held until you reserve it.
+          The organizer approved you. Your spot isn’t held until you reserve it.
         </p>
         <Offer
           deposit={deposit}
@@ -975,7 +975,7 @@ function ScoreGate({
       </div>
 
       <p className="mt-4 text-sm leading-relaxed text-muted-2">
-        The way in is an event that doesn&apos;t ask: reserve, turn up, check in, and
+        The way in is an event that doesn’t ask: reserve, turn up, check in, and
         the check-in that returns your deposit is the same transaction that writes
         the first line of your record.
       </p>
@@ -1030,7 +1030,7 @@ function Vouched({
           {vouches === 1
             ? "A member has vouched for you."
             : `${vouches} members have vouched for you.`}{" "}
-          Your spot isn&apos;t held until you reserve it.
+          Your spot isn’t held until you reserve it.
         </p>
         <Offer
           deposit={deposit}
@@ -1056,7 +1056,7 @@ function Vouched({
         <strong className="font-medium text-foreground-2">
           It costs them nothing up front
         </strong>{" "}
-        and costs you nothing at all. If you reserve and then don&apos;t turn up, it
+        and costs you nothing at all. If you reserve and then don’t turn up, it
         is counted against them, and one broken vouch closes vouching for them for
         good.
       </p>
@@ -1128,7 +1128,7 @@ function VouchFor({
       <p className="text-sm leading-relaxed text-muted">
         Somebody with no record of their own can reserve a spot here if{" "}
         {needed === 1 ? "a member vouches" : `${needed} members vouch`} for them. If
-        they don&apos;t turn up it is counted against whoever vouched, on its own
+        they don’t turn up it is counted against whoever vouched, on its own
         counter — your own attendance is never rewritten, and one broken vouch closes
         vouching for you permanently.
       </p>
@@ -1234,7 +1234,7 @@ function Applicants({
       ) : (
         <>
           <p className="mb-4 text-sm text-muted">
-            Approving doesn&apos;t take anything from them — they reserve afterwards,
+            Approving doesn’t take anything from them — they reserve afterwards,
             and that is when the deposit moves. Both answers are final on-chain.
           </p>
           {left <= 0 && (
@@ -1282,9 +1282,9 @@ function Applicants({
           RPC. Silence about that would read as "nobody else asked". */}
       {truncated && (
         <p className="mt-4 border-t border-border pt-3 text-xs text-muted-2">
-          This event&apos;s history goes back further than we can read, so an
-          application older than that won&apos;t be listed. The applicant can still be
-          approved — the contract remembers, even when the feed doesn&apos;t.
+          This event’s history goes back further than we can read, so an
+          application older than that won’t be listed. The applicant can still be
+          approved — the contract remembers, even when the feed doesn’t.
         </p>
       )}
     </Panel>
@@ -1367,8 +1367,8 @@ function ColdStart({
         <Info className="mt-0.5 size-4 shrink-0 text-accent-lift" />
         <p className="text-xs leading-[1.55] text-muted">
           Showup runs on <strong className="text-foreground">Stellar Testnet</strong>. The
-          XLM here is test money — it can&apos;t be bought, sold or spent anywhere, and
-          the faucet hands out as much as you need for free. Don&apos;t flake anyway.
+          XLM here is test money — it can’t be bought, sold or spent anywhere, and
+          the faucet hands out as much as you need for free. Don’t flake anyway.
         </p>
       </div>
 
@@ -1486,7 +1486,7 @@ function Offer({
       </Button>
 
       <p className="mt-3 text-center text-[12.5px] text-muted-3">
-        {fromStroops(feeAllowance)} XLM of that refund is the organizer&apos;s, put up
+        {fromStroops(feeAllowance)} XLM of that refund is the organizer’s, put up
         so attending costs you nothing in fees.
       </p>
     </div>
@@ -1507,7 +1507,7 @@ function Holding({
       <div className="mb-4 flex items-center gap-2.5">
         <span className="size-[7px] rounded-full bg-success" />
         <span className="text-[15px] text-success">
-          You&apos;re on the list — deposit locked
+          You’re on the list — deposit locked
         </span>
       </div>
       <div className="grid gap-3.5 sm:grid-cols-2">
@@ -1564,7 +1564,7 @@ function CheckIn({
           loading={busy}
         >
           <CheckCircle2 className="size-4" />
-          I&apos;m here — check me in
+          I’m here — check me in
         </Button>
       </div>
     </div>
@@ -1801,9 +1801,9 @@ function OrganizerPanel({
       {!finalized && !checkingIn && (
         <div className="border-b border-border py-5">
           <p className="text-sm text-muted">
-            When everyone&apos;s there, start check-in. That closes reservations for
+            When everyone’s there, start check-in. That closes reservations for
             good measure — nobody who was forwarded your link can grab a spot on the
-            spot and take a cut of the no-shows&apos; deposits.
+            spot and take a cut of the no-shows’ deposits.
           </p>
           <Button
             onClick={onOpenCheckin}
@@ -1849,8 +1849,8 @@ function OrganizerPanel({
           ) : (
             <div className="mt-4">
               <ErrorNote>
-                The check-in code for this event isn&apos;t in this browser. Only its
-                hash is on-chain, so the code can&apos;t be recovered — it lives in the
+                The check-in code for this event isn’t in this browser. Only its
+                hash is on-chain, so the code can’t be recovered — it lives in the
                 browser that created the event, or in a check-in link you already
                 saved.
               </ErrorNote>
@@ -1880,7 +1880,7 @@ function OrganizerPanel({
       <div className="pt-5">
         {finalized ? (
           <p className="text-sm text-muted">
-            This event is finalized. {checkedIn} showed, {noShows} didn&apos;t.
+            This event is finalized. {checkedIn} showed, {noShows} didn’t.
           </p>
         ) : (
           <>

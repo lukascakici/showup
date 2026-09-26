@@ -32,7 +32,7 @@ describe("ActivityFeed", () => {
   it("does not claim an empty history when the read failed", () => {
     render(<ActivityFeed activity={[]} error="rpc exploded" />);
     expect(screen.queryByText(/nothing yet/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/couldn't read this contract's events/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn['’]t read this contract['’]s events/i)).toBeInTheDocument();
   });
 
   it("says the event itself is fine when only the feed broke", () => {
@@ -65,10 +65,10 @@ describe("ActivityFeed", () => {
   // admits it — and it must only admit it when there is something to admit.
   it("admits truncation only alongside real rows", () => {
     const { rerender } = render(<ActivityFeed activity={[RESERVED]} truncated />);
-    expect(screen.getByText(/older activity isn't shown/i)).toBeInTheDocument();
+    expect(screen.getByText(/older activity isn['’]t shown/i)).toBeInTheDocument();
 
     rerender(<ActivityFeed activity={[]} truncated />);
-    expect(screen.queryByText(/older activity isn't shown/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/older activity isn['’]t shown/i)).not.toBeInTheDocument();
   });
 
   // Failing to refresh is a different fact from failing to load: the rows on

@@ -132,7 +132,7 @@ function Picker() {
           {inFreighterApp && (
             <div className="border-b border-border bg-surface-2 px-5 py-4">
               <p className="text-sm font-semibold text-foreground">
-                You&apos;re in Freighter&apos;s in-app browser
+                You’re in Freighter’s in-app browser
               </p>
               <p className="mt-1.5 text-sm text-muted">
                 {walletConnectConfigured
@@ -151,7 +151,7 @@ function Picker() {
             // nothing — a full stop in the one place where somebody with no
             // wallet was always going to end up. The way out is below it now.
             <p className="px-5 pb-2 pt-8 text-center text-sm text-muted">
-              Couldn&apos;t list any wallets just now.
+              Couldn’t list any wallets just now.
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border">
@@ -213,7 +213,7 @@ function NoWalletHelp({
   return (
     <div className="border-t border-border px-5 py-4">
       <h3 className="font-display text-sm font-bold text-foreground">
-        Don&apos;t have any of these?
+        Don’t have any of these?
       </h3>
       <p className="mt-1.5 text-sm text-muted">
         <strong className="font-medium text-foreground">Albedo</strong> needs nothing

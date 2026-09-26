@@ -45,7 +45,7 @@ export function ActivityFeed({
       ) : error && empty ? (
         <div className="mt-4">
           <p className="text-sm text-danger">
-            Couldn&apos;t read this contract&apos;s events just now. The event itself is
+            Couldn’t read this contract’s events just now. The event itself is
             fine — this is the history feed, not the money.
           </p>
           {onRetry && (
@@ -57,7 +57,7 @@ export function ActivityFeed({
       ) : empty ? (
         <p className="mt-4 text-sm text-muted-2">
           Nothing yet. Every reservation and check-in shows up here, straight from the
-          contract&apos;s events on-chain.
+          contract’s events on-chain.
         </p>
       ) : (
         <ul className="mt-2 flex flex-col divide-y divide-border">
@@ -98,15 +98,15 @@ export function ActivityFeed({
           early is indistinguishable from a quiet event unless it admits it. */}
       {!empty && truncated && (
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-2">
-          Older activity isn&apos;t shown — this feed reaches back about a day, and
-          Soroban RPC only keeps recent history. The contract&apos;s own state above
+          Older activity isn’t shown — this feed reaches back about a day, and
+          Soroban RPC only keeps recent history. The contract’s own state above
           is complete.
         </p>
       )}
 
       {!empty && error && (
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-2">
-          Couldn&apos;t refresh just now, so this may be missing the last few moments.
+          Couldn’t refresh just now, so this may be missing the last few moments.
         </p>
       )}
     </div>

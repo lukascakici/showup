@@ -85,14 +85,14 @@ export default function Home() {
       {list && list.unreadable.length > 0 && (
         <p className="mt-4 text-xs text-muted-3">
           {list.unreadable.length}{" "}
-          {list.unreadable.length === 1 ? "event" : "events"} couldn&apos;t be read
+          {list.unreadable.length === 1 ? "event" : "events"} couldn’t be read
           right now. They still exist on-chain — nothing was lost.
         </p>
       )}
 
       {error && !events && (
         <Card className="mt-4">
-          <p className="text-sm text-danger">Couldn&apos;t load events.</p>
+          <p className="text-sm text-danger">Couldn’t load events.</p>
           <p className="mt-1 font-mono text-xs text-muted-2">{error}</p>
           <Button
             variant="secondary"
@@ -111,7 +111,7 @@ export default function Home() {
           to say they had stopped moving. */}
       {error && events && (
         <p className="mt-4 text-xs text-muted-2">
-          These numbers stopped updating — the chain isn&apos;t answering right now.
+          These numbers stopped updating — the chain isn’t answering right now.
           Nothing is wrong with the events themselves.
         </p>
       )}
@@ -140,7 +140,7 @@ function Hero() {
           </h1>
           <p className="mt-3.5 max-w-[520px] text-[15.5px] leading-[1.6] text-[#9a9ba1] text-pretty">
             Reserve your spot with a refundable deposit and take it back by turning
-            up. Flake, and it goes to the people who didn&apos;t.
+            up. Flake, and it goes to the people who didn’t.
           </p>
         </div>
 
@@ -422,7 +422,7 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
             {mine === "checked-in" ? (
               <Chip tone="success">You showed up</Chip>
             ) : mine === "reserved" ? (
-              <Chip tone="success">You&apos;re in</Chip>
+              <Chip tone="success">You’re in</Chip>
             ) : finalized ? (
               <Chip>Closed</Chip>
             ) : checkingIn ? (
@@ -441,7 +441,7 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
               chain. Showing stale state silently is worse than showing nothing. */}
           {event.source === "index" && event.syncedAt !== undefined && (
             <p className="mt-3 text-xs text-muted-3">
-              Couldn&apos;t reach this event just now — showing what we last saw{" "}
+              Couldn’t reach this event just now — showing what we last saw{" "}
               {since(event.syncedAt)}.
             </p>
           )}

@@ -47,7 +47,7 @@ export function EventCreated({
           <SectionLabel>INVITE LINK</SectionLabel>
           <p className="mt-1.5 text-sm text-muted">
             Send this to the people you want there. Opening it lets them reserve a
-            spot with the deposit — it gives nothing else away, so it&apos;s safe to
+            spot with the deposit — it gives nothing else away, so it’s safe to
             post anywhere.
           </p>
 
@@ -71,13 +71,13 @@ export function EventCreated({
               Your check-in link — save it now
             </h3>
             <p className="mt-1.5 text-sm text-muted">
-              The chain only ever stored a hash of this event&apos;s check-in code, so
+              The chain only ever stored a hash of this event’s check-in code, so
               nobody — including us — can recover it. Right now the only copy lives in
               this browser. Clear your site data and you lose the ability to run
               check-in for this event.
             </p>
             <p className="mt-2 text-sm text-muted">
-              Putting this link somewhere you trust is the backup. Don&apos;t share it
+              Putting this link somewhere you trust is the backup. Don’t share it
               until the event starts: anyone holding it can check in, whether they
               showed up or not.
             </p>

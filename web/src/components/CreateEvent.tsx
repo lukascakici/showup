@@ -449,13 +449,13 @@ export function CreateEvent() {
                 fixed at creation: the terms somebody agreed to when they locked
                 their money must not be editable by the person holding it. */}
             <p className="mt-1 text-xs text-muted-3">
-              This can&apos;t be changed after the event is created.
+              This can’t be changed after the event is created.
             </p>
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-xs text-muted-2">
-              If someone doesn&apos;t show
+              If someone doesn’t show
             </legend>
             {POLICIES.map((p) => (
               <label
@@ -485,11 +485,11 @@ export function CreateEvent() {
           <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface p-3.5">
             <Info className="mt-0.5 size-4 shrink-0 text-accent-lift" />
             <p className="text-xs leading-[1.55] text-muted">
-              You&apos;ll fund{" "}
+              You’ll fund{" "}
               <strong className="text-foreground">{fromStroops(poolStroops)} XLM</strong> now —{" "}
               {fromStroops(FEE_ALLOWANCE_STROOPS)} XLM per spot — so nobody pays to attend:
               each guest gets that back on top of their deposit when they check in. Whatever
-              isn&apos;t used comes back to you when you finalize.
+              isn’t used comes back to you when you finalize.
             </p>
           </div>
 

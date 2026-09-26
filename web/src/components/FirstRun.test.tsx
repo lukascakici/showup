@@ -30,7 +30,7 @@ describe("explaining the deposit before asking for it", () => {
     // Somebody believing they are risking savings is the failure. So is somebody
     // believing the opposite of a real deposit later.
     render(<FirstRun deposit={10n * XLM} refund={10n * XLM} />);
-    expect(screen.getByText(/isn't real money/i)).toBeInTheDocument();
+    expect(screen.getByText(/isn['’]t real money/i)).toBeInTheDocument();
     expect(screen.getByText(/worth nothing anywhere/i)).toBeInTheDocument();
   });
 
