@@ -71,6 +71,7 @@ import {
   Skeleton,
 } from "./ui";
 import { ActivityFeed } from "./ActivityFeed";
+import { Conversation } from "./Conversation";
 import { CopyLink } from "./CopyLink";
 import { Who } from "./Who";
 import { FirstRun } from "./FirstRun";
@@ -615,6 +616,12 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             />
           </div>
         )}
+
+        {/* `canTakePart` is only whether it is worth *offering*. The server checks
+            the contract's own guest list on every request, so this being generous
+            costs nothing and being stingy would hide the panel from somebody who
+            belongs. */}
+        <Conversation id={id} canTakePart={isHost || mine !== "none"} />
 
         {isHost && !finalized && (
           <div className="mt-8">

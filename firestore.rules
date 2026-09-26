@@ -91,10 +91,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // The one-use nonces those claims are proved against. Denied both ways: a
+    // The one-use nonces a wallet proof is checked against. Denied both ways: a
     // readable challenge is one an attacker can watch for, and the only thing that
     // ever needs to see one is the route that issued it.
-    match /nameChallenges/{nonce} {
+    match /walletChallenges/{nonce} {
+      allow read, write: if false;
+    }
+
+    // The conversation attached to one event's guest list.
+    //
+    // **Denied both ways, and that is the enforcement rather than a gap in it.**
+    // The rule a reader might expect here — "allow if the caller is in this event's
+    // reserved list" — would have to read the *mirrored* event document, which is a
+    // snapshot of a guest list rather than the guest list. The authority on who
+    // holds a spot is the event contract, and a Firestore rule cannot read a
+    // contract. So membership is checked in /api/events/[id]/messages, which reads
+    // `get_reserved`, `get_checked_in` and the hosts off the chain on every
+    // request, and this rule is what guarantees there is no other way in.
+    match /events/{eventId}/messages/{messageId} {
       allow read, write: if false;
     }
 
