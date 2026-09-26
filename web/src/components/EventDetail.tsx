@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import {
   CalendarClock,
   CheckCircle2,
@@ -307,9 +308,14 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             aria-hidden
             className="size-8 shrink-0 rounded-[9px] bg-[linear-gradient(140deg,#8E9098,#CDCFD6)]"
           />
-          <span className="min-w-0 flex-1 truncate font-mono text-sm">
+          {/* A guest about to lock a deposit is entitled to know how many events
+              this wallet has actually run to settlement. */}
+          <Link
+            href={`/u/${event.organizer}`}
+            className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
+          >
             {shortAddr(event.organizer, 6, 6)}
-          </span>
+          </Link>
           {isHost && <Chip tone="accent">You</Chip>}
         </div>
 
@@ -791,9 +797,16 @@ function Applicants({
                 className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
               >
                 <Identicon address={applicant} />
-                <span className="min-w-0 flex-1 truncate font-mono text-sm">
+                {/* The host is deciding whether to let this wallet in, and the
+                    ledger already knows whether it has turned up before. Making
+                    them copy the address out to find that is the difference
+                    between a record that exists and one anybody uses. */}
+                <Link
+                  href={`/u/${applicant}`}
+                  className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
+                >
                   {shortAddr(applicant, 6, 6)}
-                </span>
+                </Link>
                 <span className="flex shrink-0 gap-2">
                   <Button
                     variant="secondary"

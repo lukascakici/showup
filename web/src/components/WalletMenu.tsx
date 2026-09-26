@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  BadgeCheck,
   Copy,
   Check,
   RefreshCw,
@@ -11,7 +12,7 @@ import {
 import { useWallet } from "@/lib/wallet";
 import { EXPLORER_ACCOUNT } from "@/lib/stellar";
 import { formatXlm, shortAddr } from "@/lib/format";
-import { Button, Skeleton, SectionLabel } from "./ui";
+import { Button, ButtonLink, Skeleton, SectionLabel } from "./ui";
 import { FaucetButton } from "./Faucet";
 
 export function WalletMenu() {
@@ -181,6 +182,26 @@ export function WalletMenu() {
               </code>
             </div>
           )}
+
+          {/* The ledger has been readable from the chain since the first week and
+              readable by a person only since the record page existed. This is the
+              one place somebody would look for their own. */}
+          <div className="mt-5">
+            <SectionLabel>YOUR RECORD</SectionLabel>
+            <div className="mt-2.5">
+              {/* Closed on click, or navigating to the page you are already on
+                  leaves the menu hanging open over it. */}
+              <ButtonLink
+                href={`/u/${address}`}
+                variant="secondary"
+                fullWidth
+                onClick={() => setOpen(false)}
+              >
+                <BadgeCheck className="size-4" />
+                Show-up record
+              </ButtonLink>
+            </div>
+          </div>
 
           {/* Faucet */}
           <div className="mt-5">
