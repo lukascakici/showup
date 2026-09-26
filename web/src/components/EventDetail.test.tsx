@@ -674,3 +674,28 @@ describe("EventDetail — who can run the event", () => {
     expect(screen.queryByText(/who can run this event/i)).toBeNull();
   });
 });
+
+describe("EventDetail — the deposit explained before it is asked for", () => {
+  it("shows the first-run panel with this event's own numbers", async () => {
+    state.event = anEvent({ deposit: 10n * XLM, feeAllowance: XLM / 10n });
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // Wired in on the event page rather than the home page: this is the screen
+    // where a signature is about to be asked for, and the numbers are this
+    // event's rather than an example's.
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/before you reserve/i);
+    expect(dialog).toHaveTextContent(/10\.1 XLM comes straight back/i);
+  });
+
+  it("is gone for a browser that has already read it", async () => {
+    localStorage.setItem("showup.firstrun.v1", "1");
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // Waits for the event itself to be on screen, so this is "rendered and no
+    // dialog" rather than "nothing rendered yet".
+    await screen.findByText(/Perşembe halı saha/);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});

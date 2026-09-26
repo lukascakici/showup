@@ -73,6 +73,7 @@ import {
 import { ActivityFeed } from "./ActivityFeed";
 import { CopyLink } from "./CopyLink";
 import { Who } from "./Who";
+import { FirstRun } from "./FirstRun";
 import { EventPoster } from "./EventPoster";
 import { FaucetButton } from "./Faucet";
 import { AvatarStack, Identicon } from "./Identicon";
@@ -581,6 +582,11 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             <ErrorNote>{action.message}</ErrorNote>
           </div>
         )}
+
+        {/* Before the panels below ask for anything, and using this event's own
+            numbers rather than an example — a deposit explained in the abstract is
+            the one people skip. Once per browser; it dismisses itself. */}
+        <FirstRun deposit={event.deposit} refund={refund} />
 
         {/* Not gated on being a host. Vouching is the one thing on this page any
             member can do for somebody else, and the contract decides whether
