@@ -19,6 +19,7 @@ import {
   Send,
   TriangleAlert,
   Undo2,
+  Users,
   Wallet,
   XCircle,
 } from "lucide-react";
@@ -295,6 +296,24 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   const applyToCome = () =>
     run(async () => {
       const tx = await eventClient(id, signer).apply({ guest: signer.publicKey! });
+      await tx.signAndSend();
+    });
+
+  const addHost = (host: string) =>
+    run(async () => {
+      const tx = await eventClient(id, signer).add_host({
+        host: signer.publicKey!,
+        new_host: host,
+      });
+      await tx.signAndSend();
+    });
+
+  const removeHost = (host: string) =>
+    run(async () => {
+      const tx = await eventClient(id, signer).remove_host({
+        host: signer.publicKey!,
+        target: host,
+      });
       await tx.signAndSend();
     });
 
@@ -586,6 +605,19 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
               busy={busy}
               truncated={activityResult?.truncated ?? false}
               onAnswer={answer}
+            />
+          </div>
+        )}
+
+        {isHost && !finalized && (
+          <div className="mt-8">
+            <Hosts
+              creator={event.organizer}
+              hosts={event.hosts}
+              you={address}
+              busy={busy}
+              onAdd={addHost}
+              onRemove={removeHost}
             />
           </div>
         )}
@@ -1581,6 +1613,116 @@ function MiniTile({
 /* -------------------------------------------------------------------------- */
 /* Organizer                                                                  */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Who else may run this event.
+ *
+ * The contract has had `add_host` and `remove_host` since co-hosting shipped, and
+ * nothing in the app called either of them — a capability stranded on-chain, which
+ * is worse than one that does not exist, because the README says it is there.
+ *
+ * Two things this has to be honest about, both of them the contract's rules rather
+ * than ours:
+ *
+ * **The creator is permanent.** `remove_host` aimed at them is refused, so their
+ * row has no button at all instead of one that fails when pressed. Said in words
+ * too, because an organizer adding a co-host is entitled to know they cannot be
+ * removed by them.
+ *
+ * **A co-host can run the event but cannot redirect its money.** Every payout in
+ * `finalize` goes to `config.organizer`, never to whichever host called it. That
+ * makes adding one a decision about labour and not about funds, which is the whole
+ * reason it is safe to offer here.
+ */
+function Hosts({
+  creator,
+  hosts,
+  you,
+  busy,
+  onAdd,
+  onRemove,
+}: {
+  creator: string;
+  hosts: string[];
+  you: string | null;
+  busy: boolean;
+  onAdd: (host: string) => void;
+  onRemove: (host: string) => void;
+}) {
+  const [candidate, setCandidate] = useState("");
+  const trimmed = candidate.trim();
+  const valid = isAccountAddress(trimmed);
+  const already = hosts.includes(trimmed);
+
+  return (
+    <Panel title="Who can run this event" meta="ANY HOST MAY ADD">
+      <ul className="flex flex-col divide-y divide-border">
+        {hosts.map((host) => (
+          <li key={host} className="flex flex-wrap items-center gap-3 py-3 first:pt-0">
+            <Identicon address={host} />
+            <Link
+              href={`/u/${host}`}
+              className="min-w-0 flex-1 truncate font-mono text-sm underline decoration-border-hover underline-offset-2 transition-colors hover:text-accent-lift"
+            >
+              {shortAddr(host, 6, 6)}
+            </Link>
+            {host === creator ? (
+              <Chip>Creator</Chip>
+            ) : (
+              <>
+                {host === you && <Chip tone="accent">You</Chip>}
+                <Button
+                  variant="secondary"
+                  onClick={() => onRemove(host)}
+                  disabled={busy}
+                >
+                  Remove
+                </Button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-5 border-t border-border pt-5">
+        <Field
+          label="Add a co-host"
+          hint={
+            already
+              ? "That wallet is already a host here."
+              : trimmed.length > 0 && !valid
+                ? "A Stellar account address is 56 characters and starts with G."
+                : "They will be able to start check-in, answer applications and finalize."
+          }
+        >
+          <Input
+            value={candidate}
+            onChange={(e) => setCandidate(e.target.value)}
+            placeholder="G…"
+            spellCheck={false}
+            autoComplete="off"
+            className="font-mono"
+          />
+        </Field>
+        <Button
+          fullWidth
+          className="mt-4"
+          disabled={!valid || already}
+          loading={busy}
+          onClick={() => onAdd(trimmed)}
+        >
+          <Users className="size-4" />
+          Add co-host
+        </Button>
+        <p className="mt-3 text-xs leading-relaxed text-muted-2">
+          A co-host runs the event; they cannot move its money. Every payout goes to
+          the wallet that created it, whoever signs the finalize. The creator cannot
+          be removed, including by a co-host they added.
+        </p>
+      </div>
+    </Panel>
+  );
+}
 
 function OrganizerPanel({
   id,

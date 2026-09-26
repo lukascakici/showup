@@ -604,3 +604,73 @@ describe("EventDetail — a score-gated event", () => {
     expect(await screen.findByRole("link", { name: /find an open event/i })).toBeInTheDocument();
   });
 });
+
+/**
+ * Co-host management.
+ *
+ * The contract has had `add_host` and `remove_host` since co-hosting shipped and
+ * nothing called either — a capability stranded on-chain while the README said it
+ * was there. What needs pinning is the two rules that are the contract's, because
+ * a button that fails only when pressed is worse than no button.
+ */
+describe("EventDetail — who can run the event", () => {
+  const CO_HOST = "GCOHOST1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFG";
+
+  it("offers no way to remove the creator, who is permanent", async () => {
+    state.event = anEvent({ organizer: ORGANIZER, hosts: [ORGANIZER, CO_HOST] });
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    await screen.findByText(/who can run this event/i);
+    // One Remove, for the co-host. `remove_host` aimed at the creator is refused
+    // on-chain, so a second button here would be one the contract rejects.
+    expect(screen.getAllByRole("button", { name: /^remove$/i })).toHaveLength(1);
+    expect(screen.getByText(/creator cannot be removed/i)).toBeInTheDocument();
+  });
+
+  it("says a co-host cannot move the money, because that is what makes it safe", async () => {
+    state.event = anEvent({ organizer: ORGANIZER, hosts: [ORGANIZER] });
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    // Every payout in `finalize` goes to `config.organizer`, never to whichever
+    // host called it. Adding one is a decision about labour, not about funds.
+    expect(await screen.findByText(/they cannot move its money/i)).toBeInTheDocument();
+  });
+
+  it("will not submit a wallet that is already a host, or a non-address", async () => {
+    state.event = anEvent({ organizer: ORGANIZER, hosts: [ORGANIZER, CO_HOST] });
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    const field = await screen.findByLabelText(/add a co-host/i);
+    await userEvent.type(field, CO_HOST);
+    expect(screen.getByText(/already a host/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add co-host/i })).toBeDisabled();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "GCOHOST");
+    expect(screen.getByRole("button", { name: /add co-host/i })).toBeDisabled();
+  });
+
+  it("is hidden from a guest, and from everyone once the event has settled", async () => {
+    state.event = anEvent({ organizer: ORGANIZER, hosts: [ORGANIZER] });
+    state.address = GUEST;
+    state.balance = funded("100");
+    const guestView = render(<EventDetail id={ID} linkSecret={null} />);
+    await screen.findByRole("button", { name: /reserve/i });
+    expect(screen.queryByText(/who can run this event/i)).toBeNull();
+    guestView.unmount();
+
+    // A settled event's host list is history. Changing it would write to a
+    // contract whose phase machine is terminal.
+    state.event = anEvent({ organizer: ORGANIZER, hosts: [ORGANIZER], phase: "Finalized" });
+    state.address = ORGANIZER;
+    render(<EventDetail id={ID} linkSecret={null} />);
+    await screen.findByText(/this event is finalized/i);
+    expect(screen.queryByText(/who can run this event/i)).toBeNull();
+  });
+});
