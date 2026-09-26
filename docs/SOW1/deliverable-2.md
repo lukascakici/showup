@@ -22,11 +22,26 @@ trust that a second transaction belongs to the first.
 
 ## The scores, read back from the contract afterwards
 
-| Address | Score | |
+**Read on 08.08.2026, at the end of this engagement.** The dates matter: this
+ledger is **append-only and still live.** A score is not a fixed fact about a
+wallet, it is a running total, and these wallets have gone on being used for
+testing since — so a reader checking them today will find larger numbers, not
+these. That is the record working rather than the record being wrong.
+
+| Address | Score on 08.08.2026 | |
 | :-- | :-- | :-- |
 | [`GA5TJJJCL2VXRFJPEQW42Q5GC7NOXWIXZRGOI77TEOW42OTW6KEVNGEO`](https://stellar.expert/explorer/testnet/account/GA5TJJJCL2VXRFJPEQW42Q5GC7NOXWIXZRGOI77TEOW42OTW6KEVNGEO) | `{ shows: 1, no_shows: 0 }` | showed up |
 | [`GB2QLDW2Y6ETGK5Z7AO2XSYWNN6KZNC3ZQNJMVVUJWZBUG5C3Y2ZVOST`](https://stellar.expert/explorer/testnet/account/GB2QLDW2Y6ETGK5Z7AO2XSYWNN6KZNC3ZQNJMVVUJWZBUG5C3Y2ZVOST) | `{ shows: 0, no_shows: 1 }` | skipped |
 | [`GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW`](https://stellar.expert/explorer/testnet/account/GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW) | `{ shows: 1, no_shows: 1 }` | accumulated across two events |
+
+Since then, **`GA5TJJJC…` has picked up a no-show** — recorded on 26.09.2026 when
+a test event it had reserved a spot in was finalised without it checking in. It
+reads `{ shows: 1, no_shows: 1 }` today.
+
+It is left standing rather than quietly edited, because **the counter cannot go
+back down.** There is no call on this contract that removes a no-show, by design:
+a record somebody could tidy up afterwards would not be worth gating an event on.
+The document is dated instead, which is the only correction a live ledger permits.
 
 Anyone can re-read them; no key needed:
 

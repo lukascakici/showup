@@ -8,6 +8,15 @@ This file is cumulative. **v1** stays exactly as it was recorded — it is the
 evidence that Deliverable 1 worked end to end, and deleting it would delete that
 proof.
 
+**How to read a score in this file.** Every `{shows, no_shows}` below is what the
+ledger said *at the moment that section describes*, and the reputation contract is
+**append-only and still in use.** A wallet quoted here as `{shows: 1, no_shows: 0}`
+may well read higher today — these are testing wallets and they go on being tested
+with. Nothing is edited when that happens: the counters cannot go back down, by
+design, because a record somebody could tidy up afterwards would not be worth
+gating an event on. Each section is dated; read the numbers as of its date, and
+use the keyless commands to read what the chain says now.
+
 ## Contracts — v2 (current)
 
 | What | Value |
