@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Hand, Lock, UserCheck, Users } from "lucide-react";
+import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Hand, HeartHandshake, Lock, UserCheck, Users } from "lucide-react";
 import { activityId, type Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
 import { EXPLORER_TX } from "@/lib/stellar";
@@ -124,6 +124,7 @@ function Icon({ kind }: { kind: Activity["kind"] }) {
   if (kind === "host_added" || kind === "host_removed") {
     return <Users className={`${className} text-muted`} />;
   }
+  if (kind === "vouched") return <HeartHandshake className={`${className} text-muted`} />;
   return <Flag className={`${className} text-muted`} />;
 }
 
@@ -160,6 +161,12 @@ function describe(a: Activity): string {
   }
   if (a.kind === "host_removed") {
     return `${shortAddr(a.host)} can no longer run this event`;
+  }
+  if (a.kind === "vouched") {
+    // Both addresses, deliberately. This is the only row where somebody takes on
+    // a cost for a third party, and naming just the guest would hide who is
+    // actually exposed if they don't turn up.
+    return `${shortAddr(a.voucher)} vouched for ${shortAddr(a.guest)} — ${a.vouches} so far`;
   }
   const forfeited = fromStroops(a.forfeited);
   return `Finalized — ${a.showed} showed, ${a.noShows} didn't, ${forfeited} XLM forfeited`;

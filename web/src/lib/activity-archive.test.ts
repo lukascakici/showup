@@ -161,6 +161,15 @@ describe("applications and hosts in the archive", () => {
     }
   });
 
+  it("keeps both sides of a vouch, because one of them is the one on the hook", () => {
+    // Every other row names the person who acted. This one names two people, and
+    // the second is the one who pays if the first doesn't turn up — so losing
+    // either address through storage would leave the history unable to say who
+    // was exposed.
+    const row = { kind: "vouched" as const, voucher: G, guest: GUEST, vouches: 2, ...base };
+    expect(fromArchived(toArchived(row))).toEqual(row);
+  });
+
   it("stores no undefined fields, whatever the kind", () => {
     // Firestore rejects `undefined` outright rather than storing a null, so a
     // record built by spreading the union fails on whichever variant it was
@@ -170,6 +179,7 @@ describe("applications and hosts in the archive", () => {
       { kind: "answered" as const, applicant: G, approved: true, ...base },
       { kind: "host_added" as const, host: G, ...base },
       { kind: "host_removed" as const, host: G, ...base },
+      { kind: "vouched" as const, voucher: G, guest: GUEST, vouches: 1, ...base },
     ];
     for (const row of rows) {
       for (const [key, value] of Object.entries(toArchived(row))) {

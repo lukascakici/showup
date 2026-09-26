@@ -227,6 +227,10 @@ export type Activity = Occurred &
     | { kind: "answered"; applicant: string; approved: boolean }
     | { kind: "host_added"; host: string }
     | { kind: "host_removed"; host: string }
+    // A vouch is the one row here that commits somebody other than the person
+    // acting, so leaving it out of the history would hide the only thing on this
+    // feed that a third party is on the hook for.
+    | { kind: "vouched"; voucher: string; guest: string; vouches: number }
   );
 
 /**
@@ -370,6 +374,16 @@ function decodeActivity(raw: rpc.Api.EventResponse[], eventId: string): Activity
         // between a guest list and a rubber stamp. Defaulting it to `true`
         // would turn every decline in the archive into an approval.
         approved: data.approved === true,
+        ...where,
+      });
+    } else if (name === "vouched") {
+      // Topic name and field names taken from a real `vouch` on Testnet, not
+      // from the Rust struct's spelling — the two have diverged before.
+      out.push({
+        kind: "vouched",
+        voucher: String(data.voucher),
+        guest: String(data.guest),
+        vouches: Number(data.vouches ?? 0),
         ...where,
       });
     } else if (name === "host_added") {

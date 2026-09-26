@@ -46,6 +46,8 @@ export type ArchivedActivity = {
   applicant?: string;
   approved?: boolean;
   host?: string;
+  voucher?: string;
+  vouches?: number;
 };
 
 /**
@@ -80,6 +82,8 @@ export function toArchived(a: Activity): ArchivedActivity {
     case "host_added":
     case "host_removed":
       return { ...base, host: a.host };
+    case "vouched":
+      return { ...base, voucher: a.voucher, guest: a.guest, vouches: a.vouches };
   }
 }
 
@@ -132,6 +136,14 @@ export function fromArchived(doc: ArchivedActivity): Activity | null {
       return { kind: "host_added", host: doc.host ?? "", ...base };
     case "host_removed":
       return { kind: "host_removed", host: doc.host ?? "", ...base };
+    case "vouched":
+      return {
+        kind: "vouched",
+        voucher: doc.voucher ?? "",
+        guest: doc.guest ?? "",
+        vouches: doc.vouches ?? 0,
+        ...base,
+      };
     default:
       // A row written by a newer deploy than this bundle. Skipping it shows a
       // shorter history; guessing at it would show a wrong one.
