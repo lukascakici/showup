@@ -330,6 +330,27 @@ function since(ms: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+/**
+ * How an event's door reads on a card, or `null` for the one that has no door.
+ *
+ * Deliberately short and in the guest's terms, not the contract's: a card has to
+ * answer "can I come to this" at a glance. The threshold is included because
+ * "needs a record" and "needs three check-ins" are different answers to that
+ * question.
+ */
+function admissionLabel(admission: ListedEvent["admission"]): string | null {
+  if (admission.tag === "Score") {
+    const needed = Number(admission.values?.[0] ?? 1);
+    return needed === 1 ? "Regulars only" : `${needed} check-ins needed`;
+  }
+  if (admission.tag === "Approval") return "By approval";
+  if (admission.tag === "Vouch") {
+    const needed = Number(admission.values?.[0] ?? 1);
+    return needed === 1 ? "Needs a vouch" : `Needs ${needed} vouches`;
+  }
+  return null;
+}
+
 function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
   const left = spotsLeft(event);
   const yours = !!you && event.organizer === you;
@@ -391,6 +412,13 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
             <Chip tone="accent" mono>
               {fromStroops(event.deposit)} XLM deposit
             </Chip>
+            {/* Whether you can get in at all now matters more than how many spots
+                are left, and until this row it was only discoverable by opening
+                the event. `Open` stays unlabelled: naming the default on every
+                card would turn the one row that carries information into noise. */}
+            {admissionLabel(event.admission) && (
+              <Chip>{admissionLabel(event.admission)}</Chip>
+            )}
             {mine === "checked-in" ? (
               <Chip tone="success">You showed up</Chip>
             ) : mine === "reserved" ? (
