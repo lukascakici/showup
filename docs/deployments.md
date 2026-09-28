@@ -701,8 +701,8 @@ than two months, and each write extends its own lease again on the way past.
 
 ## Deliverable 3 evidence — one real run, 12 wallets, 11 check-ins
 
-Run on **23.08.2026**, remotely: no venue, every participant on their own phone
-from wherever they were. Invitations went out in a group chat; twelve people
+Run on **23.08.2026**, remotely: no venue, every participant on their own device
+from wherever they were. Invitations went out in a group chat; twelve wallets
 reserved within about an hour, eleven checked in, one did not.
 
 The whole table below was read off the chain by
