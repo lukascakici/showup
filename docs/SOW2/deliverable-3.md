@@ -28,26 +28,11 @@ product. The demo video is filmed on the event run itself.
   </a>
 </p>
 
-**[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)** — an invite arriving in a
-group chat, a deposit locked to take the spot, the deposit back the moment you check
-in, and what that does to turnout. It illustrates the mechanism; the screens
-themselves are below, and every number it quotes is settled on-chain and listed in
-[deliverable-2.md](deliverable-2.md).
-
-Two details in it are the contract's actual behaviour rather than a simplification,
-and they are the two people ask about:
-
-- **10 XLM locked, 10.1 XLM back.** The extra 0.1 is the organizer's, funded up front
-  as `fee_allowance × capacity`, so a guest who shows up is made whole for the fees
-  they spent reserving and checking in. Attending costs nothing.
-- **"If anyone flakes, your share of their deposit arrives when the organizer
-  finalizes."** Forfeited deposits are split among the people who did turn up, in the
-  same call that settles the event.
-
-The turnout comparison at the end is the one the home page makes: a measured **82.4%**
-across the four settled events — 14 of 17 reserved spots — against a round ~50% for a
-free RSVP. The second figure is a rule of thumb rather than anything measured here,
-which is why it is drawn as the weaker of the two.
+**[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)** — an invite in a group chat,
+a deposit locked to take the spot, the deposit back on check-in, and what that does
+to turnout. It illustrates the mechanism; the real screens are below, and the turnout
+figure it compares against is the measured **82.4%** — 14 of 17 reserved spots across
+the four settled events in [deliverable-2.md](deliverable-2.md).
 
 ---
 
