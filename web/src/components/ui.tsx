@@ -5,8 +5,13 @@ import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "md" | "lg";
 
+// The focus ring is styled rather than removed. Left to the browser it is a stock
+// blue, which is the only blue anywhere in a monochrome-and-silver palette — and it
+// is not a rare state: the onboarding panel's button is autofocused, so it is the
+// first thing a first-time visitor sees. `focus-visible` rather than `focus`, so it
+// answers a keyboard and stays out of a mouse's way.
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-xl transition-colors disabled:opacity-40 disabled:pointer-events-none select-none";
+  "inline-flex items-center justify-center gap-2 rounded-xl transition-colors disabled:opacity-40 disabled:pointer-events-none select-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 const sizes: Record<Size, string> = {
   md: "h-11 px-5 text-sm font-medium",
