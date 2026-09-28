@@ -30,9 +30,7 @@ product. The demo video is filmed on the event run itself.
 
 **[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)** — an invite in a group chat,
 a deposit locked to take the spot, the deposit back on check-in, and what that does
-to turnout. It illustrates the mechanism; the real screens are below, and the turnout
-figure it compares against is the measured **82.4%** — 14 of 17 reserved spots across
-the four settled events in [deliverable-2.md](deliverable-2.md).
+to turnout. The real screens are below.
 
 ---
 
