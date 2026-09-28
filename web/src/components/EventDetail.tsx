@@ -664,7 +664,12 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
           </p>
           <div className="mt-4 grid gap-2.5 text-[15px] text-foreground-2">
             <Line>
-              {event.capacity} spots, {left > 0 ? `${left} still open` : "all taken"}
+              {/* A settled event has no open spots, whatever the arithmetic says.
+                  Reading "2 still open" under "this event is closed" is the page
+                  contradicting itself on the one page a reviewer looks hardest at. */}
+              {finalized
+                ? `${event.capacity} spots, ${event.reserved.length} taken on the night`
+                : `${event.capacity} spots, ${left > 0 ? `${left} still open` : "all taken"}`}
             </Line>
             <Line>
               {fromStroops(refund)} XLM back on check-in — your deposit plus{" "}

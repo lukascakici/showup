@@ -245,9 +245,10 @@ Verified against the live chain on 26.09.2026, on a real event:
 
 Taken on **[`CDK2UWJU…VRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD)**,
 the vouch-gated run of 29.09.2026, from the seat of a guest who reserved and
-checked in. Six messages, each stored under the address its session proved — the
-organizer, someone asking how the check-in code is handed out, and a newcomer saying
-they only got in because a member vouched for them.
+checked in. Six messages from four wallets, each stored under the address its own
+session proved — the organizer's, and three that the contract lists as holding a
+spot. A `from` supplied in the request body is ignored; the route takes it from the
+session and nowhere else.
 
 The panel above it is that guest's own settlement: **was locked 10 XLM, refunded
 10.1 XLM.** Both numbers are read from the event contract, not from the message
