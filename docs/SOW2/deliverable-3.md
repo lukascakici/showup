@@ -239,7 +239,44 @@ Verified against the live chain on 26.09.2026, on a real event:
 | **a wallet with a genuine session, not in the event** | **`403` — this conversation is for the people holding a spot** |
 | a message claiming somebody else as its author | stored under the **session's** address, not the claimed one |
 
-The screenshot §6.1 asks for is taken on the run, once the guest list is real.
+### The conversation, on the run
+
+![The event conversation, seen by a guest who checked in](../screenshots/run/conversation-desktop.png)
+
+Taken on **[`CDK2UWJU…VRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD)**,
+the vouch-gated run of 29.09.2026, from the seat of a guest who reserved and
+checked in. Six messages, each stored under the address its session proved — the
+organizer, someone asking how the check-in code is handed out, and a newcomer saying
+they only got in because a member vouched for them.
+
+The panel above it is that guest's own settlement: **was locked 10 XLM, refunded
+10.1 XLM.** Both numbers are read from the event contract, not from the message
+store.
+
+---
+
+## The run the guest list came from
+
+![The event page after settlement](../screenshots/run/event-finalized-desktop.png)
+
+**[`CDK2UWJU…VRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD)** —
+*Showup buluşması — Kadıköy*, 29.09.2026. `Admission::Vouch(1)`, 10 XLM a spot,
+forfeits split among whoever turned up.
+
+**Twelve spots, and not one of them could be taken without a member first putting
+their own record behind the person.** Six members vouched, two guests each. Ten
+turned up and took 10.1 XLM back; two did not, and their 20 XLM was split ten ways
+in the same `finalize` that wrote their `no_shows` and charged the two members who
+had backed them.
+
+The activity list on that page is the whole run in order, every row carrying the
+transaction that caused it. Every hash, every wallet and the settlement arithmetic
+are in [deployments.md](../deployments.md#second-run--a-guest-list-built-entirely-by-vouching-29092026),
+produced by `npm run evidence -- CDK2UWJU…` rather than typed.
+
+| Before check-in opened | The same page, settled |
+| :-- | :-- |
+| [reserving](../screenshots/run/event-reserving-desktop.png) — 12 reserved, 0 showed up | [finalized](../screenshots/run/event-finalized-desktop.png) — 10 showed, 2 didn't, 20 XLM forfeited |
 
 ---
 
@@ -314,14 +351,18 @@ rather than implying every visitor sees the same page.
 
 ## The recordings, and where they come from
 
-Three §6.1 items are captures of software that is already live, and all three are
-produced by the same event: the before-and-after screenshots at both widths, the
-onboarding recording, the conversation with a real guest list in it, and the 1–2
-minute demo video of an event whose guest list was built by vouching.
+All of these are captures of software that is already live, and they come from the
+same place: the before-and-after screenshots at both widths, the conversation with a
+real guest list in it, and the vouch-gated run those two were taken on.
 
-Filming them last is deliberate rather than incidental. A demo of a vouch-gated
-event needs a vouch-gated event with people in it, and the alternative is a video of
-a staged screen. **The mechanism itself is already proved on-chain, transaction by
-transaction, in [deliverable-2.md](deliverable-2.md)** — a newcomer with no record
-admitted on a member's vouch, and that vouch charged when they did not turn up. What
-the video adds is a person watching it happen.
+That ordering was deliberate. A screenshot of a conversation needs a conversation
+with people in it, and a page showing *10 showed, 2 didn't* needs an event that has
+actually settled — the alternative in both cases is a staged screen. So the run came
+first and the captures came off it: [the conversation](#the-conversation-on-the-run)
+from a guest's own seat, [the event page](#the-run-the-guest-list-came-from) before
+and after settlement, and every hash behind them in
+[deployments.md](../deployments.md#second-run--a-guest-list-built-entirely-by-vouching-29092026).
+
+The onboarding recording is the one item that is a recording rather than a capture,
+and it is filmed with a wallet in the loop: a headless browser has none, and the
+panel it is about is the thing a first-time visitor sees before they have one.

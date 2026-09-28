@@ -820,6 +820,180 @@ Every score above moved inside the same transaction as the money — the
 `score_changed` event, so there is no second transaction anyone has to be asked
 to trust.
 
+## Second run — a guest list built entirely by vouching (29.09.2026)
+
+The first run's guest list was open: anybody with the link could take a spot. This
+one could not be joined at all without a member putting their own record behind
+you. Twelve wallets reserved, and **not one of them could have** — every single
+spot was opened by a `vouch` transaction first.
+
+`Admission::Vouch(1)`, 10 XLM deposit, 14 capacity, forfeits split among whoever
+turned up. Six members did the vouching, two guests apiece.
+
+### The gate, refused before it was passed
+
+Both refusals were taken against the live event before any vouch existed. **Neither
+has a transaction hash, and cannot have one** — Soroban simulates before it submits,
+so a contract error means the transaction was never built. Both reproduce with the
+CLI and no key:
+
+```bash
+EVENT=CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD
+
+# A wallet nobody vouched for tries to reserve.
+stellar contract invoke --network testnet --id $EVENT \
+  --source <any wallet> -- rsvp --guest <that wallet>
+# error: HostError: Error(Contract, #27)   — NotEnoughVouches
+
+# A wallet with no record of its own tries to vouch somebody in.
+stellar contract invoke --network testnet --id $EVENT \
+  --source <a wallet with no shows> -- vouch --voucher <it> --guest <anyone>
+# error: HostError: Error(Contract, #24)   — CannotVouch
+```
+
+The second one is the half that makes a vouch cost something. Without it, a wallet
+with nothing to lose could wave in strangers forever.
+
+### Where the twelve vouches came from
+
+Six members, each vouching for two guests. Four of them earned the record that
+qualified them at a warm-up event held the same evening
+([`CCK7IW36…SVH45WI7UB`](https://stellar.expert/explorer/testnet/contract/CCK7IW36FHT2I5QJQ5CHI6QJUDOP5JECXQNIQFZ6BQ4E6FSVH45WI7UB)),
+which is the point worth pausing on: **the thing that admitted them here was written
+by a different contract**, and this event read it rather than being told it.
+
+| Voucher | Vouched in | Both showed? |
+| :-- | :-- | :-- |
+| [`GBBHPJ…IDTL`](https://stellar.expert/explorer/testnet/account/GBBHPJYHGFN5UEFQCSQBS6J5FAL2UG4RAKJY545ESHSGBKMIKMFCIDTL) | guests 1, 2 | yes |
+| [`GA5TJJ…NGEO`](https://stellar.expert/explorer/testnet/account/GA5TJJJCL2VXRFJPEQW42Q5GC7NOXWIXZRGOI77TEOW42OTW6KEVNGEO) | guests 3, 4 | yes |
+| [`GCK467…U5M7`](https://stellar.expert/explorer/testnet/account/GCK4673UMRZFOGT53MOICX47ABQRT6KVCESHMPS4HPHY566KRDI2U5M7) | guests 5, 6 | yes |
+| [`GDJD7A…3N5V`](https://stellar.expert/explorer/testnet/account/GDJD7A3AQ7VK5GJ57IOOR2K656HBZCIQ7S5Z6S2Y67EK6LKB6BYL3N5V) | guests 7, 8 | yes |
+| [`GCNODV…CYOW`](https://stellar.expert/explorer/testnet/account/GCNODVPULOONWYQEDMWIH3PSIQEZ2A3UPXMHCOQHBDZGOCQ67KDNCYOW) | guests 9, 10 | **no — guest 10 did not turn up** |
+| [`GAON7A…XFPK`](https://stellar.expert/explorer/testnet/account/GAON7ARMKLOKRXTYJKIDAX5H3ZIXMMNYS4KVKYKBIXPCXPYTLD27XFPK) | guests 11, 12 | **no — guest 12 did not turn up** |
+
+### The run
+
+**Event**
+
+| | |
+| --- | --- |
+| Event contract | [`CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD) |
+| Title | Showup buluşması — Kadıköy |
+| Organizer | [`GDL3H6…ZOZKI5`](https://stellar.expert/explorer/testnet/account/GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5) |
+| `create_event` tx | [`4c4fa75b…f9302c`](https://stellar.expert/explorer/testnet/tx/4c4fa75bd37f1584930c610376a12cd9e78e254af3d3bfc941be182e1bf9302c) |
+| → `CheckingIn` tx | [`03a0fc6d…571461`](https://stellar.expert/explorer/testnet/tx/03a0fc6d5c3ff6eff8401cb1b8d466dec5be7b284bddf285ee6ba4c1f6571461) |
+| `finalize` tx | [`12b5c947…b0fe14`](https://stellar.expert/explorer/testnet/tx/12b5c9470cc24d7c674dc614bf11604748a68741ccef175202adaab02db0fe14) |
+| Reserved / showed | 12 / 10 |
+| Forfeited and split | 20.00 XLM |
+
+**Attendees**
+
+| # | Wallet address | `rsvp` tx | `check_in` tx | Showed |
+| --- | --- | --- | --- | --- |
+| 1 | [`GCIJ6S…W7KHX7`](https://stellar.expert/explorer/testnet/account/GCIJ6SY4NXYOITBDPUSLQFIZWWCGT35Y4BS7JETOKJDVIS424OW7KHX7) | [`6b6a06cc…613aa4`](https://stellar.expert/explorer/testnet/tx/6b6a06ccc314b405b1ae836781e751fab175b68fce4564a426ec111b5e613aa4) | [`7cf344ae…af42fa`](https://stellar.expert/explorer/testnet/tx/7cf344aeb88390c09d5f4cda3536324914041341bf30a0d1659da4e3ecaf42fa) | yes |
+| 2 | [`GDXV54…QSAVGP`](https://stellar.expert/explorer/testnet/account/GDXV54QO4JQ2HYTJR5UDBPWLJ3RML3P4FKWWNQZDXCFWM7J7A2QSAVGP) | [`7f845355…24cb3d`](https://stellar.expert/explorer/testnet/tx/7f845355ccc80f0e6f79cba9a6fe77248585ec324d7c5a277a65bd9b7e24cb3d) | [`befb37a7…854b2e`](https://stellar.expert/explorer/testnet/tx/befb37a74ef101746f208ccbac4fcbd72b2db75a154a7c8edaf412dc53854b2e) | yes |
+| 3 | [`GAV7UI…7ITYGC`](https://stellar.expert/explorer/testnet/account/GAV7UI47Y4PTPZ5QC4USTYPYTYNA6KVSIKYS677EJ5P5BRJZBG7ITYGC) | [`3e77635e…358b42`](https://stellar.expert/explorer/testnet/tx/3e77635e70eb32a135a6c91d64d5890ac176180370dd8a781df9d33845358b42) | [`4b469ef9…858e5f`](https://stellar.expert/explorer/testnet/tx/4b469ef9a94f2f8c427244dd01273a1a8f72fc8582808d8d4d5bffd6ac858e5f) | yes |
+| 4 | [`GCLIKB…UT3YQD`](https://stellar.expert/explorer/testnet/account/GCLIKBWAIWWOKDC5ZE3I7FUQQ6OVZ2V763OAU53C376JYA5UVFUT3YQD) | [`1a372b1b…c7a7d8`](https://stellar.expert/explorer/testnet/tx/1a372b1b0a880c2c74cbc9af7c4f3b066a21a32b3c19cebc4c1b03066cc7a7d8) | [`00401f91…d3a07b`](https://stellar.expert/explorer/testnet/tx/00401f9118e2bb64a936626de529cc82590c89ab8b646374832ed867f9d3a07b) | yes |
+| 5 | [`GB55VS…KABMDY`](https://stellar.expert/explorer/testnet/account/GB55VSHNFR7AQO6D36PXWVMFFUXJGGIGAJXUZ3MSPRIARW2TNZKABMDY) | [`b696d866…79b882`](https://stellar.expert/explorer/testnet/tx/b696d86683c6fd8ce3f41886032a97e3bd572ebeb7e768211551c9d17779b882) | [`f02926cd…ef82f0`](https://stellar.expert/explorer/testnet/tx/f02926cdd71ed716dc2ea00ac35fecc1e4e4185c5e28ce4880f421fb62ef82f0) | yes |
+| 6 | [`GDDR2P…WXLG4L`](https://stellar.expert/explorer/testnet/account/GDDR2PJPLIVVFAB75AMX7LEV3RJI6326ZDIA4G42FFQOT2H72WWXLG4L) | [`4b75ef83…b2abcb`](https://stellar.expert/explorer/testnet/tx/4b75ef83f514a24d27f4c040969226f63cf3bd18614564fbbf7bbcc2d4b2abcb) | [`cca4d37e…b47fa2`](https://stellar.expert/explorer/testnet/tx/cca4d37ef7d04dbf48f5c8e243d56af24bf1e97fb619c8edc679680f98b47fa2) | yes |
+| 7 | [`GCJYUO…H3EXML`](https://stellar.expert/explorer/testnet/account/GCJYUO36HOD3KCH3MXUSMP3JQUVVB37YZAZMCYQRRH36YBL7ICH3EXML) | [`adcb014e…d07e36`](https://stellar.expert/explorer/testnet/tx/adcb014ea46a3b74bf9411a2be03fb7428cef10aae274b5af43879de3cd07e36) | [`4cec7edc…cf5d06`](https://stellar.expert/explorer/testnet/tx/4cec7edc27f0a66184675aa79d400414024ab8927211a5cc413405aea5cf5d06) | yes |
+| 8 | [`GCNKUW…WTCKMB`](https://stellar.expert/explorer/testnet/account/GCNKUWPMKEVJDTR7QP5E4P3VK6AMEAQGTGPWAHSBVSC6TLEQWPWTCKMB) | [`171a17ff…41592f`](https://stellar.expert/explorer/testnet/tx/171a17ff1814423482602aa1493c5e03007242064fdbb4c882a501417f41592f) | [`a6e8262b…ed505a`](https://stellar.expert/explorer/testnet/tx/a6e8262b02f8cb34511dd20cc4670cd6d7238253f592e42826f3625187ed505a) | yes |
+| 9 | [`GACOVM…DGPPXC`](https://stellar.expert/explorer/testnet/account/GACOVMLCYQ7LMQXUWQOPZR3IGZFQMO7AREQIZXU6WN2ICYVWB7DGPPXC) | [`841994f4…5bad07`](https://stellar.expert/explorer/testnet/tx/841994f4f586fdf4d6dab17a35c13b6492279a19c9a34fbf0b7011f9885bad07) | [`aceed025…c14884`](https://stellar.expert/explorer/testnet/tx/aceed025813a4c126e6786e376624e6448272ffa088a9305dbf65ac21bc14884) | yes |
+| 10 | [`GA453R…SJKE5Q`](https://stellar.expert/explorer/testnet/account/GA453R7ARR7DALRLLU2BYCJGQXPQC3YYBONMDQ7N4YUUWVPTAYSJKE5Q) | [`182bc132…d5077f`](https://stellar.expert/explorer/testnet/tx/182bc132bb9745ba63e176110615e8a84a7478c1b5428a17b77dd4dc5bd5077f) | — | no |
+| 11 | [`GDPYOJ…6QBGVA`](https://stellar.expert/explorer/testnet/account/GDPYOJC5VFWUXB5WKCUZN2NSQBU6VFIYXNI7BTNRU4T37VSRDP6QBGVA) | [`124a0818…6944c4`](https://stellar.expert/explorer/testnet/tx/124a08184b98a9758b2500767a079a0ba859ad43426c20f7483f0b17fe6944c4) | [`d46a8021…50fd7d`](https://stellar.expert/explorer/testnet/tx/d46a80218d6e2f064874c3697f89226730f657e3944861847567a2325750fd7d) | yes |
+| 12 | [`GASD35…WRMWUV`](https://stellar.expert/explorer/testnet/account/GASD353HHN6NB2L3ZKYTWTOEQLR6D7LL5RNZ5FSN73RAKK7C6NWRMWUV) | [`5523d8cf…4f1102`](https://stellar.expert/explorer/testnet/tx/5523d8cf06872eecce9048407410ece6218d93f1c497592b40583b79904f1102) | — | no |
+
+<details>
+<summary>Full addresses and hashes, to copy</summary>
+
+```
+1. GCIJ6SY4NXYOITBDPUSLQFIZWWCGT35Y4BS7JETOKJDVIS424OW7KHX7
+   rsvp     6b6a06ccc314b405b1ae836781e751fab175b68fce4564a426ec111b5e613aa4
+   check_in 7cf344aeb88390c09d5f4cda3536324914041341bf30a0d1659da4e3ecaf42fa
+2. GDXV54QO4JQ2HYTJR5UDBPWLJ3RML3P4FKWWNQZDXCFWM7J7A2QSAVGP
+   rsvp     7f845355ccc80f0e6f79cba9a6fe77248585ec324d7c5a277a65bd9b7e24cb3d
+   check_in befb37a74ef101746f208ccbac4fcbd72b2db75a154a7c8edaf412dc53854b2e
+3. GAV7UI47Y4PTPZ5QC4USTYPYTYNA6KVSIKYS677EJ5P5BRJZBG7ITYGC
+   rsvp     3e77635e70eb32a135a6c91d64d5890ac176180370dd8a781df9d33845358b42
+   check_in 4b469ef9a94f2f8c427244dd01273a1a8f72fc8582808d8d4d5bffd6ac858e5f
+4. GCLIKBWAIWWOKDC5ZE3I7FUQQ6OVZ2V763OAU53C376JYA5UVFUT3YQD
+   rsvp     1a372b1b0a880c2c74cbc9af7c4f3b066a21a32b3c19cebc4c1b03066cc7a7d8
+   check_in 00401f9118e2bb64a936626de529cc82590c89ab8b646374832ed867f9d3a07b
+5. GB55VSHNFR7AQO6D36PXWVMFFUXJGGIGAJXUZ3MSPRIARW2TNZKABMDY
+   rsvp     b696d86683c6fd8ce3f41886032a97e3bd572ebeb7e768211551c9d17779b882
+   check_in f02926cdd71ed716dc2ea00ac35fecc1e4e4185c5e28ce4880f421fb62ef82f0
+6. GDDR2PJPLIVVFAB75AMX7LEV3RJI6326ZDIA4G42FFQOT2H72WWXLG4L
+   rsvp     4b75ef83f514a24d27f4c040969226f63cf3bd18614564fbbf7bbcc2d4b2abcb
+   check_in cca4d37ef7d04dbf48f5c8e243d56af24bf1e97fb619c8edc679680f98b47fa2
+7. GCJYUO36HOD3KCH3MXUSMP3JQUVVB37YZAZMCYQRRH36YBL7ICH3EXML
+   rsvp     adcb014ea46a3b74bf9411a2be03fb7428cef10aae274b5af43879de3cd07e36
+   check_in 4cec7edc27f0a66184675aa79d400414024ab8927211a5cc413405aea5cf5d06
+8. GCNKUWPMKEVJDTR7QP5E4P3VK6AMEAQGTGPWAHSBVSC6TLEQWPWTCKMB
+   rsvp     171a17ff1814423482602aa1493c5e03007242064fdbb4c882a501417f41592f
+   check_in a6e8262b02f8cb34511dd20cc4670cd6d7238253f592e42826f3625187ed505a
+9. GACOVMLCYQ7LMQXUWQOPZR3IGZFQMO7AREQIZXU6WN2ICYVWB7DGPPXC
+   rsvp     841994f4f586fdf4d6dab17a35c13b6492279a19c9a34fbf0b7011f9885bad07
+   check_in aceed025813a4c126e6786e376624e6448272ffa088a9305dbf65ac21bc14884
+10. GA453R7ARR7DALRLLU2BYCJGQXPQC3YYBONMDQ7N4YUUWVPTAYSJKE5Q
+   rsvp     182bc132bb9745ba63e176110615e8a84a7478c1b5428a17b77dd4dc5bd5077f
+   check_in —
+11. GDPYOJC5VFWUXB5WKCUZN2NSQBU6VFIYXNI7BTNRU4T37VSRDP6QBGVA
+   rsvp     124a08184b98a9758b2500767a079a0ba859ad43426c20f7483f0b17fe6944c4
+   check_in d46a80218d6e2f064874c3697f89226730f657e3944861847567a2325750fd7d
+12. GASD353HHN6NB2L3ZKYTWTOEQLR6D7LL5RNZ5FSN73RAKK7C6NWRMWUV
+   rsvp     5523d8cf06872eecce9048407410ece6218d93f1c497592b40583b79904f1102
+   check_in —
+```
+
+</details>
+
+<!-- 12 reserved, 10 checked in
+     read from ledgers 4800304–4921263 in 13 pages at 2026-09-28T21:11:48.119Z -->
+
+### What one `finalize` did, in one transaction
+
+[`12b5c947…b0fe14`](https://stellar.expert/explorer/testnet/tx/12b5c9470cc24d7c674dc614bf11604748a68741ccef175202adaab02db0fe14)
+settled all of it at once: the two forfeited deposits split among the ten who turned
+up, two `no_shows` written, and **two vouchers charged for the people they backed**.
+
+Read back from the ledger afterwards:
+
+| Address | Record | |
+| :-- | :-- | :-- |
+| [`GCIJ6S…KHX7`](https://stellar.expert/explorer/testnet/account/GCIJ6SY4NXYOITBDPUSLQFIZWWCGT35Y4BS7JETOKJDVIS424OW7KHX7) | `{shows: 1, no_shows: 0}` | showed up |
+| [`GA453R…KE5Q`](https://stellar.expert/explorer/testnet/account/GA453R7ARR7DALRLLU2BYCJGQXPQC3YYBONMDQ7N4YUUWVPTAYSJKE5Q) | `{shows: 0, no_shows: 1}` | did not |
+| [`GCK467…U5M7`](https://stellar.expert/explorer/testnet/account/GCK4673UMRZFOGT53MOICX47ABQRT6KVCESHMPS4HPHY566KRDI2U5M7) | `{vouches_given: 2, vouches_broken: 0}` | both of theirs turned up |
+| [`GCNODV…CYOW`](https://stellar.expert/explorer/testnet/account/GCNODVPULOONWYQEDMWIH3PSIQEZ2A3UPXMHCOQHBDZGOCQ67KDNCYOW) | `{vouches_given: 2, vouches_broken: 1}` | **one of theirs did not** |
+
+A broken vouch is its own counter, not a show count. `GCNODV…CYOW` still reads
+`{shows: 1, no_shows: 0}` — they attended what they attended, and nothing about
+backing the wrong person rewrote that. What it did do is close vouching for them
+permanently: `vouches_broken > 0` is one of the two conditions `vouch` checks.
+
+### Where the money ended up
+
+| | |
+| :-- | :-- |
+| Locked by twelve guests | 120.00 XLM |
+| Returned to the ten who showed | 101.00 XLM (10 XLM each + the 0.1 fee allowance) |
+| Forfeited by the two who did not | 20.00 XLM |
+| Their share, split ten ways | 2.00 XLM each |
+| Left in the event contract | **0** |
+
+Verified rather than asserted: a guest who showed up went from 10000.0000000 to
+**10001.8723299 XLM** — their deposit back, plus a 2 XLM share, less the fees they
+spent on `rsvp` and `check_in`. One who did not went to **9989.8944920 XLM**. And
+`balance(CDK2UWJU…)` on the XLM SAC answers `0`, so nothing was left stranded in
+the contract.
+
+```bash
+stellar contract invoke --network testnet \
+  --id CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
+  --source <any funded wallet> \
+  -- balance --id CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD
+# "0"
+```
+
 ## Contracts — v1 (superseded, still verifiable)
 
 The original deployment, kept intact. Its events are still readable on Stellar

@@ -8,7 +8,7 @@ chapter). One page each, written against **§6.1**. Everything is on Stellar
 | :-- | :-- | :-- | :-- |
 | 1 | Admission, enforced on-chain | [deliverable-1.md](deliverable-1.md) | complete |
 | 2 | A reputation record worth reading | [deliverable-2.md](deliverable-2.md) | complete |
-| 3 | The product these mechanics need | [deliverable-3.md](deliverable-3.md) | live; recordings filmed on the run |
+| 3 | The product these mechanics need | [deliverable-3.md](deliverable-3.md) | live; run settled 29.09 |
 
 Live app: **[showup.click](https://showup.click)**. Fifteen-second overview:
 **[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)**. The full technical record is in
