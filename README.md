@@ -13,6 +13,7 @@ a "skin in the game" layer that a group chat can never enforce.
 [![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
 
 - **Live demo:** **[showup.click](https://showup.click)**
+- **What it does, in 15 seconds:** **[the overview](https://youtu.be/0s9vVx6JVSg)**
 - **Demo video:** **[the full flow, start to finish](https://youtu.be/QaT61imDXkk)**
 
 <p align="center">
