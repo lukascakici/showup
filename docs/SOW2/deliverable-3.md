@@ -199,9 +199,23 @@ about their money.
 3. **A wallet holds it.** Last, because it is the step and not the reason.
 
 Once per browser, dismissable from anywhere, and it still appears rather than
-crashing in a browser that refuses storage. Pictured above.
+crashing in a browser that refuses storage.
 
-The screen recording §6.1 asks for is filmed on the run, against a real event.
+### The recording
+
+**[onboarding.webm](../screenshots/run/onboarding.webm)** — a browser that has never
+been here, opening the run's event page for the first time. Recorded against
+[showup.click](https://showup.click) on 29.09.2026, on
+[`CDK2UWJU…VRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD),
+so the numbers in the panel are that event's own.
+
+A fresh profile is the whole point: the panel is keyed to `showup.firstrun.v1` in
+`localStorage`, so it shows once and a reused browser would never see it again. The
+recording ends with a reload that proves exactly that.
+
+| It appears, unprompted | Dismissed | Reloaded — it does not come back |
+| :-- | :-- | :-- |
+| ![The onboarding panel on first visit](../screenshots/run/onboarding-1-panel.png) | ![The event page after dismissing it](../screenshots/run/onboarding-3-dismissed.png) | ![The same page reloaded, no panel](../screenshots/run/onboarding-4-once-only.png) |
 
 ---
 
@@ -275,9 +289,12 @@ transaction that caused it. Every hash, every wallet and the settlement arithmet
 are in [deployments.md](../deployments.md#second-run--a-guest-list-built-entirely-by-vouching-29092026),
 produced by `npm run evidence -- CDK2UWJU…` rather than typed.
 
-| Before check-in opened | The same page, settled |
-| :-- | :-- |
-| [reserving](../screenshots/run/event-reserving-desktop.png) — 12 reserved, 0 showed up | [finalized](../screenshots/run/event-finalized-desktop.png) — 10 showed, 2 didn't, 20 XLM forfeited |
+The same page at each of the three phases, so the sequence is visible rather than
+asserted:
+
+| `Reserving` | `CheckingIn` | `Finalized` |
+| :-- | :-- | :-- |
+| [12 reserved, 0 showed up](../screenshots/run/event-reserving-desktop.png) | [reservations closed, guests arriving](../screenshots/run/event-checkin-desktop.png) | [10 showed, 2 didn't, 20 XLM forfeited](../screenshots/run/event-finalized-desktop.png) |
 
 ---
 
@@ -365,5 +382,7 @@ and after settlement, and every hash behind them in
 [deployments.md](../deployments.md#second-run--a-guest-list-built-entirely-by-vouching-29092026).
 
 The onboarding recording is the one item that is a recording rather than a capture,
-and it is filmed with a wallet in the loop: a headless browser has none, and the
-panel it is about is the thing a first-time visitor sees before they have one.
+and it needs no wallet at all — the panel exists precisely because it is what
+somebody reads *before* connecting one. What it needs instead is a browser that has
+never been here, which is why it is recorded in a fresh profile rather than a
+returning one.
