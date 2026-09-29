@@ -20,15 +20,24 @@ a "skin in the game" layer that a group chat can never enforce.
   <img src="docs/screenshots/home.png" alt="Showup landing page" width="720" />
 </p>
 
-This README is organised by the three deliverables it is built against, in order.
-It is cumulative: it grows as things ship, and nothing that shipped ever
-disappears from it.
+This README is organised by the deliverables it is built against, in order. It is
+cumulative: it grows as things ship, and nothing that shipped ever disappears from
+it.
 
 | Deliverable | What it is | State |
 | :-- | :-- | :-- |
 | **[1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)** | A deployed multi-wallet dApp, with CI on every push | shipped |
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
 | **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | shipped |
+
+**A second engagement followed, and it grew these same three sections rather than
+starting new ones** — one record, not two:
+
+| Second engagement | What it is | Where it lives here |
+| :-- | :-- | :-- |
+| 1 | Admission, enforced on-chain | [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci) — four gates, co-hosting |
+| 2 | A reputation record worth reading | [Deliverable 2](#deliverable-2--the-on-chain-reputation-contract) — vouching, the full record, `/u/<address>` |
+| 3 | The product those mechanics need | [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci) — names, the conversation, onboarding — and [Deliverable 3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video) for the run it was proved on |
 
 Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** and
 **[docs/SOW2](docs/SOW2/)** have one short page per deliverable, written against
@@ -112,6 +121,47 @@ have never used Stellar finishing this on their own phone, unattended.
   "check again" for after you install something, and advice that changes with the
   device, since "install the extension" is useless on a phone.
 
+**Admission — four gates the contract enforces**
+
+Who may take a spot is chosen when the event is created and checked inside `rsvp`,
+**not by the screen**. A gate a frontend applies is a suggestion: anyone can call the
+contract directly, so every one of these refuses on-chain with its own error.
+
+- **`Open`** — anyone, first come first served.
+- **`Score(n)`** — anyone whose reputation record shows at least `n` check-ins.
+  Refused with `ScoreTooLow`, and the score it reads was written by a *different*
+  event contract.
+- **`Approval`** — anyone the organizer says yes to, one at a time. An application
+  costs nothing and moves no money; the deposit is taken at `rsvp`, **after** the
+  yes, so nothing is held while somebody waits for an answer. A declined applicant
+  cannot re-apply their way back into an inbox.
+- **`Vouch(n)`** — anyone `n` members with records of their own will back. This is
+  the answer to the cold-start problem that is not an allowlist: a vouch is a signed
+  public statement that **costs the voucher** if the person they backed does not turn
+  up.
+- **Co-hosts.** `add_host` / `remove_host` let more than one wallet run an event —
+  open check-in, admit an applicant, finalize — while forfeited deposits still only
+  ever pay the original organizer. Who may *act* and who gets *paid* are deliberately
+  two different lists.
+- **The gate explains itself before it asks for a wallet.** An event page says what
+  it wants of you — *needs a vouch*, *regulars only*, *by approval* — while you are
+  still a stranger to it, rather than after a connect prompt.
+
+**The product around the gates**
+
+- **A wallet can have a name.** Claimed by signing a challenge transaction, so a name
+  can only be set by whoever holds the key. It renders wherever an address would.
+- **Every event has a conversation**, scoped to the people holding a spot in it and
+  its hosts. Membership is read off the **contract** on every request — `get_reserved`,
+  `get_checked_in`, the host list — rather than from a Firestore rule, because a rule
+  can only see the mirrored guest list and no rule can read a contract.
+- **A public record page** at `/u/<address>`, readable by anyone, assembled from the
+  ledger: shows, no-shows, turnout, vouches given and broken.
+- **Records are mirrored off-chain after being read from the chain**, so a page that
+  shows history does not re-read the whole ledger on every view. Nothing in the
+  request body can reach a stored number: the sync route accepts an address and
+  reads every figure from the contract itself.
+
 **Honest states everywhere**
 
 - **Loading, empty and broken are three different things**, and are no longer
@@ -137,8 +187,8 @@ Every push runs two jobs. **Contracts:** pinned Rust toolchain, `cargo fmt
 `contractimport!` it), a check that the committed TypeScript bindings still match
 the contract source, a check that **the wasm hash published in this README is
 what the deployed factory actually deploys** — asked of the live chain, not of a
-local build — then clippy with `-D warnings`, then 60 contract tests. **Web:**
-lint with `--max-warnings=0`, typecheck, 137 tests, build.
+local build — then clippy with `-D warnings`, then 119 contract tests. **Web:**
+lint with `--max-warnings=0`, typecheck, 290 tests, build.
 
 ### Architecture
 
@@ -389,9 +439,9 @@ are in **[docs/deployments.md](docs/deployments.md)**.
 
 ## Deliverable 3 — one real event, 10+ real attendees, a demo video
 
-**A real run, and a video of the whole thing.** Real people, invited through the
-live site, reserving real Testnet deposits from their own wallets and checking in
-on their own phones.
+**A real run, and a video of the whole thing.** Invitations sent through the live
+site, real Testnet deposits locked from wallets we do not hold the keys to, and
+check-ins from the participants' own devices.
 
 Everything in Deliverable 1's "getting a stranger from a link to a reservation"
 exists for this: each person who gave up would have been a missing row in the
@@ -402,7 +452,7 @@ they opened a link, reserved, and checked in on their phone.
 
 ### Evidence
 
-Run on **23.08.2026**. Twelve people reserved within about an hour of the
+Run on **23.08.2026**. Twelve wallets reserved within about an hour of the
 invitation, **eleven checked in**, one did not — and that one no-show is what
 makes the forfeit split and the reputation ledger visible rather than theoretical.
 
@@ -426,14 +476,54 @@ makes the forfeit split and the reputation ledger visible rather than theoretica
 | Forfeited and split | 5.00 XLM among the eleven who showed |
 | Left in the contract | **0** |
 
-It ran remotely, which is the part worth being precise about: there was no room
-and no gathering. Twelve people opened a link in a group chat, installed a wallet
-themselves, funded it from the faucet, locked a real Testnet deposit, and checked
-in from their own phones — unattended, with nobody standing next to them. That is
-the flow [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)
-was built for, and this is the first time it was asked to survive strangers.
+It ran remotely, which is the part worth being precise about: there was no room and
+no gathering. A link went into a group chat, and twelve wallets came back through it
+— each one installed and funded from the faucet at the other end, locking a real
+Testnet deposit and checking in unattended, with nobody standing next to them. That
+is the flow [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci)
+was built for, and this is the first time it was asked to survive being used by
+somebody who had not seen it before.
 
-**None of the table above was typed by hand.**
+### The second run — a guest list built entirely by vouching
+
+Run on **29.09.2026** on
+[`CDK2UWJU…VRTOMYUD`](https://stellar.expert/explorer/testnet/contract/CDK2UWJUYI5OXFLPQVTJCW4VRXCRNY6U72G6N46VIRZ45MKFVRTOMYUD)
+— *"Showup buluşması — Kadıköy"*, `Admission::Vouch(1)`, 10 XLM a spot, forfeits
+split among whoever turned up.
+
+The first run's guest list was open: anybody with the link could take a spot. **This
+one could not be joined at all without a member first putting their own record behind
+you.** Six members vouched, two guests each; twelve reserved, ten checked in, two did
+not.
+
+| | |
+| :-- | :-- |
+| Reserved / checked in | 12 / 10 |
+| Returned to each attendee | **10.10 XLM** against a 10.00 deposit |
+| Forfeited and split | 20.00 XLM among the ten who showed — **2.00 XLM each** |
+| Left in the contract | **0** |
+| `finalize` | [`12b5c9470cc24d7c674dc614bf11604748a68741ccef175202adaab02db0fe14`](https://stellar.expert/explorer/testnet/tx/12b5c9470cc24d7c674dc614bf11604748a68741ccef175202adaab02db0fe14) |
+
+That one `finalize` did four things at once: split the forfeited deposits, wrote two
+`no_shows`, credited the organizer, and **charged the two members who had vouched for
+the guests who did not turn up** — on `vouches_broken`, their own counter, leaving
+their attendance untouched. `vouches_broken > 0` is permanent, so both closed the
+door on vouching for anyone again.
+
+Four of the six vouchers earned the record that qualified them at a warm-up event the
+same evening. That is the part worth pausing on: **what admitted them here was
+written by a different contract**, and this event read it rather than being told it.
+
+Both refusals were taken against the live event before any vouch existed —
+`Error(Contract, #27)` `NotEnoughVouches` for an unvouched wallet trying to reserve,
+and `Error(Contract, #24)` `CannotVouch` for a wallet with no record trying to vouch
+somebody in. **Neither has a transaction hash and neither can**: Soroban simulates
+before it submits, so a refused call is never built into a transaction. Both
+reproduce with the CLI and no key — the commands are in
+[docs/deployments.md](docs/deployments.md#second-run--a-guest-list-built-entirely-by-vouching-29092026),
+along with every wallet, every hash and the settlement arithmetic.
+
+**None of the tables above were typed by hand.**
 [`web/scripts/collect-evidence.mjs`](web/scripts/collect-evidence.mjs) reads
 every `reserved`, `checked_in`, `phase_changed` and `finalized` event straight
 off the chain and prints it as markdown — `npm run evidence -- <event>` from
@@ -551,9 +641,9 @@ Soroban RPC. Either way the returned hash links straight to Stellar Explorer.
 
 ## Roadmap
 
-Showup is being built as a 30-day [Instawards](https://stellar.org) engagement with
-the Stellar Türkiye chapter, in four weeks. This README grows with it — nothing that
-shipped ever disappears from the record.
+Showup was built as a 30-day [Instawards](https://stellar.org) engagement with the
+Stellar Türkiye chapter, in four weeks, and a second engagement followed it. This
+README grows with both — nothing that shipped ever disappears from the record.
 
 - [x] **Week 1** · four wallets via StellarWalletsKit, every failure mode in plain
       language, public deployment, GitHub Actions CI on every push
@@ -568,6 +658,25 @@ shipped ever disappears from the record.
       recorded, and a demo video of the full flow — 12 reserved, 11 checked in,
       every hash [recorded](#deliverable-3--one-real-event-10-real-attendees-a-demo-video),
       and the flow [on video](https://youtu.be/QaT61imDXkk)
+
+**Second engagement**
+
+- [x] **Admission, enforced on-chain** — four gates fixed at creation and checked
+      inside `rsvp`: open, by score, by the organizer's yes, by vouch. Plus co-hosts,
+      so an event can be run by more than one wallet. Both contracts upgraded **in
+      place**; every address stayed the address.
+- [x] **A record worth reading** — the reputation contract grew from one number into
+      `shows`, `no_shows`, `vouches_given`, `vouches_broken` and `events_organised`,
+      without breaking a single score already in the ledger. Vouching puts a member's
+      record behind a newcomer and **costs them** when it is misplaced. Every wallet
+      has a page at `/u/<address>` that anybody can open.
+- [x] **The product those mechanics need** — gates that say what they want before
+      asking for a wallet, names attached to wallets by signature, a conversation per
+      event gated on the contract's own guest list, and an explanation of the deposit
+      before anybody signs for one.
+- [x] **A second run** — a guest list built entirely by vouching: 12 reserved, 10
+      checked in, 20 XLM split among them, and two vouchers charged for the people
+      they backed. [The record](#the-second-run--a-guest-list-built-entirely-by-vouching).
 
 ---
 
