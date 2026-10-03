@@ -183,6 +183,39 @@ no fee is paid, and the screen says so before the prompt appears.
 Each check closes a named door, and the file says which: signature against the
 claimed key, nonce issued here for this address and purpose, spent once, expires.
 
+### Claimed, and appearing across the app
+
+Eleven wallets from the run claimed a name on **29.09.2026**, each by signing the
+challenge transaction with its own key — the organizer as *Lukas*, and the guests as
+*Arda*, *Burak*, *Nil*, *Efe* and the rest. They render wherever the wallet does:
+
+| The organizer row | The conversation |
+| :-- | :-- |
+| ![The organizer shown as a name](../screenshots/run/event-finalized-desktop.png) | ![The conversation with names instead of addresses](../screenshots/run/conversation-desktop.png) |
+
+**And the door is locked.** A claim for a wallet we do not hold — the challenge
+issued for that address, signed with a different key — is refused:
+
+```
+POST /api/names  ->  401 {"error":"that signature isn't from this wallet"}
+```
+
+The targeted wallet's name was unchanged afterwards. The refusal is the server
+comparing the signature against the *claimed* account's public key, which is the one
+thing an attacker cannot produce.
+
+`firestore.rules` is what makes the stored side of this safe, and it is **deployed**
+rather than only committed: `names` is world-readable and writable by no client,
+while `walletChallenges` and `messages` are denied both ways. Checkable without a key
+or an account, against the live database:
+
+```bash
+B="https://firestore.googleapis.com/v1/projects/showup-65c24/databases/(default)/documents"
+curl -so /dev/null -w '%{http_code}\n' "$B/names/GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5"  # 200
+curl -so /dev/null -w '%{http_code}\n' "$B/walletChallenges?pageSize=1"                                      # 403
+curl -so /dev/null -w '%{http_code}\n' "$B/messages?pageSize=1"                                              # 403
+```
+
 ---
 
 ## First-run onboarding
