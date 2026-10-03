@@ -1543,8 +1543,11 @@ function Holding({
 }) {
   return (
     <div>
+      {/* An icon rather than a coloured dot, and the same icon the activity feed
+          uses for the row describing this exact fact. A dot says "something is a
+          state"; `Lock` says which one. */}
       <div className="mb-4 flex items-center gap-2.5">
-        <span className="size-[7px] rounded-full bg-success" />
+        <Lock className="size-4 shrink-0 text-success" />
         <span className="text-[15px] text-success">
           You’re on the list — deposit locked
         </span>
@@ -1577,7 +1580,7 @@ function CheckIn({
   return (
     <div>
       <div className="mb-4 flex items-center gap-2.5">
-        <span className="pulse-dot size-[7px] rounded-full bg-accent" />
+        <DoorOpen className="size-4 shrink-0 text-accent" />
         <span className="text-[15px] text-accent-lift">
           Check-in is open — take your {fromStroops(refund)} XLM back
         </span>
@@ -1624,7 +1627,7 @@ function Settled({
   return (
     <div>
       <div className="mb-4 flex items-center gap-2.5">
-        <span className="size-[7px] rounded-full bg-success" />
+        <CheckCircle2 className="size-4 shrink-0 text-success" />
         <span className="text-[15px] text-success">You showed up</span>
       </div>
       <div className="grid gap-3.5 sm:grid-cols-2">
