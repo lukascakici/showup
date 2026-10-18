@@ -2,7 +2,7 @@
 
 **Rise In × Stellar — Grand Pera, Beyoğlu, Istanbul, 19–20 September 2026.**
 
-Showup was shown in person across both days to **twenty to thirty people**, with a
+Showup was shown in person across both days to **70 to 80 people**, with a
 page built and deployed for the room —
 **[showup.click/prohackathon_residency](https://showup.click/prohackathon_residency)**,
 open for the two days the hackathon ran — and printed QR cards left on the tables so
