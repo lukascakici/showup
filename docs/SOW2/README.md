@@ -15,9 +15,10 @@ Alongside the SOW, the Customer Development Plan asks for two things, both here:
 - **[measurement.md](measurement.md)** — 24 reservations, 21 check-ins, every deposit
   returned in the same transaction as the check-in, and nothing left in any contract
   afterwards.
-- **[customer-development.md](customer-development.md)** — how organiser
-  conversations are run: what an organiser is shown, the question set mapped to the
-  plan's six hypotheses, and the template each conversation is written up in.
+- **[customer-development.md](customer-development.md)** — Showup shown in person to
+  20–30 people at the Pro Hackathon Grand Pera Edition (Rise In × Stellar, 19–20
+  September), with its own page deployed for the room; plus the question set mapped to
+  the plan's six hypotheses and the template each conversation is written up in.
 
 Live app: **[showup.click](https://showup.click)**. Fifteen-second overview:
 **[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)**. The full technical record is in

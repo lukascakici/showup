@@ -1,9 +1,70 @@
-# Customer development — how organiser conversations are run
+# Customer development — the field record, and how conversations are run
 
 The Customer Development Plan names six hypotheses the product rests on. Five of them
 can only be answered by an organiser, so the conversations that answer them are run to
 a fixed method rather than improvised: **the same questions, in the same order, every
 time, written up one conversation at a time.**
+
+The first of those conversations happened in a room full of them.
+
+---
+
+## Pro Hackathon, Grand Pera Edition — 19–20 September 2026
+
+Rise In × Stellar, Grand Pera, Beyoğlu, Istanbul. Showup was shown in person across
+both days of the hackathon, to **twenty to thirty people**, and a dedicated page was
+built and deployed for the room: **[showup.click/prohackathon_residency](https://showup.click/prohackathon_residency)**,
+open for the two days the event ran. Printed QR cards were left on the tables so
+anyone could open it without being handed a phone.
+
+![Showup open at the Pro Hackathon, Grand Pera Edition, with the printed QR card on the table](../screenshots/hackathon.jpg)
+
+### What came out of it
+
+- **Members of the Stellar team saw it and gave feedback on where to take it next.**
+  Those conversations are the reason several of this engagement's decisions landed
+  where they did, and they are the most senior audience the product has had.
+- **An organiser said they would consider running their own event on it.** That is the
+  first read from outside the project on the question the plan calls the centre of the
+  period — whether somebody who is not the builder would use it for their own event.
+- **Another team proposed building with it**, integrating Showup into the project they
+  were working on at the hackathon. Interest in it as a *layer* rather than a
+  destination was not something the plan anticipated, and it is the clearest signal so
+  far that the registration problem is felt by builders as well as by organisers.
+- **Several people asked how the system was designed** — the gates, where the deposit
+  is held, what the contract decides versus what the screen decides. The technical
+  audience went to the mechanism first, which is a useful contrast with the organiser
+  script below, where the mechanism is deliberately the last thing mentioned.
+
+### What it said about the hypotheses
+
+**H3 — inside a crypto community, a wallet is not a fatal barrier.** The strongest
+read of the period, and it supports the assumption: **most of the people shown Showup
+already held a wallet.** The plan's reason for starting inside the Stellar ecosystem
+rather than with restaurants or five-a-side football was exactly this — everywhere
+else a deposit begins with a wallet problem, and here it begins with a scheduling one.
+A room of twenty to thirty people where the wallet was largely a non-issue is the
+first direct evidence for that choice.
+
+**H2 — the organiser is the customer.** One organiser considering it for their own
+event, and one team wanting to build on it, both point the same way: adoption starts
+with a single person who brings a room with them, not with attendees recruited one at
+a time.
+
+**H6 — proof of attendance rather than a registration form.** The questions that came
+back were about the mechanism — who decides, where the money sits, what the chain
+records. Nobody asked for a better form.
+
+### What was carried into the product
+
+The room was the reason the roll-call page exists at all: a face-to-face meetup where
+the point is to get a crowd past "connect a wallet" in one tap, and where asking each
+person to fund a Testnet account and sign a transaction would lose most of them at the
+door. It deliberately touches no contract and holds no deposit — and because of that,
+nothing it records is ever presented as attendance evidence. Attendance evidence comes
+from the chain, which is the whole argument the rest of this repository makes.
+
+---
 
 That matters for a specific reason. Six conversations summarised in aggregate produce
 an opinion. Six conversations recorded separately against the same questions produce a
