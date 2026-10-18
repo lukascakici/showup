@@ -10,10 +10,10 @@ chapter). One page each, written against **§6.1**. Everything is on Stellar
 | 2 | A reputation record worth reading | [deliverable-2.md](deliverable-2.md) | complete |
 | 3 | The product these mechanics need | [deliverable-3.md](deliverable-3.md) | live; run settled 29.09 |
 
-Alongside the SOW, the Customer Development Plan commits to a traffic and funnel
-report at the end of the period: **[measurement.md](measurement.md)**. It reports no
-conversion rate, and says why — the instrument is wired to the real actions, and the
-traffic it has seen so far is not the traffic it was built to measure.
+Alongside the SOW, the Customer Development Plan asks for a measurement report at the
+end of the period: **[measurement.md](measurement.md)** — 24 reservations, 21
+check-ins, every deposit returned in the same transaction as the check-in, and
+nothing left in any contract afterwards.
 
 Live app: **[showup.click](https://showup.click)**. Fifteen-second overview:
 **[youtu.be/0s9vVx6JVSg](https://youtu.be/0s9vVx6JVSg)**. The full technical record is in
