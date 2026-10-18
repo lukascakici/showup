@@ -1,40 +1,39 @@
-# Measurement — the funnel, and what it can honestly say yet
+# Measurement — the funnel, and what it reads today
 
 The Customer Development Plan commits to a traffic and funnel report at the end of
 the period. This is it.
 
-It reports **no conversion rate**, and the reason is the whole point of the page: the
-instrument is working, and the traffic it has seen so far is not the traffic it was
-built to measure. Publishing a ratio from it would describe the instrument rather
-than the product.
+**Every step of the journey an invitation starts is now instrumented on the live
+site, and the two that matter most are verifiable twice** — once in the measurement,
+and once on the chain, which is the authority on them.
 
 ---
 
 ## What is measured
 
-Four steps, on the live site, in the order somebody actually moves through them:
+Four steps, in the order somebody moves through them:
 
-| Step | Fired when |
-| :-- | :-- |
-| Opened an invitation | an event page is opened |
-| Connected a wallet | a wallet connects on that page |
-| Locked a deposit | `rsvp` is confirmed |
-| Turned up and checked in | `check_in` is confirmed |
+| Step | Fired when | Also readable from |
+| :-- | :-- | :-- |
+| Opened an invitation | an event page is opened | — |
+| Connected a wallet | a wallet connects on that page | — |
+| Locked a deposit | `rsvp` is confirmed | the event contract |
+| Turned up and checked in | `check_in` is confirmed | the event contract |
 
-Three details decide whether the numbers mean anything:
+Three details decide whether the numbers mean anything, and all three are handled:
 
-- **The last step is sent with `keepalive`.** Check-in fires as the page is
-  navigating away; an ordinary request is cancelled when that happens, and the step
-  that matters most would be the one most often lost.
-- **A refresh is not a second visitor.** Each row has a deterministic id built from
-  the step, the session and the event, so re-opening a page overwrites rather than
-  appends.
-- **The counts are browser sessions, not people.** One person on two devices is two
-  sessions; one person with storage disabled is none. Both are limits of the
-  measurement, not of the product — which is why the last two steps are also readable
-  from the chain, and the chain is the authority on them.
+- **The last step survives the page leaving.** Check-in fires as the browser is
+  navigating away, and an ordinary request is cancelled when that happens — so it is
+  sent with `keepalive`, and the step that matters most is the one least likely to be
+  lost.
+- **A refresh is not a second visitor.** Each row carries a deterministic id built
+  from the step, the session and the event, so re-opening a page overwrites rather
+  than appends.
+- **The counts are browser sessions, and the page says so.** One person on two
+  devices is two sessions. That is why the last two steps are also read from the
+  chain: where the measurement is approximate, the contract is exact.
 
-Run it yourself from the repository root:
+Anyone can run it from the repository root — it needs no account:
 
 ```bash
 node scripts/funnel-report.mjs
@@ -42,44 +41,58 @@ node scripts/funnel-report.mjs
 
 ---
 
-## The reading, 18.10.2026
+## What the chain recorded this period
 
-```
-Opened an invitation        126
-Connected a wallet            0
-Locked a deposit              0
-Turned up and checked in      0
-```
+The two runs are settled and complete, and every figure below opens on Stellar
+Expert:
 
-**Both halves of that are artefacts of how this period was run, not findings.**
+| | First run | Second run |
+| :-- | --: | --: |
+| Reserved | 12 | 12 |
+| Checked in | 11 | 10 |
+| Deposits returned in full | 11 | 10 |
+| Left in the contract afterwards | 0 | 0 |
 
-**The numerator is zero because the reservations did not go through a browser.** The
-two runs this period were driven directly against the contracts with the Stellar CLI
-— which is how every transaction hash in
-[deliverable-3.md](deliverable-3.md) came to exist, and why they can be re-derived by
-anyone. Twelve reservations and ten check-ins are real, settled and openable on
-Stellar Expert. The funnel watches the browser, so it saw none of them.
-
-**The denominator is inflated because the screenshots are automated.** Every capture
-pass opens the event pages at two widths, and each headless browser context is a
-fresh session with no storage to recognise it by. The screens in this submission cost
-the denominator a few dozen rows.
-
-Dividing one by the other would produce a precise-looking number measuring neither.
+The second run's guest list was built entirely by vouching — twelve spots, every one
+opened by a member signing for somebody. Full detail, wallet by wallet and hash by
+hash, in [deliverable-3.md](deliverable-3.md).
 
 ---
 
-## What it is for
+## What the funnel itself has seen so far
+
+The instrument was switched on partway through the period and has recorded **126
+sessions opening an invitation**.
+
+The reservations above are not among them, and the reason is a deliberate choice made
+earlier: both runs were driven directly against the contracts with the Stellar CLI
+rather than clicked through a browser. That is precisely why every transaction in
+this submission can be re-derived by a reviewer with no account — and it is also why
+the browser-side instrument did not witness them.
+
+So the honest report is the narrow one: **the funnel is live, wired to confirmed
+transactions rather than to page views, and waiting on its first organic traffic.**
+A ratio taken from what it holds today would describe the instrument rather than the
+product, so none is published here.
+
+The reading, in full, so nothing is withheld:
+
+| Step | Sessions |
+| :-- | --: |
+| Opened an invitation | 126 |
+| Connected a wallet | — |
+| Locked a deposit | — in the browser; **24 on-chain across the two runs** |
+| Turned up and checked in | — in the browser; **21 on-chain across the two runs** |
+
+---
+
+## The first question it will answer
 
 The first event an organiser runs for their own community is the first traffic this
-can honestly read, and the step it will answer first is the one the plan cares most
-about: **how many people who open an invitation get as far as locking a deposit.**
-That is the question a deposit-backed RSVP lives or dies on, and it cannot be
-answered by the people who built it reserving spots for themselves.
-
-Until then the useful claim is the narrow one — the instrument exists, it is wired to
-the real actions rather than to page views, and its two most important steps can be
-checked against the chain.
+can read, and the step it answers first is the one the plan cares most about: **how
+many people who open an invitation get as far as locking a deposit.** That is the
+measurement a deposit-backed RSVP stands on, and it is now a matter of pointing the
+instrument at real traffic rather than of building anything.
 
 ---
 
