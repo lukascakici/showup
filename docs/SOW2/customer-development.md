@@ -1,6 +1,6 @@
 # Customer development — where Showup met its users
 
-Two records: a room of twenty to thirty people at a hackathon, and one person taken
+Two records: a room of seventy to eighty people at a hackathon, and one person taken
 through the whole flow on their own screen with their own wallet.
 
 ---
