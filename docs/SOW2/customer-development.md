@@ -57,6 +57,8 @@ built to respect it.
 
 ## A recorded session, with the whole flow on one person's screen
 
+**[youtu.be/PiFbj7nMa2o](https://youtu.be/PiFbj7nMa2o)** — subtitled.
+
 Someone taken through Showup end to end on their own machine, with their own wallet:
 opening an invite link, connecting, landing on the wrong network and fixing it,
 funding an empty Testnet account, locking a 10 XLM deposit to take a spot, checking in
