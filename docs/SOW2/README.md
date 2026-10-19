@@ -16,7 +16,7 @@ Alongside the SOW, the Customer Development Plan asks for two things, both here:
   returned in the same transaction as the check-in, and nothing left in any contract
   afterwards.
 - **[customer-development.md](customer-development.md)** — Showup shown in person to
-  20–30 people at the Pro Hackathon Grand Pera Edition (Rise In × Stellar, 19–20
+  70–80 people at the Pro Hackathon Grand Pera Edition (Rise In × Stellar, 19–20
   September), with its own page deployed for the room and printed QR cards on the
   tables.
 
