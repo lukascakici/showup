@@ -139,13 +139,21 @@ export async function spendChallenge(
     if (tx.source !== address) return false;
     if (op?.type !== "manageData") return false;
     if (op.name !== CHALLENGE_LABEL) return false;
-    if (op.value?.toString() !== nonce) return false;
+    // Decoded explicitly, not with `toString()`. Since stellar-sdk v17 the
+    // operation value is a plain `Uint8Array` rather than a `Buffer`, and
+    // `Uint8Array.prototype.toString()` returns the bytes as a comma-separated
+    // list — "49,49,49,…" — so the old comparison could never match again and
+    // every proof would have been refused.
+    if (!op.value || new TextDecoder().decode(op.value) !== nonce) return false;
 
     const key = Keypair.fromPublicKey(address);
     const hash = tx.hash();
     return tx.signatures.some((sig) => {
       try {
-        return key.verify(hash, sig.signature());
+        // `signature` is a readonly property, not a method, since stellar-sdk
+        // v17 rewrote the XDR classes in TypeScript. `verify` takes the
+        // `Signature` wrapper as-is.
+        return key.verify(hash, sig.signature);
       } catch {
         return false;
       }

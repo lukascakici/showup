@@ -1,3 +1,4 @@
+import { xdr } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 import {
   FACTORY_ID,
@@ -181,10 +182,11 @@ describe("the committed event binding against a live, pre-SOW2 event", () => {
 
   it("has no field in Config that a pre-SOW2 event could not have written", () => {
     const client = event("CAOK5LMEBEFHYWXLD5D55U46E73FD5ZTTBBBMMQIBMLYXTZWEWMUTLJL");
-    const struct = client.spec.findEntry("Config").value() as {
-      fields: () => { name: () => Buffer | string }[];
-    };
-    const fields = struct.fields().map((f) => f.name().toString());
+    // stellar-sdk v17 rewrote the XDR classes in TypeScript, so `value`,
+    // `fields` and `name` are real typed properties rather than accessor
+    // methods. The hand-written cast this used to need is gone with them.
+    const struct = client.spec.findEntry("Config").value as xdr.ScSpecUdtStructV0;
+    const fields = struct.fields.map((f) => f.name.toString());
 
     expect([...fields].sort()).toEqual([
       "capacity",
