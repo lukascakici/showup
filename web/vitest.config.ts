@@ -5,6 +5,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` throws on import outside a Server Component, and the test
+      // environment is jsdom, so every module that guards itself with it was
+      // untestable — including the wallet signature check. Aliasing it to an
+      // empty module is the standard escape hatch: it removes the guard for the
+      // test run only, and Next still enforces it at build time.
+      "server-only": fileURLToPath(new URL("./src/test/empty.ts", import.meta.url)),
     },
   },
   test: {
