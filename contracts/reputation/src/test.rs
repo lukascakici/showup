@@ -398,3 +398,148 @@ fn renewing_a_record_that_was_never_written_changes_nothing() {
             .has(&DataKey::Score(stranger.clone()))
     }));
 }
+
+// ---------------------------------------------------------------------------
+// Handing the admin over.
+//
+// This ledger holds every score ever recorded, at an address that cannot move.
+// Losing the admin means losing `set_factory` and `upgrade` while all of that
+// stays where it is — which is why the handover is two transactions signed by
+// two different keys rather than one setter.
+// ---------------------------------------------------------------------------
+
+/// Pin authorization to one address, with `mock_all_auths` turned off.
+fn only(env: &Env, who: &Address, fn_name: &'static str, contract: &Address) {
+    env.set_auths(&[]);
+    env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: who,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract,
+            fn_name,
+            args: soroban_sdk::vec![env],
+            sub_invokes: &[],
+        },
+    }]);
+}
+
+#[test]
+fn a_proposal_on_its_own_changes_nothing() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.reputation.propose_admin(&hardware);
+
+    assert_eq!(f.reputation.get_admin(), f.admin);
+    assert_eq!(f.reputation.get_pending_admin(), Some(hardware));
+}
+
+#[test]
+fn handing_the_admin_over_takes_both_keys() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.reputation.propose_admin(&hardware);
+    f.reputation.accept_admin();
+
+    assert_eq!(f.reputation.get_admin(), hardware);
+    assert_eq!(f.reputation.get_pending_admin(), None);
+}
+
+#[test]
+fn the_old_admin_is_powerless_once_the_new_one_accepts() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    let elsewhere = Address::generate(&f.env);
+
+    f.reputation.propose_admin(&hardware);
+    f.reputation.accept_admin();
+
+    only(&f.env, &f.admin, "set_factory", &f.reputation.address);
+    assert!(f.reputation.try_set_factory(&elsewhere).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.reputation.get_factory(), f.factory);
+}
+
+#[test]
+fn only_the_proposed_address_can_accept() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    let opportunist = Address::generate(&f.env);
+
+    f.reputation.propose_admin(&hardware);
+
+    only(&f.env, &opportunist, "accept_admin", &f.reputation.address);
+    assert!(f.reputation.try_accept_admin().is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.reputation.get_admin(), f.admin);
+}
+
+#[test]
+fn the_proposed_address_can_accept_under_pinned_auth() {
+    // Positive control for the negative tests above — see the factory suite.
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    f.reputation.propose_admin(&hardware);
+
+    only(&f.env, &hardware, "accept_admin", &f.reputation.address);
+    f.reputation.accept_admin();
+
+    f.env.mock_all_auths();
+    assert_eq!(f.reputation.get_admin(), hardware);
+}
+
+#[test]
+fn accepting_with_nothing_proposed_is_refused() {
+    let f = setup();
+    assert_eq!(
+        f.reputation.try_accept_admin(),
+        Err(Ok(Error::NoPendingAdmin))
+    );
+}
+
+#[test]
+fn proposing_again_replaces_the_nomination() {
+    let f = setup();
+    let typo = Address::generate(&f.env);
+    let hardware = Address::generate(&f.env);
+
+    f.reputation.propose_admin(&typo);
+    f.reputation.propose_admin(&hardware);
+    f.reputation.accept_admin();
+
+    assert_eq!(f.reputation.get_admin(), hardware);
+}
+
+#[test]
+fn propose_admin_rejects_everyone_but_the_admin() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.env.set_auths(&[]);
+    assert!(f.reputation.try_propose_admin(&hardware).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.reputation.get_pending_admin(), None);
+}
+
+#[test]
+fn a_handover_leaves_every_score_exactly_where_it_was() {
+    // The reason this contract has a `set_factory` at all is that scores must
+    // survive the things around them changing. The admin moving is one of those
+    // things.
+    let f = setup();
+    let event = f.registered_event();
+    let member = Address::generate(&f.env);
+    f.reputation.record_checkin(&event, &member);
+
+    let before = f.reputation.get_record(&member);
+
+    let hardware = Address::generate(&f.env);
+    f.reputation.propose_admin(&hardware);
+    f.reputation.accept_admin();
+
+    assert_eq!(f.reputation.get_record(&member), before);
+    assert!(f.reputation.is_registered(&event));
+}

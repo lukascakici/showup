@@ -34,6 +34,8 @@ pub enum Error {
     NotInitialized = 2,
     /// A score write from an address the factory never registered.
     NotAnEvent = 3,
+    /// `accept_admin` with nobody proposed, or after the proposal was withdrawn.
+    NoPendingAdmin = 4,
 }
 
 /// A member's attendance record, counted rather than scored.
@@ -94,6 +96,8 @@ pub struct Record {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    /// Proposed, not yet in force. See `propose_admin`.
+    PendingAdmin,
     /// The only address allowed to register events.
     Factory,
     /// Allowlist membership for one event contract.
@@ -103,6 +107,19 @@ pub enum DataKey {
     /// see `Score`. A member who predates it has no such entry, which is why
     /// the reader below defaults rather than unwraps.
     Extras(Address),
+}
+
+/// Published on both halves of a handover, so the move of the key that governs
+/// this ledger is watchable without reading contract state.
+#[contractevent]
+pub struct AdminProposed {
+    pub new_admin: Address,
+}
+
+#[contractevent]
+pub struct AdminChanged {
+    pub previous: Address,
+    pub current: Address,
 }
 
 /// Published on both halves of a vouch's life, so the cost of a broken one is
@@ -329,6 +346,51 @@ impl ReputationContract {
         Ok(())
     }
 
+    /// Nominate the next admin. Admin only, and it changes nothing on its own.
+    ///
+    /// Two transactions rather than one, the second signed by the key being
+    /// handed to. A plain setter would mean a mistyped address leaves this
+    /// ledger permanently ungovernable — no `set_factory` and no `upgrade` —
+    /// while every score ever recorded stays at this address. An address nobody
+    /// controls can never call `accept_admin`, so the mistake cannot complete.
+    ///
+    /// Both halves stay ordinary single-signer transactions, which is what a
+    /// hardware wallet can sign; requiring the new admin to authorise inside the
+    /// same call would need a signed authorization entry from an address that is
+    /// not the transaction's source.
+    ///
+    /// Proposing again replaces the previous nomination.
+    pub fn propose_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        Self::admin(&env)?.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        Self::bump_instance(&env);
+        AdminProposed { new_admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Take the admin role. Callable only by the address `propose_admin` named.
+    pub fn accept_admin(env: Env) -> Result<(), Error> {
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(Error::NoPendingAdmin)?;
+        pending.require_auth();
+
+        let previous = Self::admin(&env)?;
+        env.storage().instance().set(&DataKey::Admin, &pending);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        Self::bump_instance(&env);
+        AdminChanged {
+            previous,
+            current: pending,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     /// Replace this contract's own code, keeping its address and its state.
     /// Admin only.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
@@ -340,6 +402,11 @@ impl ReputationContract {
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         Self::admin(&env)
+    }
+
+    /// Who has been nominated but has not accepted yet.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
     pub fn get_factory(env: Env) -> Result<Address, Error> {
