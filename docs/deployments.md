@@ -23,20 +23,23 @@ use the keyless commands to read what the chain says now.
 | :-- | :-- |
 | Event factory | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | Reputation ledger | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| Event wasm hash — **current** | `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5` |
+| Event wasm hash — **current** (SOW 3 freeze) | `634e34bd75ab853c837ed7d2a9c23a1219133699edda27df1f823a28d6391c1f` |
+| Event wasm hash — at the reclaim freeze predecessor | `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5` |
 | Event wasm hash — at the admission upgrade | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
 | Event wasm hash — at the titles upgrade | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
 | Event wasm hash — at v2 bring-up | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
-| Reputation wasm hash — **current** | `bef89aa051523067c0f720f118bbddf47f055e867865bdd785e6c067ebaec9ff` |
-| Factory wasm hash — **current** | `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10` |
+| Reputation wasm hash — **current** (SOW 3 freeze) | `858b8d6500a9c13c80d4cb2b41b4a61d12ded8e6e3e9ede8a063ba4e8d0738f7` |
+| Reputation wasm hash — previous | `bef89aa051523067c0f720f118bbddf47f055e867865bdd785e6c067ebaec9ff` |
+| Factory wasm hash — **current** (SOW 3 freeze) | `09c8ba280e8d8d711afd8c53ba73a7e52d764c78f4e9745ea897a3bc9a629488` |
+| Factory wasm hash — previous | `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
-Four event wasm hashes because the factory has been pointed at a new event
-revision three times — 08.08.2026, 23.09.2026 and 24.09.2026 — each recorded
-below with the transaction that did it. The **current** one is the value
+Five event wasm hashes because the factory has been pointed at a new event
+revision four times — 08.08.2026, 23.09.2026, 24.09.2026 and 17.11.2026 — each
+recorded below with the transaction that did it. The **current** one is the value
 `scripts/check-wasm-hash.mjs` asks the live factory for on every push; the older
-ones are kept because the transactions recorded under *Bringing it up* and the two
+ones are kept because the transactions recorded under *Bringing it up* and the
 upgrade sections uploaded exactly that code, and deleting them would make those
 records unverifiable.
 
@@ -549,6 +552,103 @@ stopped needing to prove anything. `renew` removes that: the member, a friend, o
 an organizer who wants to admit them next month can each pay a few stroops to keep
 the record alive, and none of them needs our permission. That is what makes the
 ledger outlive our goodwill.
+
+## Upgraded a fourth time — a way out of a stranded deposit (17.11.2026)
+
+The SOW 3 freeze. All three contracts moved, **no address changed**, and the
+reputation ledger still holds the first engagement's results at the address it
+has had since the week it existed.
+
+Why it was needed, in one sentence: `open_checkin` and `finalize` both require a
+host signature, so until this revision **there was no path out of a reserved
+deposit that a guest could take on their own** — an organizer who walked away
+left every deposit in that contract locked permanently, recoverable by nobody.
+On Testnet that is an inconvenience. The next deployment is Mainnet.
+
+| Step | Transaction |
+| :-- | :-- |
+| upload the event revision | [`329ed086d5693d998c7387c12c0002db4ee951f02f8f03894e0307374fc4404a`](https://stellar.expert/explorer/testnet/tx/329ed086d5693d998c7387c12c0002db4ee951f02f8f03894e0307374fc4404a) |
+| upload the factory revision | [`1e75198860573de63c8e0ea4517f9f25a29151e540deac64f6dd14d28662a070`](https://stellar.expert/explorer/testnet/tx/1e75198860573de63c8e0ea4517f9f25a29151e540deac64f6dd14d28662a070) |
+| upload the reputation revision | [`3789ebdf603732d372e3f0fc6c44c477dc3d2f6c97f23d9d3e5f7e2bfaee7410`](https://stellar.expert/explorer/testnet/tx/3789ebdf603732d372e3f0fc6c44c477dc3d2f6c97f23d9d3e5f7e2bfaee7410) |
+| `reputation.upgrade` → that revision | [`e901272a7afa44015e7fd4874a27e94ccc2a523652181e09b39bfde169d5706e`](https://stellar.expert/explorer/testnet/tx/e901272a7afa44015e7fd4874a27e94ccc2a523652181e09b39bfde169d5706e) |
+| `factory.upgrade` → that revision | [`f07b042ca017687cbbad2d5b593ad4925802659b7d80118eb5902750c6ff3df5`](https://stellar.expert/explorer/testnet/tx/f07b042ca017687cbbad2d5b593ad4925802659b7d80118eb5902750c6ff3df5) |
+| `factory.set_event_wasm_hash` → that revision | [`fdbb4abf0b9dbbff009a9423474eaadd7a0988aaf72660068ded11b66dd02d6c`](https://stellar.expert/explorer/testnet/tx/fdbb4abf0b9dbbff009a9423474eaadd7a0988aaf72660068ded11b66dd02d6c) |
+
+- Event wasm hash after this upgrade: `634e34bd75ab853c837ed7d2a9c23a1219133699edda27df1f823a28d6391c1f`
+- Factory wasm hash after this upgrade: `09c8ba280e8d8d711afd8c53ba73a7e52d764c78f4e9745ea897a3bc9a629488`
+- Reputation wasm hash after this upgrade: `858b8d6500a9c13c80d4cb2b41b4a61d12ded8e6e3e9ede8a063ba4e8d0738f7`
+
+### The order was forced again, and differently
+
+Reputation first, as on 24.09, but for the opposite reason. `reclaim` records an
+abandoned event against its organizer through `record_abandoned`, which did not
+exist on the live ledger. That call is a `try_`, so the wrong order would not
+have cost anybody their deposit — it would have silently produced a reclaim with
+no accountability line, which is the half of the feature that is evidence.
+
+### What this revision added
+
+- **`event.reclaim(guest)`** — after `starts_at` plus 48 hours, any wallet
+  holding a reserved spot withdraws its own deposit, authorized by itself. No
+  amount argument and no recipient argument, so it cannot become a way to empty
+  an event. The deposit comes back; the fee allowance does not, because that
+  pool is the organizer's money for people who actually turned up.
+- **A corrected settlement.** `finalize` now subtracts reclaimers before working
+  out what was forfeited. Without it the contract tries to redistribute money
+  that has already left, the transfer traps, and an event that was abandoned
+  *and* partly reclaimed could never be settled at all — stranding everybody who
+  did not reclaim.
+- **`reputation.record_abandoned`** — the other half of `events_organised`,
+  written by an event's first reclaim because an abandoned event has no
+  settlement to carry it.
+- **`propose_admin` / `accept_admin`** on the factory and the reputation ledger,
+  so the admin can move to a hardware wallet in two transactions signed by two
+  different keys. Neither contract could change its admin at all before this.
+
+### Proven on the live chain, not only in tests
+
+An event created with a start time two days in the past, reserved, and then
+abandoned — the organizer never called anything after creating it.
+
+| | |
+| :-- | :-- |
+| Event | [`CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7KCAK5`](https://stellar.expert/explorer/testnet/contract/CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7KCAK5) |
+| Organizer (abandoned it) | `GD2CEL7T4F4ZAMAPXULE6WOP4GH5VMCSTFVGZEE7B67X3NMXMPVMRY5H` |
+| Guest (recovered their own money) | `GASUZI3HLTYBPQ7YYEAZ427D2K2BNBVOZQDQ5KJC3T5P6R6FZWTODEDY` |
+| `rsvp` — 1 XLM locked | [`369dc200cc5555b9c7d08f74347382f7765ab1de942182af480022c29113f75d`](https://stellar.expert/explorer/testnet/tx/369dc200cc5555b9c7d08f74347382f7765ab1de942182af480022c29113f75d) |
+| **`reclaim` — 1 XLM back, no organizer involved** | [`dc0ec0e27c1b6bb91d4f24475028c1e653597c4169853e7956c9594232d0b3be`](https://stellar.expert/explorer/testnet/tx/dc0ec0e27c1b6bb91d4f24475028c1e653597c4169853e7956c9594232d0b3be) |
+
+Read back from the chain afterwards, with no key:
+
+```bash
+# The organizer's accountability line: 0 before the reclaim, 1 after.
+stellar contract invoke --id CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ \
+  --network testnet --source-account <any> -- \
+  get_record --member GD2CEL7T4F4ZAMAPXULE6WOP4GH5VMCSTFVGZEE7B67X3NMXMPVMRY5H
+# {"events_abandoned":1,"events_organised":0,"no_shows":0,"shows":0,...}
+
+# The guest's own record is untouched — a reclaim is neither attendance nor absence.
+stellar contract invoke --id CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ \
+  --network testnet --source-account <any> -- \
+  get_record --member GASUZI3HLTYBPQ7YYEAZ427D2K2BNBVOZQDQ5KJC3T5P6R6FZWTODEDY
+# {"events_abandoned":0,"events_organised":0,"no_shows":0,"shows":0,...}
+
+# Who reclaimed, and what the contract thinks of them now.
+stellar contract invoke --id CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7KCAK5 \
+  --network testnet --source-account <any> -- get_reclaimed
+# ["GASUZI3HLTYBPQ7YYEAZ427D2K2BNBVOZQDQ5KJC3T5P6R6FZWTODEDY"]
+```
+
+A refusal has no transaction hash and cannot have one — Soroban simulates a call
+before it is submitted, so the error code and the command are the honest
+evidence. A second reclaim from the same wallet:
+
+```bash
+stellar contract invoke --id CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7KCAK5 \
+  --network testnet --source-account <any> -- \
+  reclaim --guest GASUZI3HLTYBPQ7YYEAZ427D2K2BNBVOZQDQ5KJC3T5P6R6FZWTODEDY
+# Error(Contract, #29)  — AlreadyReclaimed
+```
 
 ## Deliverable 1 evidence — the app itself moves money
 
