@@ -36,6 +36,28 @@ pub const TTL_EXTEND_TO: u32 = LEDGERS_PER_DAY * 90;
 /// event is not rewriting the same TTL on every single call.
 pub const TTL_THRESHOLD: u32 = LEDGERS_PER_DAY * 30;
 
+/// How long after an event starts before a guest may take their own deposit
+/// back without the organizer.
+///
+/// `open_checkin` and `finalize` both need a host signature, so until this
+/// existed there was **no path out of a reserved deposit that a guest could
+/// take on their own**: an organizer who never settled left every deposit in
+/// that contract locked permanently, recoverable by nobody. On Testnet that is
+/// an inconvenience; on Mainnet it is the one way Showup could take somebody's
+/// money and fail to give it back.
+///
+/// The window is also what stops the exit from becoming an escape hatch. A
+/// reclaim deliberately leaves the guest's attendance record untouched — it is
+/// neither turning up nor failing to — so if it were available immediately it
+/// would be a way to dodge a no-show mark. It is not: an organizer who settles
+/// within two days closes the window before it ever opens. Reclaiming is only
+/// reachable once the organizer has already failed to do their part.
+///
+/// 48 hours rather than a sharper number because it is the one figure here a
+/// real organizer would argue with, and it has to survive a weekend event
+/// settled on the Monday.
+pub const RECLAIM_GRACE_SECONDS: u64 = 48 * 60 * 60;
+
 /// The fewest shows a record needs before its owner may vouch for someone.
 ///
 /// One is enough on purpose: the point of vouching is to let a newcomer in on
@@ -77,6 +99,17 @@ pub struct Record {
     pub vouches_given: u32,
     pub vouches_broken: u32,
     pub events_organised: u32,
+    /// Events they created, took deposits for, and never settled.
+    ///
+    /// **Must stay field-for-field with the reputation contract's own `Record`.**
+    /// The two are separate declarations on purpose (see below), and a
+    /// `#[contracttype]` struct is decoded by unpacking a host map into a slice
+    /// of exactly the declared length — so a field added on one side and not the
+    /// other does not degrade, it fails the read outright with "differing host
+    /// map and output slice lengths". That is what happened when this field was
+    /// added to the ledger and not to here: every `vouch` on the event contract
+    /// stopped working, because the gate reads a record before it opens.
+    pub events_abandoned: u32,
 }
 
 /// A member's attendance record, as the event contract reads it.
@@ -145,6 +178,12 @@ pub trait Reputation {
     fn record_no_show(env: Env, event: Address, member: Address);
     /// Counted when the event settles, so it means "ran one to the end".
     fn record_organised(env: Env, event: Address, organizer: Address);
+    /// The other half of the same question: took deposits and never settled.
+    ///
+    /// Written by the event's **first `reclaim`** rather than by a settlement,
+    /// because an abandoned event has no settlement to carry it. A guest taking
+    /// their own money out without the organizer is the thing being recorded.
+    fn record_abandoned(env: Env, event: Address, organizer: Address);
     /// Signed a vouch for somebody.
     fn record_vouch_given(env: Env, event: Address, voucher: Address);
     /// Somebody they vouched for reserved a spot and never turned up.

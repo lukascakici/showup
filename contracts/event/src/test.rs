@@ -33,6 +33,9 @@ impl PanickingReputation {
     pub fn record_organised(_env: Env, _event: Address, _organizer: Address) {
         panic!("reputation is down");
     }
+    pub fn record_abandoned(_env: Env, _event: Address, _organizer: Address) {
+        panic!("reputation is down");
+    }
     pub fn record_vouch_given(_env: Env, _event: Address, _voucher: Address) {
         panic!("reputation is down");
     }
@@ -1857,4 +1860,438 @@ fn a_broken_ledger_cannot_stop_an_event_from_settling() {
         f.balance(&f.organizer),
         opening + DEPOSIT + FEE_ALLOWANCE * i128::from(CAPACITY)
     );
+}
+
+// ---------------------------------------------------------------------------
+// The drain invariant.
+//
+// Everything paid into an event is either a guest's deposit or the organizer's
+// fee pool, and `finalize` is the last call that can move any of it. So after
+// `finalize` the contract's balance must be **exactly zero**: a positive balance
+// is money stranded at an address with no further way to pay it out, and a
+// transfer that would overdraw simply traps and takes the whole settlement with
+// it.
+//
+// Today the arithmetic is
+//
+//     held = deposit·(reserved − showed) + fee_allowance·(capacity − showed)
+//          = forfeited + unspent_pool
+//
+// which is why it balances. These tests exist so that the next change to that
+// expression has to keep balancing, rather than being checked by eye.
+// ---------------------------------------------------------------------------
+
+/// Run one settlement shape and assert nothing is left behind.
+fn drains_to_zero(policy: ForfeitPolicy, reserved: u32, showed: u32, label: &'static str) {
+    assert!(showed <= reserved, "bad case");
+    let f = setup(policy);
+
+    let mut guests = Vec::new(&f.env);
+    for _ in 0..reserved {
+        let guest = f.guest(DEPOSIT);
+        f.client.rsvp(&guest);
+        guests.push_back(guest);
+    }
+
+    if showed > 0 {
+        f.client.open_checkin(&f.organizer);
+        for i in 0..showed {
+            f.client.check_in(&guests.get(i).unwrap(), &f.secret);
+        }
+    }
+
+    f.client.finalize(&f.organizer);
+    assert_eq!(f.balance(&f.client.address), 0, "{}", label);
+}
+
+#[test]
+fn settlement_leaves_nothing_in_the_contract_to_the_organizer() {
+    use ForfeitPolicy::ToOrganizer as P;
+    drains_to_zero(P, 0, 0, "nobody reserved");
+    drains_to_zero(P, 1, 0, "one reserved, nobody came");
+    drains_to_zero(P, 1, 1, "one reserved, came");
+    drains_to_zero(P, 3, 0, "three reserved, nobody came");
+    drains_to_zero(P, 3, 1, "three reserved, one came");
+    drains_to_zero(P, 3, 2, "three reserved, two came");
+    drains_to_zero(P, 3, 3, "everybody came");
+    drains_to_zero(P, 4, 2, "a full house, half came");
+    drains_to_zero(P, 4, 4, "a full house, all came");
+}
+
+#[test]
+fn settlement_leaves_nothing_in_the_contract_split_among_attendees() {
+    // The policy with the harder arithmetic: integer division leaves dust, and
+    // the dust has to ride back out with the unspent pool rather than being
+    // stranded. `reserved=3, showed=2` is the case that produces it.
+    use ForfeitPolicy::SplitAmongAttendees as P;
+    drains_to_zero(P, 0, 0, "nobody reserved");
+    drains_to_zero(P, 1, 0, "one reserved, nobody came");
+    drains_to_zero(P, 1, 1, "one reserved, came");
+    drains_to_zero(P, 3, 0, "three reserved, nobody came — nobody to split to");
+    drains_to_zero(P, 3, 1, "three reserved, one came");
+    drains_to_zero(P, 3, 2, "three reserved, two came — leaves dust");
+    drains_to_zero(P, 3, 3, "everybody came");
+    drains_to_zero(P, 4, 2, "a full house, half came");
+    drains_to_zero(P, 4, 4, "a full house, all came");
+}
+
+/// The same invariant, with some guests having already taken their deposit out.
+///
+/// `reclaim` moves money without `finalize` knowing, which is exactly the kind
+/// of change the invariant exists to catch.
+fn drains_to_zero_after_reclaims(
+    policy: ForfeitPolicy,
+    reserved: u32,
+    showed: u32,
+    reclaimed: u32,
+    label: &'static str,
+) {
+    use soroban_sdk::testutils::Ledger as _;
+    assert!(showed + reclaimed <= reserved, "bad case");
+    let f = setup(policy);
+
+    let mut guests = Vec::new(&f.env);
+    for _ in 0..reserved {
+        let guest = f.guest(DEPOSIT);
+        f.client.rsvp(&guest);
+        guests.push_back(guest);
+    }
+
+    if showed > 0 {
+        f.client.open_checkin(&f.organizer);
+        for i in 0..showed {
+            f.client.check_in(&guests.get(i).unwrap(), &f.secret);
+        }
+    }
+
+    // Past the start time and out the far side of the grace window, which is
+    // the only point any of this is reachable.
+    f.env
+        .ledger()
+        .set_timestamp(STARTS_AT + RECLAIM_GRACE_SECONDS + 1);
+
+    for i in showed..(showed + reclaimed) {
+        f.client.reclaim(&guests.get(i).unwrap());
+    }
+
+    f.client.finalize(&f.organizer);
+    assert_eq!(f.balance(&f.client.address), 0, "{}", label);
+}
+
+#[test]
+fn settlement_after_reclaims_leaves_nothing_in_the_contract() {
+    use ForfeitPolicy::ToOrganizer as P;
+    drains_to_zero_after_reclaims(P, 1, 0, 1, "the only guest reclaimed");
+    drains_to_zero_after_reclaims(P, 3, 0, 3, "everybody gave up");
+    drains_to_zero_after_reclaims(P, 3, 0, 1, "one gave up, two never came");
+    drains_to_zero_after_reclaims(P, 3, 1, 1, "one came, one gave up, one no-showed");
+    drains_to_zero_after_reclaims(P, 4, 2, 2, "half came, half gave up");
+}
+
+#[test]
+fn settlement_after_reclaims_leaves_nothing_when_splitting() {
+    use ForfeitPolicy::SplitAmongAttendees as P;
+    drains_to_zero_after_reclaims(P, 1, 0, 1, "the only guest reclaimed");
+    drains_to_zero_after_reclaims(P, 3, 0, 3, "everybody gave up — nobody to split to");
+    drains_to_zero_after_reclaims(P, 3, 1, 1, "one came, one gave up, one no-showed");
+    drains_to_zero_after_reclaims(P, 4, 2, 1, "two came, one gave up, one no-showed");
+    drains_to_zero_after_reclaims(P, 4, 2, 2, "half came, half gave up — nothing forfeited");
+}
+
+// ---------------------------------------------------------------------------
+// Reclaiming a stranded deposit.
+//
+// The call that exists because `open_checkin` and `finalize` both need a host
+// signature, so before it there was no way out of a reserved deposit that did
+// not depend on the organizer showing up to release it.
+// ---------------------------------------------------------------------------
+
+/// Move the clock to the first instant a reclaim is allowed.
+fn past_the_grace_window(f: &Fixture) {
+    use soroban_sdk::testutils::Ledger as _;
+    f.env
+        .ledger()
+        .set_timestamp(STARTS_AT + RECLAIM_GRACE_SECONDS);
+}
+
+#[test]
+fn a_guest_recovers_a_deposit_from_an_organizer_who_never_opened_check_in() {
+    // The whole reason this exists: the event never reached `CheckingIn`, so
+    // there is no host call left that could ever release this money.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    assert_eq!(f.balance(&guest), 0);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(f.balance(&guest), DEPOSIT);
+    assert_eq!(f.client.get_attendance(&guest), Some(Attendance::Reclaimed));
+    assert_eq!(f.client.get_reclaimed().len(), 1);
+    // Still `Reserving` — a reclaim is a guest leaving, not a phase change.
+    assert_eq!(f.client.get_phase(), Phase::Reserving);
+}
+
+#[test]
+fn a_guest_recovers_a_deposit_after_check_in_opened_but_never_settled() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    f.client.open_checkin(&f.organizer);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(f.balance(&guest), DEPOSIT);
+}
+
+#[test]
+fn a_reclaim_returns_the_deposit_and_not_the_fee_allowance() {
+    // The pool is the organizer's money, funded upfront to reimburse people who
+    // actually turned up. Paying it to somebody who did not would make an
+    // organizer fund absences.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(f.balance(&guest), DEPOSIT);
+    assert_ne!(f.balance(&guest), DEPOSIT + FEE_ALLOWANCE);
+}
+
+#[test]
+fn reclaiming_is_refused_until_the_grace_window_has_passed() {
+    use soroban_sdk::testutils::Ledger as _;
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    // Before the event has even started.
+    assert_eq!(
+        f.client.try_reclaim(&guest),
+        Err(Ok(Error::ReclaimTooEarly))
+    );
+
+    // Started, but the organizer still has their two days.
+    f.env.ledger().set_timestamp(STARTS_AT + 1);
+    assert_eq!(
+        f.client.try_reclaim(&guest),
+        Err(Ok(Error::ReclaimTooEarly))
+    );
+
+    // One second short of the window.
+    f.env
+        .ledger()
+        .set_timestamp(STARTS_AT + RECLAIM_GRACE_SECONDS - 1);
+    assert_eq!(
+        f.client.try_reclaim(&guest),
+        Err(Ok(Error::ReclaimTooEarly))
+    );
+
+    assert_eq!(f.balance(&guest), 0);
+}
+
+#[test]
+fn reclaiming_twice_is_refused() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+    assert_eq!(
+        f.client.try_reclaim(&guest),
+        Err(Ok(Error::AlreadyReclaimed))
+    );
+    assert_eq!(f.balance(&guest), DEPOSIT);
+}
+
+#[test]
+fn reclaiming_is_refused_to_anybody_who_never_locked_a_deposit() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let stranger = f.guest(DEPOSIT);
+
+    past_the_grace_window(&f);
+    assert_eq!(f.client.try_reclaim(&stranger), Err(Ok(Error::NotReserved)));
+}
+
+#[test]
+fn reclaiming_is_refused_to_a_guest_who_already_checked_in() {
+    // They have already been paid, with the fee allowance on top.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    f.client.open_checkin(&f.organizer);
+    f.client.check_in(&guest, &f.secret);
+
+    past_the_grace_window(&f);
+    assert_eq!(f.client.try_reclaim(&guest), Err(Ok(Error::NotReserved)));
+    assert_eq!(f.balance(&guest), DEPOSIT + FEE_ALLOWANCE);
+}
+
+#[test]
+fn reclaiming_after_settlement_is_refused() {
+    // Settling already decided where this deposit went.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    f.client.finalize(&f.organizer);
+
+    past_the_grace_window(&f);
+    assert_eq!(
+        f.client.try_reclaim(&guest),
+        Err(Ok(Error::AlreadyFinalized))
+    );
+}
+
+#[test]
+fn checking_in_after_reclaiming_is_refused() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    f.client.open_checkin(&f.organizer);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(
+        f.client.try_check_in(&guest, &f.secret),
+        Err(Ok(Error::AlreadyReclaimed))
+    );
+}
+
+#[test]
+fn reclaiming_needs_the_guests_own_signature() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+    past_the_grace_window(&f);
+
+    // Nobody has authorized anything, the guest least of all.
+    f.env.set_auths(&[]);
+    assert!(f.client.try_reclaim(&guest).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.balance(&guest), 0);
+}
+
+#[test]
+fn a_reclaim_is_neither_attendance_nor_absence() {
+    // The one number this product sells. Somebody recovering their own money
+    // from an event that never happened must not be recorded as having failed
+    // to turn up to it.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+    f.client.finalize(&f.organizer);
+
+    assert_eq!(f.score(&guest), (0, 0));
+}
+
+#[test]
+fn a_reclaim_does_not_charge_the_guests_vouchers() {
+    // A broken vouch is for somebody who reserved and never turned up. This
+    // guest did not fail to turn up — the event failed to happen.
+    let f = setup_gated(
+        ForfeitPolicy::ToOrganizer,
+        Ledger::Real,
+        Admission::Vouch(1),
+    );
+    let voucher = f.guest(0);
+    f.give_shows(&voucher, VOUCH_QUALIFY_SHOWS);
+    let guest = f.guest(DEPOSIT);
+    f.client.vouch(&voucher, &guest);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+    f.client.finalize(&f.organizer);
+
+    let record = f.reputation.as_ref().unwrap().get_record(&voucher);
+    assert_eq!(record.vouches_broken, 0);
+}
+
+#[test]
+fn the_first_reclaim_records_the_event_against_its_organizer() {
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let ledger = f.reputation.as_ref().unwrap();
+    assert_eq!(ledger.get_record(&f.organizer).events_abandoned, 0);
+
+    let first = f.guest(DEPOSIT);
+    let second = f.guest(DEPOSIT);
+    f.client.rsvp(&first);
+    f.client.rsvp(&second);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&first);
+    assert_eq!(ledger.get_record(&f.organizer).events_abandoned, 1);
+
+    // A second guest giving up on the same event is the same abandonment, not
+    // another one.
+    f.client.reclaim(&second);
+    assert_eq!(ledger.get_record(&f.organizer).events_abandoned, 1);
+}
+
+#[test]
+fn a_reclaim_survives_a_reputation_ledger_that_is_down() {
+    // The guest's money must never depend on the ledger being healthy — the
+    // same rule `check_in` and `finalize` already follow.
+    let f = setup_with(ForfeitPolicy::ToOrganizer, Ledger::Panicking);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(f.balance(&guest), DEPOSIT);
+}
+
+#[test]
+fn a_reclaim_works_on_an_event_with_no_reputation_ledger_at_all() {
+    let f = setup_with(ForfeitPolicy::ToOrganizer, Ledger::None);
+    let guest = f.guest(DEPOSIT);
+    f.client.rsvp(&guest);
+
+    past_the_grace_window(&f);
+    f.client.reclaim(&guest);
+
+    assert_eq!(f.balance(&guest), DEPOSIT);
+}
+
+#[test]
+fn settling_after_some_reclaimed_still_pays_everybody_left_correctly() {
+    // Four reserved: one came, one gave up, two never showed. The two no-shows
+    // are the only deposits there are to forfeit.
+    let f = setup(ForfeitPolicy::ToOrganizer);
+    let came = f.guest(DEPOSIT);
+    let gave_up = f.guest(DEPOSIT);
+    let absent_one = f.guest(DEPOSIT);
+    let absent_two = f.guest(DEPOSIT);
+    for g in [&came, &gave_up, &absent_one, &absent_two] {
+        f.client.rsvp(g);
+    }
+    let organizer_before = f.balance(&f.organizer);
+
+    f.client.open_checkin(&f.organizer);
+    f.client.check_in(&came, &f.secret);
+    past_the_grace_window(&f);
+    f.client.reclaim(&gave_up);
+    f.client.finalize(&f.organizer);
+
+    assert_eq!(f.balance(&came), DEPOSIT + FEE_ALLOWANCE);
+    assert_eq!(f.balance(&gave_up), DEPOSIT);
+    assert_eq!(f.balance(&absent_one), 0);
+    // Two forfeited deposits, plus the pool nobody but `came` drew from.
+    let unspent_pool = FEE_ALLOWANCE * i128::from(CAPACITY - 1);
+    assert_eq!(
+        f.balance(&f.organizer) - organizer_before,
+        DEPOSIT * 2 + unspent_pool
+    );
+    assert_eq!(f.balance(&f.client.address), 0);
 }

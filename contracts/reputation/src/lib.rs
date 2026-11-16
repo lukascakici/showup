@@ -91,6 +91,11 @@ pub struct Record {
     pub vouches_given: u32,
     pub vouches_broken: u32,
     pub events_organised: u32,
+    /// Events they created, took deposits for, and never settled.
+    ///
+    /// Safe to add here where it would not be on `Extras`: `Record` is never
+    /// stored, only assembled at read time.
+    pub events_abandoned: u32,
 }
 
 #[contracttype]
@@ -107,6 +112,21 @@ pub enum DataKey {
     /// see `Score`. A member who predates it has no such entry, which is why
     /// the reader below defaults rather than unwraps.
     Extras(Address),
+    /// Events this member created, took deposits for, and never settled.
+    ///
+    /// Its own key rather than a field on `Extras`, for the reason stated
+    /// there: `Extras` is stored, so it cannot grow without making every entry
+    /// already written undecodable.
+    Abandoned(Address),
+}
+
+/// Published when an organizer's event is first reclaimed against.
+///
+/// Worth watching on its own: this is the ledger recording that somebody took
+/// deposits and walked away from them.
+#[contractevent]
+pub struct EventAbandoned {
+    pub organizer: Address,
 }
 
 /// Published on both halves of a handover, so the move of the key that governs
@@ -241,6 +261,7 @@ impl ReputationContract {
             vouches_given: extras.vouches_given,
             vouches_broken: extras.vouches_broken,
             events_organised: extras.events_organised,
+            events_abandoned: Self::abandoned_of(&env, &member),
         }
     }
 
@@ -256,6 +277,31 @@ impl ReputationContract {
         let mut extras = Self::extras_of(&env, &organizer);
         extras.events_organised = extras.events_organised.saturating_add(1);
         Self::put_extras(&env, &organizer, &extras);
+        Ok(())
+    }
+
+    /// Count an abandoned event against the address that created it.
+    /// Registered events only.
+    ///
+    /// The other half of `record_organised`, and the one that matters on
+    /// Mainnet: an event that took deposits and was never settled. Called by the
+    /// event's **first `reclaim`**, because there is no settlement to carry it —
+    /// that is precisely what happened.
+    ///
+    /// Idempotence lives in the event contract rather than here: it only calls
+    /// this when its reclaim list was empty, the same way `record_checkin` is
+    /// guarded by attendance rather than by a second storage entry per member.
+    pub fn record_abandoned(env: Env, event: Address, organizer: Address) -> Result<(), Error> {
+        Self::require_event(&env, &event)?;
+        event.require_auth();
+
+        // Its own key rather than a field on `Extras`. `Extras` is a *stored*
+        // struct, so growing it would make every entry written by the current
+        // wasm undecodable to a client generated from the new spec — the same
+        // trap `Config` fell into on the event contract.
+        let current = Self::abandoned_of(&env, &organizer);
+        Self::put_abandoned(&env, &organizer, current.saturating_add(1));
+        EventAbandoned { organizer }.publish(&env);
         Ok(())
     }
 
@@ -469,6 +515,22 @@ impl ReputationContract {
     fn put_extras(env: &Env, member: &Address, extras: &Extras) {
         let key = DataKey::Extras(member.clone());
         env.storage().persistent().set(&key, extras);
+        Self::bump(env, &key);
+        Self::bump_instance(env);
+    }
+
+    /// Zero for everybody who has never abandoned an event, which is almost
+    /// everybody — hence the default rather than an unwrap.
+    fn abandoned_of(env: &Env, member: &Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Abandoned(member.clone()))
+            .unwrap_or(0)
+    }
+
+    fn put_abandoned(env: &Env, member: &Address, count: u32) {
+        let key = DataKey::Abandoned(member.clone());
+        env.storage().persistent().set(&key, &count);
         Self::bump(env, &key);
         Self::bump_instance(env);
     }

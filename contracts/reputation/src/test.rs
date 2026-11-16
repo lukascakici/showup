@@ -296,6 +296,7 @@ fn an_unknown_member_has_an_empty_record_rather_than_no_record() {
             vouches_given: 0,
             vouches_broken: 0,
             events_organised: 0,
+            events_abandoned: 0,
         }
     );
 }
@@ -321,6 +322,7 @@ fn a_record_written_before_the_extras_existed_still_reads() {
             vouches_given: 0,
             vouches_broken: 0,
             events_organised: 0,
+            events_abandoned: 0,
         }
     );
     // And the old read is untouched, which is what the deployed event contract
@@ -542,4 +544,75 @@ fn a_handover_leaves_every_score_exactly_where_it_was() {
 
     assert_eq!(f.reputation.get_record(&member), before);
     assert!(f.reputation.is_registered(&event));
+}
+
+// ---------------------------------------------------------------------------
+// The other half of organising: took deposits and never settled.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn an_abandoned_event_is_counted_against_its_organizer() {
+    let f = setup();
+    let event = f.registered_event();
+    let organizer = Address::generate(&f.env);
+
+    assert_eq!(f.reputation.get_record(&organizer).events_abandoned, 0);
+    f.reputation.record_abandoned(&event, &organizer);
+    assert_eq!(f.reputation.get_record(&organizer).events_abandoned, 1);
+}
+
+#[test]
+fn abandoning_and_organising_are_counted_separately() {
+    // Not mutually exclusive, and nothing enforces that they are: an organizer
+    // who abandons an event and then settles it late has genuinely done both.
+    let f = setup();
+    let event = f.registered_event();
+    let organizer = Address::generate(&f.env);
+
+    f.reputation.record_abandoned(&event, &organizer);
+    f.reputation.record_organised(&event, &organizer);
+
+    let record = f.reputation.get_record(&organizer);
+    assert_eq!(record.events_abandoned, 1);
+    assert_eq!(record.events_organised, 1);
+}
+
+#[test]
+fn an_abandonment_touches_no_other_counter() {
+    let f = setup();
+    let event = f.registered_event();
+    let organizer = Address::generate(&f.env);
+    f.reputation.record_checkin(&event, &organizer);
+
+    f.reputation.record_abandoned(&event, &organizer);
+
+    let record = f.reputation.get_record(&organizer);
+    assert_eq!(record.shows, 1);
+    assert_eq!(record.no_shows, 0);
+    assert_eq!(record.vouches_given, 0);
+    assert_eq!(record.vouches_broken, 0);
+}
+
+#[test]
+fn only_a_registered_event_can_record_an_abandonment() {
+    // The same gate every other write goes through: an address the factory
+    // never registered cannot mark somebody as having abandoned an event.
+    let f = setup();
+    let impostor = Address::generate(&f.env);
+    let organizer = Address::generate(&f.env);
+
+    assert_eq!(
+        f.reputation.try_record_abandoned(&impostor, &organizer),
+        Err(Ok(Error::NotAnEvent))
+    );
+    assert_eq!(f.reputation.get_record(&organizer).events_abandoned, 0);
+}
+
+#[test]
+fn a_record_that_predates_abandonment_reads_zero_rather_than_failing() {
+    // Its own storage key, so a member who has never been counted has no entry
+    // at all — and `get_record` has to answer anyway.
+    let f = setup();
+    let newcomer = Address::generate(&f.env);
+    assert_eq!(f.reputation.get_record(&newcomer).events_abandoned, 0);
 }

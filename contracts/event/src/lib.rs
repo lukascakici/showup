@@ -37,7 +37,8 @@
 //! forfeited deposits.
 
 use interfaces::{
-    ReputationClient, MAX_TITLE_BYTES, TTL_EXTEND_TO, TTL_THRESHOLD, VOUCH_QUALIFY_SHOWS,
+    ReputationClient, MAX_TITLE_BYTES, RECLAIM_GRACE_SECONDS, TTL_EXTEND_TO, TTL_THRESHOLD,
+    VOUCH_QUALIFY_SHOWS,
 };
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, token, Address, Bytes,
@@ -95,6 +96,11 @@ pub enum Error {
     CannotVouchForYourself = 26,
     /// Not enough members have vouched for this guest yet.
     NotEnoughVouches = 27,
+    /// `reclaim` before `starts_at + RECLAIM_GRACE_SECONDS`. The organizer
+    /// still has time to settle.
+    ReclaimTooEarly = 28,
+    /// A second `reclaim` from a guest who already took their deposit back.
+    AlreadyReclaimed = 29,
 }
 
 #[contracttype]
@@ -127,6 +133,14 @@ pub enum Attendance {
     Declined,
     Reserved,
     CheckedIn,
+    /// Took their own deposit back, because the organizer never settled.
+    ///
+    /// **Deliberately neither `CheckedIn` nor left as `Reserved`.** A reclaim is
+    /// not attendance and it is not absence: the guest recovered their money
+    /// from an event that never happened properly, and the one number this
+    /// product sells must not record that as either. Being its own state is
+    /// what keeps `finalize`'s no-show loop from touching them — see there.
+    Reclaimed,
 }
 
 #[contracttype]
@@ -211,6 +225,12 @@ pub enum DataKey {
     /// both readers below have a default rather than an `unwrap`.
     Admission,
     Hosts,
+    /// Everyone who has taken their deposit back without the organizer.
+    ///
+    /// A list rather than a counter for the same reason `Vouchers` is one: the
+    /// evidence has to be able to name who, and `finalize` reads its length to
+    /// know how much money has already left.
+    Reclaimed,
     /// Everyone who has vouched for this guest, at this event.
     ///
     /// A list rather than a counter because `finalize` has to charge them by
@@ -231,6 +251,17 @@ pub struct CheckedIn {
     pub guest: Address,
     /// deposit + fee_allowance, returned in this same call.
     pub refunded: i128,
+}
+
+/// Published when a guest exits a deposit the organizer never settled.
+///
+/// Worth watching on its own: every one of these is an event somebody took
+/// money for and walked away from.
+#[contractevent]
+pub struct DepositReclaimed {
+    pub guest: Address,
+    /// The deposit, and only the deposit — see `reclaim`.
+    pub amount: i128,
 }
 
 #[contractevent]
@@ -627,6 +658,9 @@ impl EventContract {
         {
             Some(Attendance::CheckedIn) => return Err(Error::AlreadyCheckedIn),
             Some(Attendance::Reserved) => {}
+            // Already took the deposit back, so there is nothing left in here
+            // to hand over and no spot left to honour.
+            Some(Attendance::Reclaimed) => return Err(Error::AlreadyReclaimed),
             // Approved but never reserved is the same as never asking, as far
             // as the door is concerned: no deposit was ever locked, so there is
             // nothing here to hand back.
@@ -667,6 +701,109 @@ impl EventContract {
     }
 
     /// Start check-in, closing reservations. Any host.
+    /// Take your own deposit back when the organizer never settled.
+    ///
+    /// `open_checkin` and `finalize` both need a host signature, so without this
+    /// there is **no path out of a reserved deposit that a guest can take on
+    /// their own**: an organizer who walks away leaves every deposit in this
+    /// contract locked forever, recoverable by nobody — not the guest, not the
+    /// admin, not us. That is not a bug, which is why no audit would report it;
+    /// it is the design working exactly as written. On Mainnet it is the one way
+    /// Showup could take somebody's money and fail to give it back.
+    ///
+    /// Three properties make this safe to expose:
+    ///
+    /// - **It touches only the caller's own deposit.** There is no amount
+    ///   argument and no recipient argument, so it can never become a way to
+    ///   empty an event.
+    /// - **It cannot be used early.** Not until `starts_at` plus
+    ///   `RECLAIM_GRACE_SECONDS`, by which point the organizer has had two days
+    ///   past their own start time to settle.
+    /// - **It is not a way to dodge a no-show.** A reclaim leaves the guest's
+    ///   attendance record untouched, so the grace window is what stops it being
+    ///   an escape hatch: an organizer who settles on time closes it before it
+    ///   opens.
+    ///
+    /// The deposit comes back and the fee allowance does not. That pool is the
+    /// organizer's money, funded upfront to reimburse people who actually came;
+    /// paying it to somebody who did not attend would make an organizer fund
+    /// absences.
+    ///
+    /// Allowed in `Reserving` and in `CheckingIn`. An organizer can disappear
+    /// before opening check-in or after, and both strand the same money.
+    pub fn reclaim(env: Env, guest: Address) -> Result<(), Error> {
+        let config = Self::config(&env)?;
+        if Self::phase(&env) == Phase::Finalized {
+            return Err(Error::AlreadyFinalized);
+        }
+
+        // Saturating, so an event created with a `starts_at` near u64::MAX
+        // cannot overflow its way into an immediately-reclaimable window.
+        if env.ledger().timestamp() < config.starts_at.saturating_add(RECLAIM_GRACE_SECONDS) {
+            return Err(Error::ReclaimTooEarly);
+        }
+
+        match env
+            .storage()
+            .persistent()
+            .get::<_, Attendance>(&DataKey::Attendance(guest.clone()))
+        {
+            Some(Attendance::Reserved) => {}
+            Some(Attendance::Reclaimed) => return Err(Error::AlreadyReclaimed),
+            // Checked in already got the deposit back, with the fee allowance
+            // on top. Everything else never locked one.
+            Some(Attendance::CheckedIn)
+            | None
+            | Some(Attendance::Applied)
+            | Some(Attendance::Approved)
+            | Some(Attendance::Declined) => return Err(Error::NotReserved),
+        }
+
+        guest.require_auth();
+
+        let mut reclaimed = Self::reclaimed_list(&env);
+        // Read before the push: an empty list means this is the first person to
+        // give up on the organizer, and that is what gets recorded against them.
+        let first = reclaimed.is_empty();
+        reclaimed.push_back(guest.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::Reclaimed, &reclaimed);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Attendance(guest.clone()), &Attendance::Reclaimed);
+        Self::bump_attendance(&env, &guest);
+        Self::bump_instance(&env);
+
+        token::Client::new(&env, &config.token).transfer(
+            &env.current_contract_address(),
+            &guest,
+            &config.deposit,
+        );
+
+        // An event that took deposits and was abandoned is recorded against
+        // whoever created it. There is no `finalize` here to carry the write —
+        // that is the whole point — so the first reclaim carries it instead, and
+        // a guest taking their own money out without the organizer is the
+        // honest definition of the thing being recorded.
+        //
+        // Through `try_` like every other ledger write: a reputation contract
+        // that is down must never take a guest's deposit with it.
+        if first {
+            if let Some(reputation) = &config.reputation {
+                let _ = ReputationClient::new(&env, reputation)
+                    .try_record_abandoned(&env.current_contract_address(), &config.organizer);
+            }
+        }
+
+        DepositReclaimed {
+            guest,
+            amount: config.deposit,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     pub fn open_checkin(env: Env, host: Address) -> Result<(), Error> {
         Self::set_phase(&env, host, Phase::Reserving, Phase::CheckingIn)
     }
@@ -690,11 +827,19 @@ impl EventContract {
         let reserved = Self::reserved_list(&env);
         let checked_in = Self::checked_in_list(&env);
         let showed = checked_in.len();
-        let no_shows = reserved.len() - showed;
+        // Anyone who reclaimed took their deposit with them, so they are neither
+        // a no-show to be forfeited nor an attendee to be paid. Without this
+        // term the contract tries to redistribute money that has already left
+        // and the transfer traps, which would make an event that was abandoned
+        // *and* partly reclaimed impossible to settle at all — stranding
+        // everybody who did not reclaim.
+        let no_shows = reserved.len() - showed - Self::reclaimed_list(&env).len();
 
         let forfeited = config.deposit * i128::from(no_shows);
         // The fee pool was sized for a full house; only the guests who checked in
-        // ever drew from it, so the rest is still the organizer's money.
+        // ever drew from it, so the rest is still the organizer's money. A
+        // reclaim never touches the pool, which is why this line is unchanged —
+        // and that it stays unchanged is the check that the line above is right.
         let unspent_pool = config.fee_allowance * i128::from(config.capacity - showed);
 
         let client = token::Client::new(&env, &config.token);
@@ -794,6 +939,11 @@ impl EventContract {
 
     pub fn get_reserved(env: Env) -> Vec<Address> {
         Self::reserved_list(&env)
+    }
+
+    /// Everyone who took their own deposit back. Empty on a healthy event.
+    pub fn get_reclaimed(env: Env) -> Vec<Address> {
+        Self::reclaimed_list(&env)
     }
 
     pub fn get_checked_in(env: Env) -> Vec<Address> {
@@ -1081,6 +1231,16 @@ impl EventContract {
         env.storage()
             .instance()
             .get(&DataKey::CheckedIn)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    /// Empty for every event that was settled the way it should have been, and
+    /// for every event created before `reclaim` existed — hence the default
+    /// rather than an unwrap.
+    fn reclaimed_list(env: &Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Reclaimed)
             .unwrap_or_else(|| Vec::new(env))
     }
 }
