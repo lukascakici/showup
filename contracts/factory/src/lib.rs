@@ -16,6 +16,11 @@
 //! replaces the factory's own code. Together they mean a change to any contract
 //! in the system costs an upload and an admin call — not a new factory address,
 //! a binding regeneration and a v2/v3 split through every doc.
+//!
+//! The admin itself moves through `propose_admin` + `accept_admin`, in two
+//! transactions signed by the two different keys — so the role can be handed to
+//! a hardware wallet without a mistyped address being able to strand all three
+//! of the above. See `propose_admin`.
 
 use interfaces::{
     Admission, EventClient, ForfeitPolicy, ReputationClient, TTL_EXTEND_TO, TTL_THRESHOLD,
@@ -31,11 +36,15 @@ use soroban_sdk::{
 pub enum Error {
     AlreadyInitialized = 1,
     NotInitialized = 2,
+    /// `accept_admin` with nobody proposed, or after the proposal was withdrawn.
+    NoPendingAdmin = 3,
 }
 
 #[contracttype]
 pub enum DataKey {
     Admin,
+    /// Proposed, not yet in force. See `propose_admin`.
+    PendingAdmin,
     EventWasmHash,
     Events,
     /// Monotonic counter; doubles as the deploy salt so every event gets its own
@@ -56,6 +65,19 @@ pub struct EventCreated {
     pub starts_at: u64,
     pub deposit: i128,
     pub capacity: u32,
+}
+
+/// Published on both halves of a handover, so the move of the key that governs
+/// this system is watchable without reading contract state.
+#[contractevent]
+pub struct AdminProposed {
+    pub new_admin: Address,
+}
+
+#[contractevent]
+pub struct AdminChanged {
+    pub previous: Address,
+    pub current: Address,
 }
 
 #[contract]
@@ -193,6 +215,58 @@ impl EventFactory {
         Ok(())
     }
 
+    /// Nominate the next admin. Admin only, and it changes nothing on its own.
+    ///
+    /// Handing the key over is two transactions rather than one, and the second
+    /// is signed by the key being handed to. A plain setter would mean a
+    /// mistyped address leaves the factory permanently ungovernable — no
+    /// `set_event_wasm_hash`, no `set_reputation`, no `upgrade`, and no way
+    /// back. An address nobody controls can never call `accept_admin`, so the
+    /// mistake cannot complete.
+    ///
+    /// That matters most for the move this was written for: taking the admin off
+    /// a laptop keypair and onto a hardware wallet. It also keeps both halves as
+    /// ordinary single-signer transactions, which is what a hardware wallet can
+    /// actually sign — requiring the new admin to authorise inside the *same*
+    /// call would need a signed authorization entry from an address that is not
+    /// the transaction's source.
+    ///
+    /// Proposing again replaces the previous nomination, so a wrong address is
+    /// corrected by calling this a second time.
+    pub fn propose_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        Self::admin(&env)?.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
+        Self::bump_instance(&env);
+        AdminProposed { new_admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Take the admin role. Callable only by the address `propose_admin` named.
+    ///
+    /// The proposal is consumed whether or not it is ever used again, so an
+    /// accepted handover leaves nothing pending behind it.
+    pub fn accept_admin(env: Env) -> Result<(), Error> {
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingAdmin)
+            .ok_or(Error::NoPendingAdmin)?;
+        pending.require_auth();
+
+        let previous = Self::admin(&env)?;
+        env.storage().instance().set(&DataKey::Admin, &pending);
+        env.storage().instance().remove(&DataKey::PendingAdmin);
+        Self::bump_instance(&env);
+        AdminChanged {
+            previous,
+            current: pending,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     /// Replace the factory's own code, keeping its address and its event list.
     /// Admin only.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
@@ -212,6 +286,12 @@ impl EventFactory {
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         Self::admin(&env)
+    }
+
+    /// Who has been nominated but has not accepted yet. `None` most of the time
+    /// — a handover in progress is the only state where this answers.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
     /// Which event revision new events get. Lets a reviewer check that the

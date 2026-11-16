@@ -42,10 +42,16 @@ export const networks = {
 
 export const Errors = {
   1: {message:"AlreadyInitialized"},
-  2: {message:"NotInitialized"}
+  2: {message:"NotInitialized"},
+  /**
+   * `accept_admin` with nobody proposed, or after the proposal was withdrawn.
+   */
+  3: {message:"NoPendingAdmin"}
 }
 
-export type DataKey = {tag: "Admin", values: void} | {tag: "EventWasmHash", values: void} | {tag: "Events", values: void} | {tag: "Count", values: void} | {tag: "Reputation", values: void};
+export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "EventWasmHash", values: void} | {tag: "Events", values: void} | {tag: "Count", values: void} | {tag: "Reputation", values: void};
+
+
 
 
 
@@ -119,6 +125,15 @@ export interface Client {
   list_events: (options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
 
   /**
+   * Construct and simulate a accept_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Take the admin role. Callable only by the address `propose_admin` named.
+   * 
+   * The proposal is consumed whether or not it is ever used again, so an
+   * accepted handover leaves nothing pending behind it.
+   */
+  accept_admin: (options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
    * Construct and simulate a create_event transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Deploy and initialize an event owned by `organizer`.
    * 
@@ -127,6 +142,29 @@ export interface Client {
    * the same transaction.
    */
   create_event: ({organizer, title, starts_at, token, deposit, fee_allowance, capacity, code_hash, policy, admission}: {organizer: string, title: string, starts_at: u64, token: string, deposit: i128, fee_allowance: i128, capacity: u32, code_hash: Buffer, policy: ForfeitPolicy, admission: Admission}, options?: MethodOptions) => Promise<AssembledTransaction<Result<string>>>
+
+  /**
+   * Construct and simulate a propose_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Nominate the next admin. Admin only, and it changes nothing on its own.
+   * 
+   * Handing the key over is two transactions rather than one, and the second
+   * is signed by the key being handed to. A plain setter would mean a
+   * mistyped address leaves the factory permanently ungovernable — no
+   * `set_event_wasm_hash`, no `set_reputation`, no `upgrade`, and no way
+   * back. An address nobody controls can never call `accept_admin`, so the
+   * mistake cannot complete.
+   * 
+   * That matters most for the move this was written for: taking the admin off
+   * a laptop keypair and onto a hardware wallet. It also keeps both halves as
+   * ordinary single-signer transactions, which is what a hardware wallet can
+   * actually sign — requiring the new admin to authorise inside the *same*
+   * call would need a signed authorization entry from an address that is not
+   * the transaction's source.
+   * 
+   * Proposing again replaces the previous nomination, so a wrong address is
+   * corrected by calling this a second time.
+   */
+  propose_admin: ({new_admin}: {new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
 
   /**
    * Construct and simulate a get_reputation transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -148,6 +186,13 @@ export interface Client {
    * Construct and simulate a get_event_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_event_count: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a get_pending_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Who has been nominated but has not accepted yet. `None` most of the time
+   * — a handover in progress is the only state where this answers.
+   */
+  get_pending_admin: (options?: MethodOptions) => Promise<AssembledTransaction<Option<string>>>
 
   /**
    * Construct and simulate a get_event_wasm_hash transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -184,17 +229,22 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAAgAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAg==",
-        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABQAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAAAAAAAANRXZlbnRXYXNtSGFzaAAAAAAAAAAAAAAAAAAABkV2ZW50cwAAAAAAAAAAAFJNb25vdG9uaWMgY291bnRlcjsgZG91YmxlcyBhcyB0aGUgZGVwbG95IHNhbHQgc28gZXZlcnkgZXZlbnQgZ2V0cyBpdHMgb3duCmFkZHJlc3MuAAAAAAAFQ291bnQAAAAAAAAAAAAAhVRoZSByZXB1dGF0aW9uIGxlZGdlciwgaWYgb25lIGlzIHdpcmVkIHVwLiBBYnNlbnQgaXMgYSB2YWxpZCBzdGF0ZTogdGhlCmZhY3RvcnkgcHJlZGF0ZXMgcmVwdXRhdGlvbiBhbmQgc3RpbGwgaGFzIHRvIHdvcmsgd2l0aG91dCBpdC4AAAAAAAAKUmVwdXRhdGlvbgAA",
+      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAAwAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAElgYWNjZXB0X2FkbWluYCB3aXRoIG5vYm9keSBwcm9wb3NlZCwgb3IgYWZ0ZXIgdGhlIHByb3Bvc2FsIHdhcyB3aXRoZHJhd24uAAAAAAAADk5vUGVuZGluZ0FkbWluAAAAAAAD",
+        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABgAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAADBQcm9wb3NlZCwgbm90IHlldCBpbiBmb3JjZS4gU2VlIGBwcm9wb3NlX2FkbWluYC4AAAAMUGVuZGluZ0FkbWluAAAAAAAAAAAAAAANRXZlbnRXYXNtSGFzaAAAAAAAAAAAAAAAAAAABkV2ZW50cwAAAAAAAAAAAFJNb25vdG9uaWMgY291bnRlcjsgZG91YmxlcyBhcyB0aGUgZGVwbG95IHNhbHQgc28gZXZlcnkgZXZlbnQgZ2V0cyBpdHMgb3duCmFkZHJlc3MuAAAAAAAFQ291bnQAAAAAAAAAAAAAhVRoZSByZXB1dGF0aW9uIGxlZGdlciwgaWYgb25lIGlzIHdpcmVkIHVwLiBBYnNlbnQgaXMgYSB2YWxpZCBzdGF0ZTogdGhlCmZhY3RvcnkgcHJlZGF0ZXMgcmVwdXRhdGlvbiBhbmQgc3RpbGwgaGFzIHRvIHdvcmsgd2l0aG91dCBpdC4AAAAAAAAKUmVwdXRhdGlvbgAA",
         "AAAAAAAAAFNSZXBsYWNlIHRoZSBmYWN0b3J5J3Mgb3duIGNvZGUsIGtlZXBpbmcgaXRzIGFkZHJlc3MgYW5kIGl0cyBldmVudCBsaXN0LgpBZG1pbiBvbmx5LgAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAABAAAD6QAAAAIAAAAD",
+        "AAAABQAAAAAAAAAAAAAADEFkbWluQ2hhbmdlZAAAAAEAAAANYWRtaW5fY2hhbmdlZAAAAAAAAAIAAAAAAAAACHByZXZpb3VzAAAAEwAAAAAAAAAAAAAAB2N1cnJlbnQAAAAAEwAAAAAAAAAC",
         "AAAABQAAAAAAAAAAAAAADEV2ZW50Q3JlYXRlZAAAAAEAAAANZXZlbnRfY3JlYXRlZAAAAAAAAAYAAAAAAAAABWV2ZW50AAAAAAAAEwAAAAAAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAAb0NhcnJpZWQgb24gdGhlIGV2ZW50IHNvIGEgZmVlZCBvciBhbiBpbmRleGVyIGNhbiBzaG93IG5hbWVzIHdpdGhvdXQKcmVhZGluZyBldmVyeSBldmVudCBjb250cmFjdCBvbmUgYXQgYSB0aW1lLgAAAAAFdGl0bGUAAAAAAAAQAAAAAAAAAAAAAAAJc3RhcnRzX2F0AAAAAAAABgAAAAAAAAAAAAAAB2RlcG9zaXQAAAAACwAAAAAAAAAAAAAACGNhcGFjaXR5AAAABAAAAAAAAAAC",
+        "AAAABQAAAIRQdWJsaXNoZWQgb24gYm90aCBoYWx2ZXMgb2YgYSBoYW5kb3Zlciwgc28gdGhlIG1vdmUgb2YgdGhlIGtleSB0aGF0IGdvdmVybnMKdGhpcyBzeXN0ZW0gaXMgd2F0Y2hhYmxlIHdpdGhvdXQgcmVhZGluZyBjb250cmFjdCBzdGF0ZS4AAAAAAAAADUFkbWluUHJvcG9zZWQAAAAAAAABAAAADmFkbWluX3Byb3Bvc2VkAAAAAAABAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAAAAAAI=",
         "AAAAAAAAAAAAAAAJZ2V0X2FkbWluAAAAAAAAAAAAAAEAAAPpAAAAEwAAAAM=",
         "AAAAAAAAADVSZWdpc3RlciB0aGUgZmFjdG9yeSBhZ2FpbnN0IHRoZSB1cGxvYWRlZCBldmVudCB3YXNtLgAAAAAAAAppbml0aWFsaXplAAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAD2V2ZW50X3dhc21faGFzaAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAAAAAAAAAAALbGlzdF9ldmVudHMAAAAAAAAAAAEAAAPqAAAAEw==",
+        "AAAAAAAAAMJUYWtlIHRoZSBhZG1pbiByb2xlLiBDYWxsYWJsZSBvbmx5IGJ5IHRoZSBhZGRyZXNzIGBwcm9wb3NlX2FkbWluYCBuYW1lZC4KClRoZSBwcm9wb3NhbCBpcyBjb25zdW1lZCB3aGV0aGVyIG9yIG5vdCBpdCBpcyBldmVyIHVzZWQgYWdhaW4sIHNvIGFuCmFjY2VwdGVkIGhhbmRvdmVyIGxlYXZlcyBub3RoaW5nIHBlbmRpbmcgYmVoaW5kIGl0LgAAAAAADGFjY2VwdF9hZG1pbgAAAAAAAAABAAAD6QAAAAIAAAAD",
         "AAAAAAAAANtEZXBsb3kgYW5kIGluaXRpYWxpemUgYW4gZXZlbnQgb3duZWQgYnkgYG9yZ2FuaXplcmAuCgpUaGUgb3JnYW5pemVyIGF1dGhvcml6ZXMgdGhpcyB3aG9sZSBjYWxsIHRyZWUsIHdoaWNoIGlzIHdoYXQgbGV0cyB0aGUKZXZlbnQncyBvd24gYGluaXRpYWxpemVgIHB1bGwgdGhlIGZlZSBwb29sIG91dCBvZiB0aGVpciB3YWxsZXQgYXMgcGFydCBvZgp0aGUgc2FtZSB0cmFuc2FjdGlvbi4AAAAADGNyZWF0ZV9ldmVudAAAAAoAAAAAAAAACW9yZ2FuaXplcgAAAAAAABMAAAAAAAAABXRpdGxlAAAAAAAAEAAAAAAAAAAJc3RhcnRzX2F0AAAAAAAABgAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAAAAAAdkZXBvc2l0AAAAAAsAAAAAAAAADWZlZV9hbGxvd2FuY2UAAAAAAAALAAAAAAAAAAhjYXBhY2l0eQAAAAQAAAAAAAAACWNvZGVfaGFzaAAAAAAAA+4AAAAgAAAAAAAAAAZwb2xpY3kAAAAAB9AAAAANRm9yZmVpdFBvbGljeQAAAAAAAAAAAAAJYWRtaXNzaW9uAAAAAAAH0AAAAAlBZG1pc3Npb24AAAAAAAABAAAD6QAAABMAAAAD",
+        "AAAAAAAAA7hOb21pbmF0ZSB0aGUgbmV4dCBhZG1pbi4gQWRtaW4gb25seSwgYW5kIGl0IGNoYW5nZXMgbm90aGluZyBvbiBpdHMgb3duLgoKSGFuZGluZyB0aGUga2V5IG92ZXIgaXMgdHdvIHRyYW5zYWN0aW9ucyByYXRoZXIgdGhhbiBvbmUsIGFuZCB0aGUgc2Vjb25kCmlzIHNpZ25lZCBieSB0aGUga2V5IGJlaW5nIGhhbmRlZCB0by4gQSBwbGFpbiBzZXR0ZXIgd291bGQgbWVhbiBhCm1pc3R5cGVkIGFkZHJlc3MgbGVhdmVzIHRoZSBmYWN0b3J5IHBlcm1hbmVudGx5IHVuZ292ZXJuYWJsZSDigJQgbm8KYHNldF9ldmVudF93YXNtX2hhc2hgLCBubyBgc2V0X3JlcHV0YXRpb25gLCBubyBgdXBncmFkZWAsIGFuZCBubyB3YXkKYmFjay4gQW4gYWRkcmVzcyBub2JvZHkgY29udHJvbHMgY2FuIG5ldmVyIGNhbGwgYGFjY2VwdF9hZG1pbmAsIHNvIHRoZQptaXN0YWtlIGNhbm5vdCBjb21wbGV0ZS4KClRoYXQgbWF0dGVycyBtb3N0IGZvciB0aGUgbW92ZSB0aGlzIHdhcyB3cml0dGVuIGZvcjogdGFraW5nIHRoZSBhZG1pbiBvZmYKYSBsYXB0b3Aga2V5cGFpciBhbmQgb250byBhIGhhcmR3YXJlIHdhbGxldC4gSXQgYWxzbyBrZWVwcyBib3RoIGhhbHZlcyBhcwpvcmRpbmFyeSBzaW5nbGUtc2lnbmVyIHRyYW5zYWN0aW9ucywgd2hpY2ggaXMgd2hhdCBhIGhhcmR3YXJlIHdhbGxldCBjYW4KYWN0dWFsbHkgc2lnbiDigJQgcmVxdWlyaW5nIHRoZSBuZXcgYWRtaW4gdG8gYXV0aG9yaXNlIGluc2lkZSB0aGUgKnNhbWUqCmNhbGwgd291bGQgbmVlZCBhIHNpZ25lZCBhdXRob3JpemF0aW9uIGVudHJ5IGZyb20gYW4gYWRkcmVzcyB0aGF0IGlzIG5vdAp0aGUgdHJhbnNhY3Rpb24ncyBzb3VyY2UuCgpQcm9wb3NpbmcgYWdhaW4gcmVwbGFjZXMgdGhlIHByZXZpb3VzIG5vbWluYXRpb24sIHNvIGEgd3JvbmcgYWRkcmVzcyBpcwpjb3JyZWN0ZWQgYnkgY2FsbGluZyB0aGlzIGEgc2Vjb25kIHRpbWUuAAAADXByb3Bvc2VfYWRtaW4AAAAAAAABAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAACNgTm9uZWAgdW50aWwgYW4gYWRtaW4gd2lyZXMgb25lIHVwLgAAAAAOZ2V0X3JlcHV0YXRpb24AAAAAAAAAAAABAAAD6AAAABM=",
         "AAAAAAAAANxXaXJlIHRoZSBmYWN0b3J5IHRvIGEgcmVwdXRhdGlvbiBsZWRnZXIsIG9yIG1vdmUgaXQgdG8gYW5vdGhlciBvbmUuCkFkbWluIG9ubHkuCgpUaGlzIGlzIHRoZSBzZWNvbmQgaGFsZiBvZiB0aGUgY2lyY3VsYXIgc2V0dXA6IHJlcHV0YXRpb24gaXMgZGVwbG95ZWQKa25vd2luZyB0aGUgZmFjdG9yeSdzIGFkZHJlc3MsIHRoZW4gdGhlIGZhY3RvcnkgaXMgcG9pbnRlZCBiYWNrIGhlcmUuAAAADnNldF9yZXB1dGF0aW9uAAAAAAABAAAAAAAAAApyZXB1dGF0aW9uAAAAAAATAAAAAQAAA+kAAAACAAAAAw==",
         "AAAAAAAAAAAAAAAPZ2V0X2V2ZW50X2NvdW50AAAAAAAAAAABAAAABA==",
+        "AAAAAAAAAIlXaG8gaGFzIGJlZW4gbm9taW5hdGVkIGJ1dCBoYXMgbm90IGFjY2VwdGVkIHlldC4gYE5vbmVgIG1vc3Qgb2YgdGhlIHRpbWUK4oCUIGEgaGFuZG92ZXIgaW4gcHJvZ3Jlc3MgaXMgdGhlIG9ubHkgc3RhdGUgd2hlcmUgdGhpcyBhbnN3ZXJzLgAAAAAAABFnZXRfcGVuZGluZ19hZG1pbgAAAAAAAAAAAAABAAAD6AAAABM=",
         "AAAAAAAAAINXaGljaCBldmVudCByZXZpc2lvbiBuZXcgZXZlbnRzIGdldC4gTGV0cyBhIHJldmlld2VyIGNoZWNrIHRoYXQgdGhlCmRlcGxveWVkIGZhY3RvcnkgcmVhbGx5IGlzIHBvaW50aW5nIGF0IHRoZSB3YXNtIHRoZSBkb2NzIGNsYWltLgAAAAATZ2V0X2V2ZW50X3dhc21faGFzaAAAAAAAAAAAAQAAA+kAAAPuAAAAIAAAAAM=",
         "AAAAAAAAAQ1Qb2ludCBuZXcgZXZlbnRzIGF0IGEgbmV3IGV2ZW50IHdhc20uIEFkbWluIG9ubHkuCgpSZWFkIGF0IGRlcGxveSB0aW1lIG9uIGV2ZXJ5IGBjcmVhdGVfZXZlbnRgLCBzbyB0aGlzIHRha2VzIGVmZmVjdCBvbiB0aGUKbmV4dCBldmVudCBhbmQgbGVhdmVzIGV2ZXJ5IGV4aXN0aW5nIG9uZSBleGFjdGx5IGFzIGl0IHdhcyDigJQgYW4gZXZlbnQKcGVvcGxlIGhhdmUgYWxyZWFkeSBsb2NrZWQgZGVwb3NpdHMgaW4gbXVzdCBuZXZlciBjaGFuZ2UgdW5kZXJuZWF0aCB0aGVtLgAAAAAAABNzZXRfZXZlbnRfd2FzbV9oYXNoAAAAAAEAAAAAAAAAD2V2ZW50X3dhc21faGFzaAAAAAPuAAAAIAAAAAEAAAPpAAAAAgAAAAM=",
         "AAAAAQAAAatBIG1lbWJlcidzIGF0dGVuZGFuY2UgcmVjb3JkLCBhcyB0aGUgZXZlbnQgY29udHJhY3QgcmVhZHMgaXQuCgpNaXJyb3JzIHRoZSByZXB1dGF0aW9uIGNvbnRyYWN0J3Mgb3duIGBTY29yZWAgZmllbGQgZm9yIGZpZWxkLiBJdCBpcyBjb3BpZWQKcmF0aGVyIHRoYW4gc2hhcmVkIGJlY2F1c2UgdGhhdCBjb250cmFjdCBkZWxpYmVyYXRlbHkgZG9lcyBub3QgbGluayB0aGlzCmNyYXRlIOKAlCBkb2luZyBzbyB3b3VsZCBwdWJsaXNoIGEgYEZvcmZlaXRQb2xpY3lgIHR5cGUgb24gYSByZXB1dGF0aW9uCmxlZGdlcidzIHNwZWMg4oCUIGFuZCBhIGAjW2NvbnRyYWN0dHlwZV1gIHN0cnVjdCBlbmNvZGVzIGFzIGEgbWFwIGtleWVkIGJ5CmZpZWxkIG5hbWUsIHNvIHR3byBpZGVudGljYWwgZGVjbGFyYXRpb25zIGRlY29kZSBlYWNoIG90aGVyIGV4YWN0bHkuAAAAAAAAAAAFU2NvcmUAAAAAAAACAAAAAAAAAAhub19zaG93cwAAAAQAAAAAAAAABXNob3dzAAAAAAAABA==",
@@ -209,10 +259,13 @@ export class Client extends ContractClient {
         get_admin: this.txFromJSON<Result<string>>,
         initialize: this.txFromJSON<Result<void>>,
         list_events: this.txFromJSON<Array<string>>,
+        accept_admin: this.txFromJSON<Result<void>>,
         create_event: this.txFromJSON<Result<string>>,
+        propose_admin: this.txFromJSON<Result<void>>,
         get_reputation: this.txFromJSON<Option<string>>,
         set_reputation: this.txFromJSON<Result<void>>,
         get_event_count: this.txFromJSON<u32>,
+        get_pending_admin: this.txFromJSON<Option<string>>,
         get_event_wasm_hash: this.txFromJSON<Result<Buffer>>,
         set_event_wasm_hash: this.txFromJSON<Result<void>>
   }

@@ -399,3 +399,152 @@ fn events_from_different_organizers_stay_independent() {
         0
     );
 }
+
+// ---------------------------------------------------------------------------
+// Handing the admin over.
+//
+// The role governs `set_event_wasm_hash`, `set_reputation` and `upgrade`, so
+// losing it is losing the ability to change anything about future events. These
+// cover the two halves separately, because the whole point of there being two is
+// that the first one is not enough.
+// ---------------------------------------------------------------------------
+
+/// Pin authorization to one address, with `mock_all_auths` turned off.
+///
+/// Needed because `mock_all_auths` authorizes everybody, which is exactly the
+/// distinction these tests exist to make.
+fn only(env: &Env, who: &Address, fn_name: &'static str, contract: &Address) {
+    env.set_auths(&[]);
+    env.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: who,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract,
+            fn_name,
+            args: soroban_sdk::vec![env],
+            sub_invokes: &[],
+        },
+    }]);
+}
+
+#[test]
+fn a_proposal_on_its_own_changes_nothing() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.factory.propose_admin(&hardware);
+
+    assert_eq!(f.factory.get_admin(), f.admin);
+    assert_eq!(f.factory.get_pending_admin(), Some(hardware));
+}
+
+#[test]
+fn handing_the_admin_over_takes_both_keys() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.factory.propose_admin(&hardware);
+    f.factory.accept_admin();
+
+    assert_eq!(f.factory.get_admin(), hardware);
+    // Nothing left pending: an accepted handover is not still in progress.
+    assert_eq!(f.factory.get_pending_admin(), None);
+}
+
+#[test]
+fn the_old_admin_is_powerless_once_the_new_one_accepts() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    let stranger = Address::generate(&f.env);
+
+    f.factory.propose_admin(&hardware);
+    f.factory.accept_admin();
+
+    // The laptop key still exists and still signs; it just governs nothing now.
+    // This is the assertion the whole rotation is for.
+    only(&f.env, &f.admin, "set_reputation", &f.factory.address);
+    assert!(f.factory.try_set_reputation(&stranger).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_reputation(), None);
+}
+
+#[test]
+fn only_the_proposed_address_can_accept() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    let opportunist = Address::generate(&f.env);
+
+    f.factory.propose_admin(&hardware);
+
+    only(&f.env, &opportunist, "accept_admin", &f.factory.address);
+    assert!(f.factory.try_accept_admin().is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_admin(), f.admin);
+    assert_eq!(f.factory.get_pending_admin(), Some(hardware));
+}
+
+#[test]
+fn accepting_with_nothing_proposed_is_refused() {
+    let f = setup();
+    assert_eq!(f.factory.try_accept_admin(), Err(Ok(Error::NoPendingAdmin)));
+}
+
+#[test]
+fn proposing_again_replaces_the_nomination() {
+    let f = setup();
+    let typo = Address::generate(&f.env);
+    let hardware = Address::generate(&f.env);
+
+    // The reason a plain setter was rejected: this is how a wrong address gets
+    // corrected, and with one-step `set_admin` there would be nothing to correct.
+    f.factory.propose_admin(&typo);
+    f.factory.propose_admin(&hardware);
+    f.factory.accept_admin();
+
+    assert_eq!(f.factory.get_admin(), hardware);
+}
+
+#[test]
+fn a_superseded_nominee_cannot_still_accept() {
+    let f = setup();
+    let typo = Address::generate(&f.env);
+    let hardware = Address::generate(&f.env);
+
+    f.factory.propose_admin(&typo);
+    f.factory.propose_admin(&hardware);
+
+    only(&f.env, &typo, "accept_admin", &f.factory.address);
+    assert!(f.factory.try_accept_admin().is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_admin(), f.admin);
+}
+
+#[test]
+fn propose_admin_rejects_everyone_but_the_admin() {
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+
+    f.env.set_auths(&[]);
+    assert!(f.factory.try_propose_admin(&hardware).is_err());
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_pending_admin(), None);
+}
+
+#[test]
+fn the_proposed_address_can_accept_under_pinned_auth() {
+    // The positive control for every `only(...)` test above. Without it they
+    // could all be passing because the helper builds an auth entry the contract
+    // never matches, rather than because the wrong address was refused.
+    let f = setup();
+    let hardware = Address::generate(&f.env);
+    f.factory.propose_admin(&hardware);
+
+    only(&f.env, &hardware, "accept_admin", &f.factory.address);
+    f.factory.accept_admin();
+
+    f.env.mock_all_auths();
+    assert_eq!(f.factory.get_admin(), hardware);
+}
