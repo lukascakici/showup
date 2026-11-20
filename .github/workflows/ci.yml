@@ -96,25 +96,37 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Two commits, so the change detection below has something to diff.
-          fetch-depth: 2
+          # Full history: the comparison below spans everything a push
+          # contained, which can be any number of commits back.
+          fetch-depth: 0
 
       # "On every change" in the SOW means every change to the contracts. A
       # pull request always runs; a push only runs if it touched the contract
       # layer or this workflow.
+      #
+      # The range is the **whole push**, not `HEAD~1..HEAD`. A push of two
+      # commits where only the earlier one touches the contracts is exactly the
+      # case the narrower form gets wrong, and it got it wrong here: the commit
+      # fixing this job shipped alongside a web-only commit and the analysis was
+      # skipped, so the fix went to main unverified.
       - name: Decide whether there is anything to analyse
         id: scope
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
+          paths="contracts Cargo.toml Cargo.lock rust-toolchain.toml .github/workflows/ci.yml"
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif ! git rev-parse --verify --quiet HEAD~1 >/dev/null; then
-            # No parent to compare against — analyse rather than assume.
+          elif [ -z "${BEFORE:-}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            # A new branch, a force push, or a rewritten history — nothing
+            # trustworthy to compare against, so analyse rather than assume.
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet HEAD~1 HEAD -- contracts Cargo.toml Cargo.lock \
-                 rust-toolchain.toml .github/workflows/ci.yml; then
+          elif git diff --quiet "${BEFORE}" "${{ github.sha }}" -- $paths; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No contract changes in this push — skipping the analysis."
+            echo "Nothing in the contract layer changed in this push — skipping."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
