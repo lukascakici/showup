@@ -101,6 +101,24 @@ pub enum Error {
     ReclaimTooEarly = 28,
     /// A second `reclaim` from a guest who already took their deposit back.
     AlreadyReclaimed = 29,
+    /// `deposit + fee_allowance`, multiplied out across the whole capacity,
+    /// does not fit in an `i128`.
+    ///
+    /// Refused at creation rather than discovered at settlement: these three
+    /// numbers are the organizer's to choose, and the only moment they can be
+    /// rejected without anybody's money already depending on them is before the
+    /// event exists.
+    AmountsTooLarge = 30,
+    /// Arithmetic in the money path went out of range, which it cannot do while
+    /// this contract's own invariants hold.
+    ///
+    /// Unreachable by construction: the ceiling at `initialize` bounds every
+    /// amount, the capacity guard bounds every list, and the attendance states
+    /// are mutually exclusive. It exists so that if one of those ever stops
+    /// being true, settlement **refuses with a name** instead of trapping with
+    /// an opaque host panic — a refusal can be diagnosed and recovered from, a
+    /// wrong payout cannot.
+    InvariantViolated = 31,
 }
 
 #[contracttype]
@@ -373,9 +391,33 @@ impl EventContract {
         if capacity == 0 {
             return Err(Error::InvalidCapacity);
         }
+
+        // One bound at the door, so every sum inside this contract is in range
+        // by construction rather than by argument.
+        //
+        // `(deposit + fee_allowance) * capacity` is the most this contract can
+        // ever hold: every deposit a full house could lock, plus the whole fee
+        // pool. If that fits, so does every intermediate the settlement
+        // computes — the forfeited total, the unspent pool, their sum, a single
+        // guest's refund, and the share each attendee is paid. Checking the
+        // maximum once is what makes the nine multiplications and additions
+        // downstream safe, and it is checked where the numbers are still the
+        // organizer's to change rather than after somebody has locked money
+        // against them.
+        deposit
+            .checked_add(fee_allowance)
+            .and_then(|per_guest| per_guest.checked_mul(i128::from(capacity)))
+            .ok_or(Error::AmountsTooLarge)?;
+
         organizer.require_auth();
 
-        let pool = fee_allowance * i128::from(capacity);
+        // In range because the ceiling above already holds, and still written
+        // as a checked call: the whole money path in this contract is, so that
+        // none of it depends on a reader remembering which lines were argued
+        // safe and which were merely not yet wrong.
+        let pool = fee_allowance
+            .checked_mul(i128::from(capacity))
+            .ok_or(Error::AmountsTooLarge)?;
         if pool > 0 {
             let this = env.current_contract_address();
             token::Client::new(&env, &token).transfer(&organizer, &this, &pool);
@@ -453,7 +495,12 @@ impl EventContract {
         token::Client::new(&env, &config.token).transfer(&guest, &this, &config.deposit);
 
         reserved.push_back(guest.clone());
-        let spots_left = config.capacity - reserved.len();
+        // In range because the capacity guard above refuses before the push, so
+        // the list is at most `capacity` long by the time this runs.
+        let spots_left = config
+            .capacity
+            .checked_sub(reserved.len())
+            .ok_or(Error::InvariantViolated)?;
         env.storage().instance().set(&DataKey::Reserved, &reserved);
         env.storage()
             .persistent()
@@ -674,7 +721,12 @@ impl EventContract {
             return Err(Error::WrongCode);
         }
 
-        let refunded = config.deposit + config.fee_allowance;
+        // In range because `initialize` refused any event whose
+        // `deposit + fee_allowance` could not be added at all.
+        let refunded = config
+            .deposit
+            .checked_add(config.fee_allowance)
+            .ok_or(Error::InvariantViolated)?;
         token::Client::new(&env, &config.token).transfer(
             &env.current_contract_address(),
             &guest,
@@ -833,14 +885,33 @@ impl EventContract {
         // and the transfer traps, which would make an event that was abandoned
         // *and* partly reclaimed impossible to settle at all — stranding
         // everybody who did not reclaim.
-        let no_shows = reserved.len() - showed - Self::reclaimed_list(&env).len();
+        //
+        // Checked, like every other number in this function. The ceiling fixed
+        // at `initialize` makes all of this provably in range, so none of these
+        // can fail — but "provably" rests on invariants enforced in other
+        // functions, and that is exactly the reasoning that rots when somebody
+        // changes one of them. If an invariant ever breaks, settlement refuses
+        // with a name instead of trapping with a host panic, and refusing is
+        // recoverable where a wrong payout is not.
+        let no_shows = reserved
+            .len()
+            .checked_sub(showed)
+            .and_then(|n| n.checked_sub(Self::reclaimed_list(&env).len()))
+            .ok_or(Error::InvariantViolated)?;
 
-        let forfeited = config.deposit * i128::from(no_shows);
+        let forfeited = config
+            .deposit
+            .checked_mul(i128::from(no_shows))
+            .ok_or(Error::InvariantViolated)?;
         // The fee pool was sized for a full house; only the guests who checked in
         // ever drew from it, so the rest is still the organizer's money. A
-        // reclaim never touches the pool, which is why this line is unchanged —
-        // and that it stays unchanged is the check that the line above is right.
-        let unspent_pool = config.fee_allowance * i128::from(config.capacity - showed);
+        // reclaim never touches the pool, which is why this line counts only
+        // `showed` — and that it does is the check that the line above is right.
+        let unspent_pool = config
+            .capacity
+            .checked_sub(showed)
+            .and_then(|unused| config.fee_allowance.checked_mul(i128::from(unused)))
+            .ok_or(Error::InvariantViolated)?;
 
         let client = token::Client::new(&env, &config.token);
         let contract = env.current_contract_address();
@@ -852,7 +923,9 @@ impl EventContract {
 
         match config.policy {
             ForfeitPolicy::ToOrganizer => {
-                let payout = forfeited + unspent_pool;
+                let payout = forfeited
+                    .checked_add(unspent_pool)
+                    .ok_or(Error::InvariantViolated)?;
                 if payout > 0 {
                     client.transfer(&contract, &config.organizer, &payout);
                 }
@@ -870,8 +943,15 @@ impl EventContract {
                         client.transfer(&contract, &guest, &share);
                     }
                 }
-                let remainder = forfeited - share * i128::from(showed);
-                let payout = remainder + unspent_pool;
+                let paid_out = share
+                    .checked_mul(i128::from(showed))
+                    .ok_or(Error::InvariantViolated)?;
+                let remainder = forfeited
+                    .checked_sub(paid_out)
+                    .ok_or(Error::InvariantViolated)?;
+                let payout = remainder
+                    .checked_add(unspent_pool)
+                    .ok_or(Error::InvariantViolated)?;
                 if payout > 0 {
                     client.transfer(&contract, &config.organizer, &payout);
                 }

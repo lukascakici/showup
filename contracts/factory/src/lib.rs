@@ -38,6 +38,8 @@ pub enum Error {
     NotInitialized = 2,
     /// `accept_admin` with nobody proposed, or after the proposal was withdrawn.
     NoPendingAdmin = 3,
+    /// The event counter, which is also the deploy salt, has no room left.
+    CounterExhausted = 4,
 }
 
 #[contracttype]
@@ -172,7 +174,13 @@ impl EventFactory {
         let mut events = Self::events_list(&env);
         events.push_back(event.clone());
         env.storage().instance().set(&DataKey::Events, &events);
-        env.storage().instance().set(&DataKey::Count, &(count + 1));
+        // Checked, and deliberately not saturating. The counter doubles as the
+        // deploy salt, so every event's address is derived from it — a count
+        // that stopped moving would start handing new events the address of an
+        // existing one, which is a far worse failure than refusing to create
+        // the 4,294,967,296th.
+        let next = count.checked_add(1).ok_or(Error::CounterExhausted)?;
+        env.storage().instance().set(&DataKey::Count, &next);
         Self::bump_instance(&env);
 
         EventCreated {

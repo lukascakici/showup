@@ -6,7 +6,9 @@ contracts were frozen at one commit and put through the static analysis an audit
 expects to see run first. This page is the result: **every finding, what was done
 about it, and the reasoning for anything deliberately left as it is.**
 
-A report with no findings is a report nobody believes. There are 73.
+A report with no findings is a report nobody believes. There were 73. Twelve were
+fixed, including **every critical one**; the remaining 61 each have a decision
+below.
 
 | | |
 | :-- | :-- |
@@ -20,21 +22,34 @@ finding in it unreproducible.
 
 ---
 
-## The baseline
+## The baseline, and where it stands now
 
 | Crate | Critical | Medium | Minor | Enhancement |
 | :-- | --: | --: | --: | --: |
-| `event` | 10 | 14 | 0 | 18 |
-| `factory` | 1 | 8 | 0 | 7 |
+| `event` | 10 → **0** | 14 → **13** | 0 | 18 |
+| `factory` | 1 → **0** | 8 | 0 | 7 |
 | `reputation` | 0 | 2 | 0 | 12 |
 | `interfaces` | 0 | 0 | 0 | 1 |
-| **Total** | **11** | **24** | **0** | **38** |
+| **Total** | **11 → 0** | **24 → 23** | **0** | **38** |
+
+| Detector | Severity | Before | After |
+| :-- | :-- | --: | --: |
+| `integer_overflow_or_underflow` | critical | 11 | **0** |
+| `front_running` | medium | 1 | **0** |
+| `dynamic_storage` | medium | 11 | 11 |
+| `contract_import_dependency` | medium | 6 | 6 |
+| `init_instead_of_constructor` | medium | 3 | 3 |
+| `missing_new_admin_auth` | medium | 2 | 2 |
+| `dos_unexpected_revert_with_storage` | medium | 1 | 1 |
+| `storage_change_events` | enhancement | 30 | 30 |
+| `soroban_version` | enhancement | 4 | 4 |
+| `assert_violation` | enhancement | 4 | 4 |
 
 ---
 
-## The 11 critical findings
+## The 11 critical findings — fixed
 
-**Every one is the same class: arithmetic that is not explicitly bounded.**
+**Every one was the same class: arithmetic that is not explicitly bounded.**
 
 | Where | Operation |
 | :-- | :-- |
@@ -98,38 +113,77 @@ exist yet.
 
 `count + 1` on the factory is a `u32` that would need 4.29 billion events.
 
-### Why none of these is being "fixed", and why that is the safer answer
+### What was done, and the option that was rejected
 
-The obvious fix is `saturating_sub` and `checked_mul`. **For the three
-subtractions it would make the contracts less safe, not more.**
-
-Each of those three is correct because of an invariant enforced in a different
-function. That kind of reasoning is exactly what rots: if a future change ever
-removes somebody from `reserved` without removing them from `checked_in`, the
-invariant breaks. Today that breakage **halts settlement loudly**. With
-`saturating_sub` it would instead produce a silently wrong no-show count — and
-a wrong no-show count mis-pays real money to real people.
-
-A transaction that refuses to complete is recoverable. A settlement that
+**The obvious fix is `saturating_sub`, and it would have made the contracts less
+safe.** Each of those three subtractions is correct because of an invariant
+enforced somewhere else — the capacity guard, the mutually exclusive attendance
+states. Saturating arithmetic would turn a broken invariant into a *silently
+wrong* no-show count, and a wrong no-show count mis-pays real money to real
+people. A transaction that refuses to complete is recoverable; a settlement that
 completes with the wrong arithmetic is not.
 
-So the decision is to keep the checked arithmetic, and to defend the invariants
-where they actually live — in the tests that already enforce them. **Status:
-acknowledged, not changed, deliberately.**
+So the money path was made **checked**, not saturating, in two layers.
+
+**A ceiling, fixed once at creation.** `initialize` now refuses any event where
+`(deposit + fee_allowance) * capacity` — the most the contract could ever hold —
+does not fit in an `i128`, with a new `AmountsTooLarge` error. That single bound
+puts every amount the settlement computes in range by construction: the
+forfeited total, the unspent pool, their sum, one guest's refund, and each
+attendee's share. It is checked while the three numbers are still the
+organiser's to change, rather than at a settlement where somebody's money
+already depends on them — and before the fee pool is pulled, so a refusal never
+takes the organiser's money with it.
+
+**Checked arithmetic with a name, everywhere in the money path.** Every
+multiplication, addition and subtraction that moves or sizes a payment now goes
+through `checked_*` and returns `InvariantViolated` rather than trapping. That
+error is unreachable while the invariants hold — which is the point. If one ever
+stops holding, settlement **refuses with a name** instead of halting on an
+opaque host panic, and a named refusal can be diagnosed where a panic cannot.
+
+The factory's event counter got the same treatment with `CounterExhausted`, and
+deliberately not `saturating_add`: the counter doubles as the deploy salt, so a
+count that stopped moving would start handing new events the address of an
+existing one — far worse than refusing to create the 4,294,967,296th.
+
+**Four tests** cover the new bound: the addition overflowing, the multiplication
+overflowing across capacity, ordinary amounts being unaffected, and — the one
+that matters — the refusal landing *before* any money moves.
+
+**Status: fixed. Scout reports 0 critical findings across all four crates.**
 
 ---
 
-## The 24 medium findings
+## The remaining 23 medium findings
 
 | Count | Finding | Decision |
 | --: | :-- | :-- |
-| 11 | Dynamic types in instance/persistent storage | **Acknowledged.** The reserved, checked-in, reclaimed and voucher lists are `Vec<Address>`, bounded by the event's own `capacity`, which is fixed at creation and cannot be raised. The growth a detector warns about is capped by a number the contract already enforces. |
-| 3 | `contractimport!` without a tracked dependency | **Acknowledged, test-only.** It appears in test files, where the whole point is to load the *built wasm* rather than link the crate — linking it would publish one contract's types into another's spec, which this project avoids deliberately. |
-| 3 | `contractimport!` should use `/release/deps/` | **Acknowledged, test-only.** Same three sites. |
+| 11 | Dynamic types in instance/persistent storage | **Ten acknowledged, one real and tracked.** The event contract's reserved, checked-in, reclaimed and voucher lists are `Vec<Address>` bounded by that event's own `capacity`, which is fixed at creation and cannot be raised — the growth the detector warns about is capped by a number the contract already enforces. The factory's list of every event it has ever created is **not** bounded, and that one is a genuine long-term limit rather than a false positive: it is one instance entry that grows forever. At the current size it is nothing; the fix is paginated reads, and it is a redesign rather than a patch. |
+| 6 | `contractimport!` without a tracked dependency, and not using `/release/deps/` | **Acknowledged, test-only.** All six are in test files, where the whole point is to load the *built wasm* rather than link the crate — linking it would publish one contract's types into another's spec, which this project avoids deliberately. See below on why they are not silenced. |
 | 3 | Use the constructor pattern instead of `init` | **Acknowledged.** `initialize` predates the pattern and is load-bearing for every deployed contract; changing it would break the factory's deploy-and-initialise call and every existing event. |
 | 2 | New admin must sign before being stored | **See below — this one is answered by design.** |
 | 1 | Storage operation without access control | **Acknowledged.** The flagged write is inside a call already gated by `require_auth`. |
-| 1 | Transferred amount should have a minimum, against front-running | **Acknowledged.** There is no price, no swap and no ordering advantage here: a deposit is a fixed amount set at creation and returned in the same asset. |
+| 1 | Transferred amount should have a minimum, against front-running | **Gone.** It was flagged on the fee-pool transfer at creation, and cleared when that line became a checked call. There was no exposure either way: a deposit is a fixed amount set at creation and returned in the same asset, with no price, no swap and no ordering advantage. |
+
+### Why the test-only findings are left visible rather than silenced
+
+Ten of the remaining findings are in test files, and the tidy move would be an
+`#[allow(...)]` on each. **It was tried and rejected, because it costs more than
+it saves.**
+
+Scout's detectors are dylint lints, so rustc does not know their names. An
+`#[allow(contract_import_dependency)]` fails the build:
+
+```
+error: unknown lint: `contract_import_dependency`
+  = note: `-D unknown-lints` implied by `-D warnings`
+```
+
+Silencing *that* needs `#[allow(unknown_lints)]`, which switches off a real rustc
+diagnostic class across the scope it covers — a worse trade than the report noise
+it removes. CI builds with `-D warnings` and will keep doing so, so these ten
+findings stay visible and stay explained here instead.
 
 ### `missing-new-admin-auth`, and why the answer is two transactions
 
@@ -156,7 +210,7 @@ form would have been the version that could not be executed.
 
 | Count | Finding | Decision |
 | --: | :-- | :-- |
-| 30 | Consider emitting an event when storage is modified | **Partly adopted.** The writes that matter already publish: `Reserved`, `CheckedIn`, `Finalized`, `DepositReclaimed`, `AdminProposed`, `AdminChanged`, `EventAbandoned`, `VouchRecorded`. The remainder are internal bookkeeping, and an event per storage write would cost every user fees for data nobody reads. |
+| 30 | Consider emitting an event when storage is modified | **Checked one by one; already satisfied.** Every state change worth watching from outside already publishes — `Reserved`, `CheckedIn`, `Finalized`, `DepositReclaimed`, `ScoreChanged`, `EventRegistered`, `EventAbandoned`, `VouchRecorded`, `RecordRenewed`, `AdminProposed`, `AdminChanged`, the phase transitions, the host list and both halves of an application. The detector fires on the function, not on the absence of an event. What is left is internal bookkeeping, where an event per write would charge every user fees for data nobody reads. |
 | 4 | Use the latest Soroban version | **Acknowledged, scheduled.** The contracts are built against `soroban-sdk 27.0.0` and run correctly under Protocol 30; the upgrade is tracked separately so that it does not move the code underneath this report. |
 | 4 | `assert` causes a panic — return an error instead | **Acknowledged, test-only.** All four are in test code. |
 

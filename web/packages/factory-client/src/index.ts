@@ -46,7 +46,11 @@ export const Errors = {
   /**
    * `accept_admin` with nobody proposed, or after the proposal was withdrawn.
    */
-  3: {message:"NoPendingAdmin"}
+  3: {message:"NoPendingAdmin"},
+  /**
+   * The event counter, which is also the deploy salt, has no room left.
+   */
+  4: {message:"CounterExhausted"}
 }
 
 export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "EventWasmHash", values: void} | {tag: "Events", values: void} | {tag: "Count", values: void} | {tag: "Reputation", values: void};
@@ -242,7 +246,7 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAAAwAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAElgYWNjZXB0X2FkbWluYCB3aXRoIG5vYm9keSBwcm9wb3NlZCwgb3IgYWZ0ZXIgdGhlIHByb3Bvc2FsIHdhcyB3aXRoZHJhd24uAAAAAAAADk5vUGVuZGluZ0FkbWluAAAAAAAD",
+      new ContractSpec([ "AAAABAAAAAAAAAAAAAAABUVycm9yAAAAAAAABAAAAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAAAAAAA5Ob3RJbml0aWFsaXplZAAAAAAAAgAAAElgYWNjZXB0X2FkbWluYCB3aXRoIG5vYm9keSBwcm9wb3NlZCwgb3IgYWZ0ZXIgdGhlIHByb3Bvc2FsIHdhcyB3aXRoZHJhd24uAAAAAAAADk5vUGVuZGluZ0FkbWluAAAAAAADAAAAQ1RoZSBldmVudCBjb3VudGVyLCB3aGljaCBpcyBhbHNvIHRoZSBkZXBsb3kgc2FsdCwgaGFzIG5vIHJvb20gbGVmdC4AAAAAEENvdW50ZXJFeGhhdXN0ZWQAAAAE",
         "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABgAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAADBQcm9wb3NlZCwgbm90IHlldCBpbiBmb3JjZS4gU2VlIGBwcm9wb3NlX2FkbWluYC4AAAAMUGVuZGluZ0FkbWluAAAAAAAAAAAAAAANRXZlbnRXYXNtSGFzaAAAAAAAAAAAAAAAAAAABkV2ZW50cwAAAAAAAAAAAFJNb25vdG9uaWMgY291bnRlcjsgZG91YmxlcyBhcyB0aGUgZGVwbG95IHNhbHQgc28gZXZlcnkgZXZlbnQgZ2V0cyBpdHMgb3duCmFkZHJlc3MuAAAAAAAFQ291bnQAAAAAAAAAAAAAhVRoZSByZXB1dGF0aW9uIGxlZGdlciwgaWYgb25lIGlzIHdpcmVkIHVwLiBBYnNlbnQgaXMgYSB2YWxpZCBzdGF0ZTogdGhlCmZhY3RvcnkgcHJlZGF0ZXMgcmVwdXRhdGlvbiBhbmQgc3RpbGwgaGFzIHRvIHdvcmsgd2l0aG91dCBpdC4AAAAAAAAKUmVwdXRhdGlvbgAA",
         "AAAAAAAAAFNSZXBsYWNlIHRoZSBmYWN0b3J5J3Mgb3duIGNvZGUsIGtlZXBpbmcgaXRzIGFkZHJlc3MgYW5kIGl0cyBldmVudCBsaXN0LgpBZG1pbiBvbmx5LgAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAABAAAD6QAAAAIAAAAD",
         "AAAABQAAAAAAAAAAAAAADEFkbWluQ2hhbmdlZAAAAAEAAAANYWRtaW5fY2hhbmdlZAAAAAAAAAIAAAAAAAAACHByZXZpb3VzAAAAEwAAAAAAAAAAAAAAB2N1cnJlbnQAAAAAEwAAAAAAAAAC",
