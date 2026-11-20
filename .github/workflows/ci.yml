@@ -15,6 +15,10 @@ env:
   # Pinned so a re-tagged release can't quietly change the compiler that
   # produces the wasm we deploy.
   STELLAR_CLI_SHA256: 357bf712f6353c28cd33c794402a3c87231757a5b305e6ef1604365af4fdd556
+  # CoinFabrik Scout. Pinned for the same reason the CLI is: a security report
+  # has to name the version that produced it, and a detector set that changes
+  # underneath the report makes every finding in it unreproducible.
+  SCOUT_VERSION: 0.3.17
 
 jobs:
   contracts:
@@ -70,6 +74,81 @@ jobs:
 
       - name: Test
         run: cargo test --locked
+
+  # The security pass promised by SOW 3 Deliverable 2, run against the contract
+  # layer frozen on 17.11.2026.
+  #
+  # `continue-on-error` on purpose, for now. A scanner that fails the build on
+  # its first run is a scanner somebody disables on its first run; the baseline
+  # is 11 critical and 24 medium findings, and triaging them is the deliverable
+  # rather than a red tick. This becomes blocking once that baseline is
+  # published with a decision against every line — and the step that enforces it
+  # is the `--max-*` gate below, not a human remembering.
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Scout analyses the whole workspace, and contracts/factory/src/test.rs
+      # pulls the event contract in with contractimport!, which needs the wasm
+      # to exist. Same ordering constraint the contracts job has.
+      - name: Install the Stellar CLI
+        run: |
+          set -euo pipefail
+          file="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL -o "$file" \
+            "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/${file}"
+          echo "${STELLAR_CLI_SHA256}  ${file}" | sha256sum --check
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$file" -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build the contracts
+        run: stellar contract build --locked
+
+      # Scout 0.3.17 pins dylint_driver 4.1.2, whose build script clones
+      # rust-clippy and checks out the literal ref `master`. rust-clippy renamed
+      # its default branch to `main`, so that build fails with
+      # "revparse_ext failed for master" and Scout never runs at all.
+      #
+      # Fixed upstream in dylint 6.3.0; Scout has not adopted it
+      # (CoinFabrik/scout-audit#350). Until it does, this points the clone at a
+      # local mirror that has both names. The clone must be **full** — a shallow
+      # one gets past the branch error and then fails to find the clippy commit
+      # matching Scout's nightly.
+      - name: Work around the rust-clippy branch rename
+        run: |
+          set -euo pipefail
+          git clone --bare --quiet https://github.com/rust-lang/rust-clippy "$RUNNER_TEMP/rust-clippy.git"
+          git -C "$RUNNER_TEMP/rust-clippy.git" branch master main
+          git -C "$RUNNER_TEMP/rust-clippy.git" symbolic-ref HEAD refs/heads/master
+          git config --global url."file://$RUNNER_TEMP/rust-clippy.git".insteadOf \
+            https://github.com/rust-lang/rust-clippy
+
+      - name: Install Scout
+        run: cargo install cargo-scout-audit --locked --version "${SCOUT_VERSION}"
+
+      - name: Scout
+        run: |
+          set -euo pipefail
+          cargo scout-audit --output-format md --output-path scout-report.md
+          cargo scout-audit --output-format raw-json --output-path scout-report.json
+
+      - name: Publish the findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-report
+          path: |
+            scout-report.md
+            scout-report.json
 
   web:
     name: Web
