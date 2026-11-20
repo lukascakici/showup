@@ -81,25 +81,67 @@ jobs:
   # `continue-on-error` on purpose, for now. A scanner that fails the build on
   # its first run is a scanner somebody disables on its first run; the baseline
   # is 11 critical and 24 medium findings, and triaging them is the deliverable
-  # rather than a red tick. This becomes blocking once that baseline is
-  # published with a decision against every line — and the step that enforces it
-  # is the `--max-*` gate below, not a human remembering.
+  # rather than a red tick.
+  #
+  # It is also **slow** — ten to twenty minutes cold, because Scout builds dylint
+  # drivers against rustc internals before it analyses anything. Two things keep
+  # that off the critical path: it runs in parallel with `contracts` and `web`
+  # and blocks neither, and it only runs when the contracts actually change.
+  # Analysing a frozen contract layer again because a markdown file moved is
+  # twenty minutes of nothing.
   security:
     name: Security
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Two commits, so the change detection below has something to diff.
+          fetch-depth: 2
+
+      # "On every change" in the SOW means every change to the contracts. A
+      # pull request always runs; a push only runs if it touched the contract
+      # layer or this workflow.
+      - name: Decide whether there is anything to analyse
+        id: scope
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif ! git rev-parse --verify --quiet HEAD~1 >/dev/null; then
+            # No parent to compare against — analyse rather than assume.
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD~1 HEAD -- contracts Cargo.toml Cargo.lock \
+                 rust-toolchain.toml .github/workflows/ci.yml; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No contract changes in this push — skipping the analysis."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install the pinned Rust toolchain
+        if: steps.scope.outputs.run == 'true'
         run: rustup show
 
       - uses: Swatinem/rust-cache@v2
+        if: steps.scope.outputs.run == 'true'
+
+      # Scout's own build is the expensive part and it depends only on the
+      # pinned version, so it survives between runs.
+      - name: Cache Scout
+        if: steps.scope.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-scout-audit
+            ~/.dylint_drivers
+          key: scout-${{ runner.os }}-${{ env.SCOUT_VERSION }}
 
       # Scout analyses the whole workspace, and contracts/factory/src/test.rs
       # pulls the event contract in with contractimport!, which needs the wasm
       # to exist. Same ordering constraint the contracts job has.
       - name: Install the Stellar CLI
+        if: steps.scope.outputs.run == 'true'
         run: |
           set -euo pipefail
           file="stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
@@ -111,6 +153,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build the contracts
+        if: steps.scope.outputs.run == 'true'
         run: stellar contract build --locked
 
       # Scout 0.3.17 pins dylint_driver 4.1.2, whose build script clones
@@ -124,6 +167,7 @@ jobs:
       # one gets past the branch error and then fails to find the clippy commit
       # matching Scout's nightly.
       - name: Work around the rust-clippy branch rename
+        if: steps.scope.outputs.run == 'true'
         run: |
           set -euo pipefail
           git clone --bare --quiet https://github.com/rust-lang/rust-clippy "$RUNNER_TEMP/rust-clippy.git"
@@ -133,22 +177,29 @@ jobs:
             https://github.com/rust-lang/rust-clippy
 
       - name: Install Scout
-        run: cargo install cargo-scout-audit --locked --version "${SCOUT_VERSION}"
-
-      - name: Scout
+        if: steps.scope.outputs.run == 'true'
         run: |
-          set -euo pipefail
-          cargo scout-audit --output-format md --output-path scout-report.md
-          cargo scout-audit --output-format raw-json --output-path scout-report.json
+          if [ -x "$HOME/.cargo/bin/cargo-scout-audit" ]; then
+            echo "restored from cache: $(cargo scout-audit --version)"
+          else
+            cargo install cargo-scout-audit --locked --version "${SCOUT_VERSION}"
+          fi
+
+      # Once, not once per output format. Each invocation re-runs the whole
+      # analysis, and running it twice for a second file doubled a job that is
+      # already the longest in this workflow. The published report that a
+      # reviewer reads is docs/SOW3/security.md, written against this output;
+      # the JSON is the raw evidence it can be checked against.
+      - name: Scout
+        if: steps.scope.outputs.run == 'true'
+        run: cargo scout-audit --output-format raw-json --output-path scout-report.json
 
       - name: Publish the findings
-        if: always()
+        if: steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: scout-report
-          path: |
-            scout-report.md
-            scout-report.json
+          path: scout-report.json
 
   web:
     name: Web
