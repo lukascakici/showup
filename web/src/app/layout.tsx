@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import localFont from "next/font/local";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet";
@@ -103,6 +104,15 @@ export default function RootLayout({
             <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 text-[13px] text-muted-3 sm:px-7">
               <span>Showup — deposit-backed attendance on Stellar Testnet.</span>
               <span className="flex items-center gap-4">
+                {/* In the footer rather than the top bar: somebody who wants to
+                    know who can touch their deposit goes looking for it, and the
+                    nav is for the two things people arrive to do. */}
+                <Link
+                  href="/trust"
+                  className="-my-3 flex min-h-11 items-center transition-colors hover:text-foreground-2"
+                >
+                  What we can and cannot do
+                </Link>
                 No real funds are used.
                 {/* Padding and a matching negative margin: a thumb-sized target
                     that doesn't push the footer taller than the line it sits on. */}
