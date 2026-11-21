@@ -16,6 +16,7 @@ below.
 | Code analysed | commit [`b9fd4d4`](https://github.com/lukascakici/showup/commit/b9fd4d4a5ce537cac69ea321f53e055abdd73b71) — the contract layer frozen 17.11.2026 |
 | Scope | all four crates: `event`, `factory`, `reputation`, `interfaces` |
 | When it runs | **every push**, as the `Security` job in CI, with the version pinned |
+| Fixes live on Testnet | 21.11.2026 — event wasm `5f5e0ec5…`, factory wasm `110c1658…`, [recorded with every transaction](../deployments.md#upgraded-a-fifth-time--every-amount-bounded-the-money-path-checked-21112026) |
 
 Pinned on purpose: a detector set that changes underneath the report makes every
 finding in it unreproducible.

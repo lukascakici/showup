@@ -23,20 +23,23 @@ use the keyless commands to read what the chain says now.
 | :-- | :-- |
 | Event factory | [`CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE`](https://stellar.expert/explorer/testnet/contract/CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE) |
 | Reputation ledger | [`CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ`](https://stellar.expert/explorer/testnet/contract/CDFGVEIJDNCTGN2F6VN47QFDWTGTKJMBNBEETAWGZ5RV7GDYPEOLA3DJ) |
-| Event wasm hash — **current** (SOW 3 freeze) | `634e34bd75ab853c837ed7d2a9c23a1219133699edda27df1f823a28d6391c1f` |
+| Event wasm hash — **current** (bounded amounts) | `5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03` |
+| Event wasm hash — at the SOW 3 freeze | `634e34bd75ab853c837ed7d2a9c23a1219133699edda27df1f823a28d6391c1f` |
 | Event wasm hash — at the reclaim freeze predecessor | `f6faabe325ff4de6b759596008c1c5aa85fdd567addd5a4d354eae20c99241e5` |
 | Event wasm hash — at the admission upgrade | `2ffab53113a4d2df8dd5742f9ffdc71911694f2a210e9f7cd449bd498744d754` |
 | Event wasm hash — at the titles upgrade | `8fe992b8209d298ecc7c2e2bd882f8fe6412572ef39bdbbf29a687bc69c10949` |
 | Event wasm hash — at v2 bring-up | `96cd1eb65889b856ea033fde4b3537176641ad2ca1d3c8dc25f2226c140a6860` |
 | Reputation wasm hash — **current** (SOW 3 freeze) | `858b8d6500a9c13c80d4cb2b41b4a61d12ded8e6e3e9ede8a063ba4e8d0738f7` |
 | Reputation wasm hash — previous | `bef89aa051523067c0f720f118bbddf47f055e867865bdd785e6c067ebaec9ff` |
-| Factory wasm hash — **current** (SOW 3 freeze) | `09c8ba280e8d8d711afd8c53ba73a7e52d764c78f4e9745ea897a3bc9a629488` |
+| Factory wasm hash — **current** (bounded amounts) | `110c1658d64bf07c32d40e0d071cac74d46e02faaa5e1f4b6225a9ec4cbe44a2` |
+| Factory wasm hash — at the SOW 3 freeze | `09c8ba280e8d8d711afd8c53ba73a7e52d764c78f4e9745ea897a3bc9a629488` |
 | Factory wasm hash — previous | `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
-Five event wasm hashes because the factory has been pointed at a new event
-revision four times — 08.08.2026, 23.09.2026, 24.09.2026 and 17.11.2026 — each
+Six event wasm hashes because the factory has been pointed at a new event
+revision five times — 08.08.2026, 23.09.2026, 24.09.2026, 17.11.2026 and
+21.11.2026 — each
 recorded below with the transaction that did it. The **current** one is the value
 `scripts/check-wasm-hash.mjs` asks the live factory for on every push; the older
 ones are kept because the transactions recorded under *Bringing it up* and the
@@ -649,6 +652,91 @@ stellar contract invoke --id CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7
   reclaim --guest GASUZI3HLTYBPQ7YYEAZ427D2K2BNBVOZQDQ5KJC3T5P6R6FZWTODEDY
 # Error(Contract, #29)  — AlreadyReclaimed
 ```
+
+## Upgraded a fifth time — every amount bounded, the money path checked (21.11.2026)
+
+The result of the week 2 security pass. [CoinFabrik Scout](https://github.com/CoinFabrik/scout-audit)
+runs over the contracts in CI on every push that touches them, and its first full
+report is published with a decision against each finding in
+**[docs/SOW3/security.md](SOW3/security.md)**. This deployment is the half of that
+pass which had to reach the chain to count.
+
+No address changed. The reputation ledger was not touched at all this time, so
+its code is still the revision deployed on 17.11.
+
+| Step | Transaction |
+| :-- | :-- |
+| upload the event revision | [`8672e8690d4bf20970e5244e5245d612cb448fe0a674b0ea11961b49eb369498`](https://stellar.expert/explorer/testnet/tx/8672e8690d4bf20970e5244e5245d612cb448fe0a674b0ea11961b49eb369498) |
+| upload the factory revision | [`6ee3dde872ae6a3ea3311099de89332623e1abf7e4b423032b94fcc6910e5b47`](https://stellar.expert/explorer/testnet/tx/6ee3dde872ae6a3ea3311099de89332623e1abf7e4b423032b94fcc6910e5b47) |
+| `factory.upgrade` → that revision | [`2aa71f228ace6e7a9ecc4cb6017a4bf5bfa60c0466d277646a61e1bdae6f195b`](https://stellar.expert/explorer/testnet/tx/2aa71f228ace6e7a9ecc4cb6017a4bf5bfa60c0466d277646a61e1bdae6f195b) |
+| `factory.set_event_wasm_hash` → that revision | [`8b9493e914fb9dbde9f7b51f3e3c79b57bf03857b2f1b2b2dcdf9ce09b0f5868`](https://stellar.expert/explorer/testnet/tx/8b9493e914fb9dbde9f7b51f3e3c79b57bf03857b2f1b2b2dcdf9ce09b0f5868) |
+
+- Event wasm hash after this upgrade: `5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03`
+- Factory wasm hash after this upgrade: `110c1658d64bf07c32d40e0d071cac74d46e02faaa5e1f4b6225a9ec4cbe44a2`
+- Reputation wasm hash, unchanged: `858b8d6500a9c13c80d4cb2b41b4a61d12ded8e6e3e9ede8a063ba4e8d0738f7`
+
+### What this revision added
+
+One idea, applied in two places. **An event's numbers are bounded once, when it
+is created**, and every step of the money path afterwards is a checked
+operation that returns a named error rather than a trap.
+
+- **A ceiling at `initialize`.** `deposit + fee_allowance`, multiplied by
+  `capacity`, has to fit in the integer the contract settles in. If it doesn't,
+  the event is never created and the organizer keeps their fee pool —
+  `AmountsTooLarge` (#30). Everything downstream is then arithmetic on numbers
+  already known to fit, which is what makes the rest of the contract's sums
+  provably safe rather than merely large enough.
+- **`InvariantViolated` (#31).** The three subtractions in `finalize` are correct
+  because of invariants maintained elsewhere in the contract — a reserved guest
+  is counted once, a reclaimer cannot also be a check-in. Rather than trust that
+  forever, each one is checked, and a settlement whose own numbers do not add up
+  refuses instead of paying out the wrong amounts.
+- **`CounterExhausted` (#4, factory).** The event counter is also the deploy
+  salt, so a counter that stopped moving would start handing new events the
+  address of an existing one. It is checked, deliberately not saturating.
+
+Deliberately **not** `saturating_add` / `saturating_sub`, which is the obvious
+reading of an arithmetic-overflow finding and would have been the wrong fix: a
+saturating subtraction turns a broken invariant into a plausible-looking wrong
+number, and in `finalize` that number is how much money each attendee gets. The
+full reasoning, and the decision on each of the findings not fixed, is in the
+security report.
+
+Eight contract error codes also stopped falling through to "the transaction
+failed, please try again" in the app — four of them left over from the vouching
+work of the previous engagement. None of the eight is helped by trying again,
+which is the single piece of advice that list of messages exists to stop giving.
+
+### Proven on the live chain
+
+The factory deploys the new revision, so the ceiling can be demonstrated against
+it with no key and no transaction — a refusal is a simulation, and has no hash:
+
+```bash
+# An event whose deposit cannot fit: refused at creation, nothing deployed.
+stellar contract invoke --id CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE \
+  --network testnet --source-account <any> -- create_event \
+  --organizer <any> --title "ceiling probe" --starts_at 1800000000 \
+  --token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC \
+  --deposit 170141183460469231731687303715884105727 --fee_allowance 1 --capacity 2 \
+  --code_hash 0000000000000000000000000000000000000000000000000000000000000001 \
+  --policy ToOrganizer --admission Open
+# Error(Contract, #30)  — AmountsTooLarge
+
+# The same call with ordinary amounts still simulates all the way through,
+# including the registration with the reputation ledger.
+#   CDFGVEIJ… - Success - Event: [{"symbol":"event_registered"}]
+#   CD5AEMRB… - Success - Event: EventCreated (event_created) …
+
+# And the hash the factory actually deploys from:
+stellar contract invoke --id CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE \
+  --network testnet --source-account <any> -- get_event_wasm_hash
+# "5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03"
+```
+
+Events created before this upgrade keep the revision they were born with, as
+always: `set_event_wasm_hash` governs the next event, never an existing one.
 
 ## Deliverable 1 evidence — the app itself moves money
 
