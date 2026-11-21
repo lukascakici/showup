@@ -3,7 +3,10 @@ import Link from "next/link";
 import localFont from "next/font/local";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet";
-import { SITE_URL, X_HANDLE, X_URL } from "@/lib/links";
+import { NetworkProvider } from "@/lib/network-context";
+import { requestNetwork } from "@/lib/network.server";
+import { siteUrlFor } from "@/lib/networks";
+import { X_HANDLE, X_URL } from "@/lib/links";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/og";
 import { TopBar } from "@/components/TopBar";
 import { NetworkBanner } from "@/components/NetworkBanner";
@@ -43,24 +46,39 @@ const jeko = localFont({
  * warns at build time. It is also the reason the OG image declared once here
  * cascades onto every route, including `/e/[id]`.
  */
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: SITE_TITLE,
-  description: SITE_DESCRIPTION,
-  openGraph: {
-    type: "website",
-    siteName: SITE_NAME,
-    url: SITE_URL,
-    title: SITE_TITLE,
+/**
+ * Built per request rather than declared once, because `metadataBase` decides
+ * which host every absolute URL on the page claims to live at — the OG image,
+ * the canonical link, the share card. Declared statically it was always the
+ * Mainnet host, so a Testnet event shared into a chat would have advertised
+ * itself at `showup.click`: a link to a page that does not exist there, on the
+ * network that holds real money. The host the request arrived on is the only
+ * honest answer.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const network = await requestNetwork();
+  const siteUrl = siteUrlFor(network);
+  const title = network.isRealMoney ? SITE_TITLE : `${SITE_TITLE} — ${network.label}`;
+
+  return {
+    metadataBase: new URL(siteUrl),
+    title,
     description: SITE_DESCRIPTION,
-  },
-  twitter: {
-    card: "summary_large_image",
-    site: `@${X_HANDLE}`,
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-  },
-};
+    openGraph: {
+      type: "website",
+      siteName: SITE_NAME,
+      url: siteUrl,
+      title,
+      description: SITE_DESCRIPTION,
+    },
+    twitter: {
+      card: "summary_large_image",
+      site: `@${X_HANDLE}`,
+      title,
+      description: SITE_DESCRIPTION,
+    },
+  };
+}
 
 /**
  * Only the theme colour is set here; the width and scale come from Next's own
@@ -79,17 +97,20 @@ export const viewport: Viewport = {
   themeColor: "#0f0f10",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const network = await requestNetwork();
+
   return (
     <html
       lang="en"
       className={`${jeko.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <NetworkProvider id={network.id}>
         <WalletProvider>
           <Backdrop />
           <TopBar />
@@ -102,7 +123,7 @@ export default function RootLayout({
                 modern iPhone, so the note gets the inset added to its own
                 padding rather than being read through a bar. */}
             <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-8 text-[13px] text-muted-3 sm:px-7">
-              <span>Showup — deposit-backed attendance on Stellar Testnet.</span>
+              <span>Showup — deposit-backed attendance on Stellar {network.label}.</span>
               <span className="flex items-center gap-4">
                 {/* In the footer rather than the top bar: somebody who wants to
                     know who can touch their deposit goes looking for it, and the
@@ -113,7 +134,10 @@ export default function RootLayout({
                 >
                   What we can and cannot do
                 </Link>
-                No real funds are used.
+                {/* The one line that must never be wrong by a word. On Testnet it
+                    is the reassurance; on Mainnet its absence is the warning, and
+                    saying nothing is better than saying something softer. */}
+                {network.isRealMoney ? "Deposits are real XLM." : "No real funds are used."}
                 {/* Padding and a matching negative margin: a thumb-sized target
                     that doesn't push the footer taller than the line it sits on. */}
                 <a
@@ -132,6 +156,7 @@ export default function RootLayout({
           </footer>
           <WalletPicker />
         </WalletProvider>
+        </NetworkProvider>
       </body>
     </html>
   );
