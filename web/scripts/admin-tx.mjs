@@ -308,12 +308,25 @@ async function send([envelope]) {
   const sent = await server.sendTransaction(tx);
   if (sent.status !== "PENDING") {
     const code = txCode(sent.errorResult);
+    const explanations = {
+      txBadAuth:
+        "That is the threshold doing its job — the envelope does not carry enough\n" +
+        "signatures for this account. Hand it to another holder and sign again.",
+      // Stellar refuses signatures it did not need, so "more is safer" is wrong
+      // here: an account at threshold 1 accepts exactly one signature, and a
+      // second one fails the whole transaction.
+      txBadAuthExtra:
+        "Too many signatures, not too few. This account needs fewer than the\n" +
+        "envelope carries, and Stellar rejects a transaction holding signatures\n" +
+        "it had no use for. Rebuild and gather exactly as many as\n" +
+        "`admin-account.mjs show` says the medium threshold is.",
+      txTooLate:
+        "The envelope's time window closed while it was being passed around.\n" +
+        "Nothing was lost except the signatures on it — rebuild and sign again.",
+    };
     die(
       `The network refused it: ${code ?? sent.status}\n\n` +
-        (code === "txBadAuth"
-          ? "That is the threshold doing its job — the envelope does not carry enough\n" +
-            "signatures for this account. Hand it to another holder and sign again."
-          : "Nothing was submitted."),
+        (explanations[code] ?? "Nothing was submitted."),
     );
   }
 
