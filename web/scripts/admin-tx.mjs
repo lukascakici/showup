@@ -3,8 +3,8 @@
  * signatures as the admin account requires.
  *
  *   node scripts/admin-tx.mjs build <contract> <fn> [value ...]
- *   node scripts/admin-tx.mjs sign  <xdr> [--alias <identity>]
- *   node scripts/admin-tx.mjs send  <xdr>
+ *   node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>]
+ *   node scripts/admin-tx.mjs send  <xdr|@file>
  *
  * The `stellar` CLI signs with exactly one key, which is fine while the admin is
  * one keypair and impossible once it is a multisig account. This is the same
@@ -30,6 +30,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import {
   Account,
@@ -78,12 +79,22 @@ function toScVal(value) {
   );
 }
 
-/** Hidden prompt, so a seed phrase never lands in the shell history or a file. */
+/**
+ * Hidden prompt, so a secret never lands in the shell history or a file.
+ *
+ * The prompt is written to **stderr**, never stdout. stdout is this tool's data
+ * channel — the signed envelope goes there, and the whole flow is built on
+ * redirecting it to a file. An earlier version prompted on stdout and the
+ * prompt string, ANSI escapes and all, was written into the envelope file,
+ * which then failed to parse as base64 on the next step. The echo suppression
+ * held and no key was written, but the lesson is the general one: anything
+ * meant for a human goes to stderr.
+ */
 function askSecret(prompt) {
   return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: true });
     // Everything after the prompt is echoed as nothing at all. Not even
-    // asterisks: a length is information about a seed phrase.
+    // asterisks: a length is information about a secret.
     rl._writeToOutput = function (chunk) {
       if (chunk.includes(prompt)) rl.output.write(chunk);
     };
@@ -95,13 +106,56 @@ function askSecret(prompt) {
   });
 }
 
+/**
+ * An envelope, given either literally or as `@path`.
+ *
+ * A signed Soroban envelope runs to a couple of kilobytes of base64, which is
+ * past what is comfortable to paste and past what some shells will accept as one
+ * argument. `@path` keeps the multi-step flow usable: each step writes a file,
+ * the next step reads it.
+ */
+function envelopeFrom(value) {
+  if (!value.startsWith("@")) return value;
+  const path = value.slice(1);
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (err) {
+    die(`Couldn't read the envelope from ${path}: ${err.message}`);
+  }
+
+  // Take the base64 and say so if anything else was in there. An envelope file
+  // can pick up noise — a prompt, a shell banner, a stray copy-paste — and
+  // "Invalid character" from deep inside a base64 decoder is a miserable way to
+  // find that out. Base64 is self-delimiting enough to pull out safely, and
+  // reporting what was discarded keeps this from hiding a real mix-up.
+  const lines = raw.split("\n").map((l) => l.trim());
+  const envelope = lines.filter((l) => l.length > 0 && /^[A-Za-z0-9+/=]+$/.test(l));
+  const noise = lines.filter((l) => l.length > 0 && !/^[A-Za-z0-9+/=]+$/.test(l));
+
+  if (envelope.length === 0) die(`${path} contains no base64 envelope.`);
+  if (envelope.length > 1) {
+    die(
+      `${path} contains ${envelope.length} separate envelopes.\n\n` +
+        `Each step writes one. Two in a file means an output was appended to\n` +
+        `rather than replaced, and signing the wrong one is silent.`,
+    );
+  }
+  if (noise.length > 0) {
+    console.error(`note           : ignored ${noise.length} non-envelope line(s) in ${path}`);
+  }
+  return envelope[0];
+}
+
 function keypairFrom(secret) {
   if (/^S[A-Z2-7]{55}$/.test(secret)) return Keypair.fromSecret(secret);
   die(
     "That isn't a secret key (S…, 56 characters).\n\n" +
-      "If what you have is a 24-word seed phrase, turn it into a key first with\n" +
-      "`stellar keys add <alias> --secure-store` and sign with that alias, so the\n" +
-      "phrase goes into your OS keychain rather than through a terminal.",
+      "A signer's stored value should be the S-form — what `stellar keys secret`\n" +
+      "prints. A 24-word seed phrase is not accepted here directly: deriving a key\n" +
+      "from a phrase is a different operation, and silently guessing which\n" +
+      "derivation path was meant is how a signature ends up coming from an address\n" +
+      "nobody listed.",
   );
 }
 
@@ -140,7 +194,13 @@ async function build([contractId, fn, ...values]) {
       networkPassphrase: NETWORK,
     })
       .addOperation(new Contract(contractId).call(fn, ...values.map(toScVal)))
-      .setTimeout(600) // ten minutes: long enough to pass an envelope to a second holder
+      // An hour. The limit here is a human one: the envelope has to reach other
+      // holders, be looked at, and be signed — and if it expires in the middle
+      // of that, the whole round starts again. Shorter is not safer, because
+      // what the timebound protects against is a *stale* transaction being
+      // replayed later, and an hour is nowhere near long enough to matter for
+      // a call whose effect is checked on the chain immediately afterwards.
+      .setTimeout(3600)
       .build(),
   );
 
@@ -220,8 +280,8 @@ function secretFromAlias(alias) {
 }
 
 async function sign([envelope, ...flags]) {
-  if (!envelope) die("Usage: admin-tx.mjs sign <xdr> [--alias <identity>]");
-  const tx = new Transaction(envelope, NETWORK);
+  if (!envelope) die("Usage: admin-tx.mjs sign <xdr|@file> [--alias <identity>]");
+  const tx = new Transaction(envelopeFrom(envelope), NETWORK);
   const before = tx.signatures.length;
 
   const aliasAt = flags.indexOf("--alias");
@@ -241,8 +301,8 @@ async function sign([envelope, ...flags]) {
 }
 
 async function send([envelope]) {
-  if (!envelope) die("Usage: admin-tx.mjs send <xdr>");
-  const tx = new Transaction(envelope, NETWORK);
+  if (!envelope) die("Usage: admin-tx.mjs send <xdr|@file>");
+  const tx = new Transaction(envelopeFrom(envelope), NETWORK);
   console.error(`signatures     : ${tx.signatures.length}`);
 
   const sent = await server.sendTransaction(tx);
@@ -285,8 +345,8 @@ if (!commands[command]) {
   die(
     "Usage:\n" +
       "  node scripts/admin-tx.mjs build <contract> <fn> [value ...]\n" +
-      "  node scripts/admin-tx.mjs sign  <xdr> [--alias <identity>]\n" +
-      "  node scripts/admin-tx.mjs send  <xdr>",
+      "  node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>]\n" +
+      "  node scripts/admin-tx.mjs send  <xdr|@file>",
   );
 }
 await commands[command](rest);
