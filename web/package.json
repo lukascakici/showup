@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "evidence": "node scripts/collect-evidence.mjs"
+    "evidence": "node scripts/collect-evidence.mjs",
+    "admin": "node scripts/admin-tx.mjs"
   },
   "engines": {
     "node": "24.x"
