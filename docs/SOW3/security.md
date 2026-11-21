@@ -261,6 +261,60 @@ can be checked against the run that produced them rather than taken on trust.
 The artefact is uploaded before the check below, deliberately: the run that fails
 is the run whose raw output somebody needs to read.
 
+## Key management
+
+The second half of this deliverable, and the one that was not about the contracts
+at all. Until 21.11.2026 both contracts were governed by a single command-line
+keypair whose 24-word seed phrase sat in a plain text file on a laptop. Reading
+that one file was enough to decide what code every future event would run.
+
+**The admin is now
+[`GBWMYPV6…5QQF`](https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF),
+an account requiring two signatures out of three.** Neither contract address
+changed. [Every transaction is recorded here.](../deployments.md#the-rotation-itself-21112026)
+
+Why an account rather than a device, stated plainly because it is a departure
+from the obvious answer:
+
+- **A hardware wallet is one key in one place.** 2-of-3 survives the loss *or*
+  the theft of any single key; a single device survives neither.
+- **It is verifiable rather than asserted.** Signers and thresholds are ordinary
+  public ledger state, so "this needs two signatures" is something a reviewer
+  reads off the chain. Where a key is physically kept is not checkable by anybody
+  but its holder.
+- **One of the three keys is on the build machine**, and that is sound rather
+  than a compromise: it holds one weight of three, so reading that machine
+  yields a signature that cannot do anything alone. Neutralising that key is
+  what the threshold is for.
+
+Two refusals are the actual evidence, and neither has a transaction hash because
+the network rejects them before inclusion: the retired keypair now has its
+`set_event_wasm_hash` refused outright, and a call carrying only the build
+machine's signature is refused `txBadAuth` by the live factory.
+
+### What made this safe to do
+
+Raising a threshold to 2 cannot be undone by one key — lowering it again needs
+the threshold met. An account whose other holders cannot really sign is not
+inconvenienced, it is finished. So the sequence was built so that the
+irreversible step came last and was never taken on trust:
+
+1. The whole handover was **rehearsed on the live factory and undone**, before
+   any key moved anywhere.
+2. The 2-of-3 authorisation was **proven against a throwaway factory** — one
+   signature refused, two accepted — before the live contracts depended on it.
+3. The contracts were handed over while the incoming account still needed one
+   signature, so the handover never depended on an untested threshold.
+4. The other two holders each **signed a real transaction, and both signatures
+   were verified against its hash**, which is proof of possession in the only
+   form that counts.
+5. Only then was the threshold raised, and a live two-signature admin call
+   confirmed it end to end.
+
+`scripts/check-scout-baseline.mjs` has nothing to say about any of this, which is
+the point of including it here: the tooling in the section above protects against
+a bug in the contracts, and this protects against the people who can change them.
+
 ## What stops this page going quietly out of date
 
 A security report is true the day it is written. What it cannot survive on its
