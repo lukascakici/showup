@@ -12,7 +12,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "evidence": "node scripts/collect-evidence.mjs",
-    "admin": "node scripts/admin-tx.mjs"
+    "admin": "node scripts/admin-tx.mjs",
+    "admin:account": "node scripts/admin-account.mjs"
   },
   "engines": {
     "node": "24.x"

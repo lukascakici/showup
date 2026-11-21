@@ -3,7 +3,7 @@
  * signatures as the admin account requires.
  *
  *   node scripts/admin-tx.mjs build <contract> <fn> [value ...]
- *   node scripts/admin-tx.mjs sign  <xdr>
+ *   node scripts/admin-tx.mjs sign  <xdr> [--alias <identity>]
  *   node scripts/admin-tx.mjs send  <xdr>
  *
  * The `stellar` CLI signs with exactly one key, which is fine while the admin is
@@ -29,6 +29,7 @@
  * is the one class of mistake that is expensive here.
  */
 
+import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import {
   Account,
@@ -161,12 +162,50 @@ async function readAdmin(contractId) {
   return scValToNative(sim.result.retval);
 }
 
-async function sign([envelope]) {
-  if (!envelope) die("Usage: admin-tx.mjs sign <xdr>");
+/**
+ * Pull a secret out of a `stellar` CLI identity without it passing through a
+ * terminal or a shell variable. The value goes CLI -> this process -> signature
+ * and is never printed; printing a key to look at it is how keys stop being
+ * secret.
+ *
+ * **Not available for `--secure-store` identities.** The CLI refuses outright —
+ * "Secure Store does not reveal secret key" — which is the keychain doing its
+ * job and also what rules it out as a signer here: a key the CLI will only use
+ * itself can only ever contribute one signature per transaction, via
+ * `stellar contract invoke`, and one signature is the thing a 2-of-3 account
+ * exists to refuse. The signer that lives on this machine is therefore an
+ * ordinary identity, and that is sound rather than a compromise: it holds one
+ * of three weights, so reading this laptop gets an attacker a signature that
+ * cannot do anything on its own. Neutralising that key is the whole point of
+ * the threshold.
+ */
+function secretFromAlias(alias) {
+  try {
+    return execFileSync("stellar", ["keys", "secret", alias], {
+      encoding: "utf8",
+      stdio: ["inherit", "pipe", "inherit"], // stdin inherited: the keychain may prompt
+    }).trim();
+  } catch {
+    die(
+      `Couldn't read the key for identity \`${alias}\`.\n\n` +
+        `\`stellar keys ls\` lists what exists. If the identity is in the OS\n` +
+        `keychain, the prompt it raises has to be answered in this terminal.`,
+    );
+  }
+}
+
+async function sign([envelope, ...flags]) {
+  if (!envelope) die("Usage: admin-tx.mjs sign <xdr> [--alias <identity>]");
   const tx = new Transaction(envelope, NETWORK);
   const before = tx.signatures.length;
 
-  const secret = process.env.STELLAR_ADMIN_SECRET ?? (await askSecret("secret key (hidden): "));
+  const aliasAt = flags.indexOf("--alias");
+  const alias = aliasAt === -1 ? null : flags[aliasAt + 1];
+  if (aliasAt !== -1 && !alias) die("`--alias` needs an identity name.");
+
+  const secret = alias
+    ? secretFromAlias(alias)
+    : (process.env.STELLAR_ADMIN_SECRET ?? (await askSecret("secret key (hidden): ")));
   if (!secret) die("Nothing entered.");
   const keypair = keypairFrom(secret);
 
@@ -221,7 +260,7 @@ if (!commands[command]) {
   die(
     "Usage:\n" +
       "  node scripts/admin-tx.mjs build <contract> <fn> [value ...]\n" +
-      "  node scripts/admin-tx.mjs sign  <xdr>\n" +
+      "  node scripts/admin-tx.mjs sign  <xdr> [--alias <identity>]\n" +
       "  node scripts/admin-tx.mjs send  <xdr>",
   );
 }
