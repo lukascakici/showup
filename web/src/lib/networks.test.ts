@@ -8,7 +8,10 @@ import {
   isLive,
   liveNetworks,
   network,
+  networkFromHostname,
+  networkIdFromHostname,
   parseNetworkId,
+  siteUrlFor,
 } from "./networks";
 
 describe("the native XLM contract address", () => {
@@ -103,6 +106,73 @@ describe("parseNetworkId", () => {
     expect(parseNetworkId("")).toBeNull();
     expect(parseNetworkId(null)).toBeNull();
     expect(parseNetworkId(undefined)).toBeNull();
+  });
+});
+
+describe("which network a hostname serves", () => {
+  it("serves Mainnet on the production host, with or without www", () => {
+    expect(networkIdFromHostname("showup.click")).toBe("mainnet");
+    expect(networkIdFromHostname("www.showup.click")).toBe("mainnet");
+  });
+
+  it("is case- and port-insensitive, because a Host header is whatever was sent", () => {
+    expect(networkIdFromHostname("Showup.Click")).toBe("mainnet");
+    expect(networkIdFromHostname("showup.click:443")).toBe("mainnet");
+    expect(networkIdFromHostname("  showup.click  ")).toBe("mainnet");
+  });
+
+  it("serves Testnet on everything else", () => {
+    // Every one of these is a hostname this app will really be reached on, and
+    // not one of them may be mistaken for the network that holds real money.
+    for (const host of [
+      "testnet.showup.click",
+      "localhost",
+      "localhost:3000",
+      "127.0.0.1",
+      "showup-git-main-lukascakicis-projects.vercel.app",
+      "showup.vercel.app",
+      "",
+    ]) {
+      expect(networkIdFromHostname(host)).toBe("testnet");
+    }
+  });
+
+  it("does not treat a lookalike host as Mainnet", () => {
+    // A subdomain, a suffix or a homoglyph domain must not inherit real money
+    // just by containing the production hostname.
+    for (const host of [
+      "evil-showup.click",
+      "showup.click.attacker.com",
+      "showup.clickx",
+      "notshowup.click",
+      "api.showup.click",
+    ]) {
+      expect(networkIdFromHostname(host)).toBe("testnet");
+    }
+  });
+
+  it("serves the live network when the hostname asks for one that is not", () => {
+    // What makes the domain split shippable before Mainnet is deployed:
+    // showup.click asks for Mainnet, Mainnet has no contracts, so it serves
+    // Testnet — exactly what it serves today.
+    expect(networkIdFromHostname("showup.click")).toBe("mainnet");
+    expect(isLive("mainnet")).toBe(false);
+    expect(networkFromHostname("showup.click").id).toBe("testnet");
+    expect(networkFromHostname("testnet.showup.click").id).toBe("testnet");
+  });
+});
+
+describe("where a link to a network points", () => {
+  it("gives each network its own canonical host", () => {
+    expect(siteUrlFor(network("mainnet"))).toBe("https://showup.click");
+    expect(siteUrlFor(network("testnet"))).toBe("https://testnet.showup.click");
+  });
+
+  it("round-trips: a canonical host resolves back to its own network", () => {
+    for (const id of ["mainnet", "testnet"] as const) {
+      const host = new URL(siteUrlFor(network(id))).hostname;
+      expect(networkIdFromHostname(host)).toBe(id);
+    }
   });
 });
 

@@ -150,6 +150,60 @@ export function parseNetworkId(value: string | null | undefined): NetworkId | nu
   return value === "testnet" || value === "mainnet" ? value : null;
 }
 
+/**
+ * The hostname that serves real money, and the only one.
+ *
+ * Mainnet is an **allowlist of one**. Everything else — the Testnet subdomain, a
+ * Vercel preview, localhost, a hostname somebody typed wrong, a `Host` header
+ * somebody made up — resolves to Testnet. The asymmetry is the whole design: the
+ * worst outcome of a misconfiguration becomes "this shows Testnet when it should
+ * have shown Mainnet", which is visible and harmless, instead of "this looked
+ * like Testnet and moved real money", which is neither.
+ */
+const MAINNET_HOSTNAMES = new Set(["showup.click", "www.showup.click"]);
+
+/** `showup.click` -> mainnet. Anything else at all -> testnet. */
+export function networkIdFromHostname(hostname: string): NetworkId {
+  // Lowercased and de-ported: a Host header arrives as the client wrote it,
+  // and `Showup.Click:443` is the same host as `showup.click`.
+  const host = hostname.trim().toLowerCase().split(":")[0];
+  return MAINNET_HOSTNAMES.has(host) ? "mainnet" : "testnet";
+}
+
+/**
+ * The network to serve on a given hostname.
+ *
+ * Falls back when the hostname's network is not live, which is what lets the
+ * domain split ship before Mainnet exists: `showup.click` asks for Mainnet,
+ * Mainnet has no contracts yet, and it serves Testnet — the same thing it serves
+ * today — until the day the addresses are filled in.
+ */
+export function networkFromHostname(hostname: string): Network {
+  const id = networkIdFromHostname(hostname);
+  return isLive(id) ? network(id) : defaultNetwork();
+}
+
+/**
+ * Where a link to this network should point.
+ *
+ * Invite links are built from a fixed canonical host rather than
+ * `window.location.origin`, so that an event created on localhost or on a
+ * preview deployment still produces a link somebody else can open — see
+ * `links.ts`. Once there are two networks there have to be two canonical hosts,
+ * because an invite that lands on the wrong one shows a stranger an event that
+ * does not exist there.
+ */
+export function siteUrlFor(n: Network): string {
+  const override = process.env.NEXT_PUBLIC_SITE_URL;
+  if (override) {
+    // A self-hoster gets one origin, and it serves whatever network they
+    // configured. Appending a subdomain to somebody else's domain would be a
+    // guess about DNS we have no business making.
+    return override.replace(/\/+$/, "");
+  }
+  return n.id === "mainnet" ? "https://showup.click" : "https://testnet.showup.click";
+}
+
 export const EXPLORER_TX = (n: Network, hash: string) =>
   `https://stellar.expert/explorer/${n.explorerSegment}/tx/${hash}`;
 export const EXPLORER_ACCOUNT = (n: Network, id: string) =>
