@@ -157,6 +157,18 @@ export function friendlyContractError(err: unknown): string {
     21: "That isn't how this event admits people.",
     22: "This event checks attendance records and can't reach the one it was set up with.",
     23: "The organizer who created an event can't be removed from it.",
+    // 24 to 27 came with vouching and 28 to 31 with the reclaim and the amount
+    // bounds. They were falling through to "please try again" — the one piece
+    // of advice this list exists to stop giving, since retrying none of them
+    // helps.
+    24: "Your record can't carry a vouch yet: it needs a check-in, and no vouch of yours that was broken.",
+    25: "You've already vouched for this person at this event.",
+    26: "You can't vouch for yourself.",
+    27: "This event needs more people to vouch for you before you can reserve.",
+    28: "It's too early to take your deposit back — the organizer has 48 hours after the start time to settle.",
+    29: "You've already taken your deposit back from this event.",
+    30: "Those amounts are too large for this event to hold. Lower the deposit, the fee allowance, or the capacity.",
+    31: "This event can't settle: its own numbers don't add up, so it refused rather than pay out the wrong amounts.",
   };
 
   const match = message.match(/Error\(Contract,\s*#(\d+)\)/);

@@ -2295,3 +2295,107 @@ fn settling_after_some_reclaimed_still_pays_everybody_left_correctly() {
     );
     assert_eq!(f.balance(&f.client.address), 0);
 }
+
+// ---------------------------------------------------------------------------
+// The ceiling on what an event can ever hold.
+//
+// `(deposit + fee_allowance) * capacity` is the most this contract can take in.
+// Checking it once at creation is what makes every multiplication and addition
+// in the settlement in-range by construction — and the check belongs here,
+// while the three numbers are still the organizer's to change, rather than at a
+// settlement where somebody's money already depends on them.
+// ---------------------------------------------------------------------------
+
+/// A bare contract and the arguments to initialize it, so these can vary one
+/// number at a time.
+type InitResult =
+    Result<Result<(), soroban_sdk::ConversionError>, Result<Error, soroban_sdk::InvokeError>>;
+
+fn init_with(deposit: i128, fee_allowance: i128, capacity: u32) -> InitResult {
+    let env = Env::default();
+    env.mock_all_auths();
+    let issuer = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(issuer).address();
+    let organizer = Address::generate(&env);
+    // Funded well past anything these cases ask for: the subject here is the
+    // ceiling, and an organizer who simply cannot afford the fee pool would
+    // fail for a different reason and prove nothing.
+    StellarAssetClient::new(&env, &token).mint(&organizer, &1_000_000_000_000_000);
+    let code_hash = env
+        .crypto()
+        .sha256(&Bytes::from_slice(&env, b"x"))
+        .to_bytes();
+
+    let client = EventContractClient::new(&env, &env.register(EventContract, ()));
+    client.try_initialize(
+        &organizer,
+        &String::from_str(&env, TITLE),
+        &STARTS_AT,
+        &token,
+        &deposit,
+        &fee_allowance,
+        &capacity,
+        &code_hash,
+        &ForfeitPolicy::ToOrganizer,
+        &None,
+        &Admission::Open,
+    )
+}
+
+#[test]
+fn an_event_whose_deposit_and_allowance_cannot_be_added_is_refused() {
+    assert_eq!(init_with(i128::MAX, 1, 1), Err(Ok(Error::AmountsTooLarge)));
+}
+
+#[test]
+fn an_event_whose_total_cannot_be_multiplied_out_is_refused() {
+    // Each number is individually fine. Together, across the capacity, they are
+    // not — which is exactly the case a per-field check would let through.
+    assert_eq!(
+        init_with(i128::MAX / 2, 0, 3),
+        Err(Ok(Error::AmountsTooLarge))
+    );
+}
+
+#[test]
+fn the_ceiling_is_checked_before_any_money_moves() {
+    // The refusal has to come before the fee pool is pulled from the organizer.
+    // A contract that took the pool and then refused would be the worst of both.
+    let env = Env::default();
+    env.mock_all_auths();
+    let issuer = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(issuer).address();
+    let organizer = Address::generate(&env);
+    StellarAssetClient::new(&env, &token).mint(&organizer, &1_000_000);
+    let code_hash = env
+        .crypto()
+        .sha256(&Bytes::from_slice(&env, b"x"))
+        .to_bytes();
+    let before = token::Client::new(&env, &token).balance(&organizer);
+
+    let client = EventContractClient::new(&env, &env.register(EventContract, ()));
+    let refused = client.try_initialize(
+        &organizer,
+        &String::from_str(&env, TITLE),
+        &STARTS_AT,
+        &token,
+        &(i128::MAX / 2),
+        &(i128::MAX / 2),
+        &2,
+        &code_hash,
+        &ForfeitPolicy::ToOrganizer,
+        &None,
+        &Admission::Open,
+    );
+
+    assert_eq!(refused, Err(Ok(Error::AmountsTooLarge)));
+    assert_eq!(token::Client::new(&env, &token).balance(&organizer), before);
+}
+
+#[test]
+fn ordinary_amounts_are_unaffected_by_the_ceiling() {
+    // The guard must not narrow what a real event can do. A deposit of a
+    // thousand XLM across a hundred guests is nowhere near it.
+    assert!(init_with(10_000_000_000, 1_000_000, 100).is_ok());
+    assert!(init_with(DEPOSIT, FEE_ALLOWANCE, CAPACITY).is_ok());
+}
