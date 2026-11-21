@@ -115,13 +115,25 @@ async function build([contractId, fn, ...values]) {
     );
   }
 
-  // Read the admin off the contract rather than being told it. The source
-  // account has to be the admin for the signature check to mean anything, and
-  // asking the chain removes the one way to get that wrong.
-  const admin = await readAdmin(contractId);
-  console.error(`admin on chain : ${admin}`);
+  // Read the authoriser off the contract rather than being told it. The source
+  // account has to be the address the contract will demand, and asking the
+  // chain removes the one way to get that wrong.
+  //
+  // `accept_admin` is the exception that makes this worth doing properly: the
+  // address that has to sign it is the *pending* admin, not the current one.
+  // Building it against `get_admin` would produce a transaction signed by the
+  // outgoing key — which is the one key the contract refuses for this call.
+  const authoriser =
+    fn === "accept_admin"
+      ? await readPendingAdmin(contractId)
+      : await readAdmin(contractId);
+  console.error(
+    fn === "accept_admin"
+      ? `pending admin  : ${authoriser}  (the address that must sign)`
+      : `admin on chain : ${authoriser}`,
+  );
 
-  const account = await server.getAccount(admin);
+  const account = await server.getAccount(authoriser);
   const prepared = await server.prepareTransaction(
     new TransactionBuilder(account, {
       fee: String(Number(BASE_FEE) * 100),
@@ -138,28 +150,41 @@ async function build([contractId, fn, ...values]) {
 }
 
 /**
- * Ask the contract who its admin is.
+ * Simulate a read-only getter and return what it answered.
  *
- * `get_admin` is read-only, so simulation answers it and the source account is
- * never consulted — hence the all-zero address below, which exists only to hold
- * a sequence number. Reading this rather than accepting it as an argument is
- * deliberate: the source account has to *be* the admin for the signature check
- * to mean anything, and asking the chain removes the way to get that wrong.
+ * Simulation never consults the source account for a read, hence the all-zero
+ * address below — it exists only to hold a sequence number.
  */
-async function readAdmin(contractId) {
+async function read(contractId, fn) {
   const tx = new TransactionBuilder(new Account(NULL_ACCOUNT, "0"), {
     fee: BASE_FEE,
     networkPassphrase: NETWORK,
   })
-    .addOperation(new Contract(contractId).call("get_admin"))
+    .addOperation(new Contract(contractId).call(fn))
     .setTimeout(30)
     .build();
 
   const sim = await server.simulateTransaction(tx);
   if (rpc.Api.isSimulationError(sim)) {
-    die(`Couldn't read the admin of ${contractId}:\n\n${sim.error}`);
+    die(`Couldn't call \`${fn}\` on ${contractId}:\n\n${sim.error}`);
   }
   return scValToNative(sim.result.retval);
+}
+
+const readAdmin = (contractId) => read(contractId, "get_admin");
+
+async function readPendingAdmin(contractId) {
+  const pending = await read(contractId, "get_pending_admin");
+  if (!pending) {
+    die(
+      `${contractId} has nobody proposed as admin, so there is nothing to accept.\n\n` +
+        `The handover is two transactions: the current admin calls\n` +
+        `\`propose_admin <address>\` first, and only the proposed address can\n` +
+        `then call \`accept_admin\`. \`get_pending_admin\` is how you check\n` +
+        `which address that is before signing anything.`,
+    );
+  }
+  return pending;
 }
 
 /**
