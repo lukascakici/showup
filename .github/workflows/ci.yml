@@ -92,7 +92,11 @@ jobs:
   security:
     name: Security
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Blocking, as of 21.11.2026. It was `continue-on-error: true` while the
+    # baseline was untriaged, because a job that is red on 73 known findings is
+    # a job everybody learns to ignore. Now that each of those findings has a
+    # written decision in docs/SOW3/security.md, anything Scout reports beyond
+    # them is genuinely new — see the gate step at the end of this job.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -212,12 +216,21 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: cargo scout-audit --output-format raw-json --output-path scout-report.json
 
+      # Uploaded before the gate below, and deliberately so: the run that fails
+      # is the run whose raw evidence somebody needs to read.
       - name: Publish the findings
         if: steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: scout-report
           path: scout-report.json
+
+      # What makes this job worth blocking on. Not "zero findings" — this
+      # codebase has 61 it has decided to live with, each with a reason written
+      # down — but "nothing Scout found that the report has no answer for".
+      - name: Check the findings against the triaged baseline
+        if: steps.scope.outputs.run == 'true'
+        run: node scripts/check-scout-baseline.mjs scout-report.json
 
   web:
     name: Web

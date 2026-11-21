@@ -13,9 +13,11 @@ below.
 | | |
 | :-- | :-- |
 | Analyser | **CoinFabrik Scout `0.3.17`**, 39 detectors |
-| Code analysed | commit [`b9fd4d4`](https://github.com/lukascakici/showup/commit/b9fd4d4a5ce537cac69ea321f53e055abdd73b71) — the contract layer frozen 17.11.2026 |
+| Code analysed — *before* | commit [`b9fd4d4`](https://github.com/lukascakici/showup/commit/b9fd4d4a5ce537cac69ea321f53e055abdd73b71) — the contract layer frozen 17.11.2026 |
+| Code analysed — *after* | commit [`6f5e2fd`](https://github.com/lukascakici/showup/commit/6f5e2fdde2569fdc9e0f4b81561448bb20b85971) — the fixes, and what every "after" number below was measured on |
 | Scope | all four crates: `event`, `factory`, `reputation`, `interfaces` |
-| When it runs | **every push**, as the `Security` job in CI, with the version pinned |
+| When it runs | **every push** that touches the contracts, as the `Security` job in CI, with the version pinned |
+| Does it block | **Yes**, since 21.11.2026 — see [what stops this page going out of date](#what-stops-this-page-going-quietly-out-of-date) |
 | Fixes live on Testnet | 21.11.2026 — event wasm `5f5e0ec5…`, factory wasm `110c1658…`, [recorded with every transaction](../deployments.md#upgraded-a-fifth-time--every-amount-bounded-the-money-path-checked-21112026) |
 
 Pinned on purpose: a detector set that changes underneath the report makes every
@@ -240,6 +242,35 @@ stellar contract build            # the tests contractimport! the wasm
 cargo scout-audit
 ```
 
-Every CI run publishes `scout-report.md` and `scout-report.json` as artefacts, so
-the numbers above can be checked against the run that produced them rather than
-taken on trust.
+Every CI run publishes `scout-report.json` as an artefact, so the numbers above
+can be checked against the run that produced them rather than taken on trust.
+The artefact is uploaded before the check below, deliberately: the run that fails
+is the run whose raw output somebody needs to read.
+
+## What stops this page going quietly out of date
+
+A security report is true the day it is written. What it cannot survive on its
+own is the next commit: a new unbounded subtraction, a new unbounded `Vec`, a new
+admin setter — each would be a finding nobody read, sitting in a document that
+says there are none of those.
+
+So since 21.11.2026 the `Security` job is **blocking**, gated by
+[`scripts/check-scout-baseline.mjs`](../../scripts/check-scout-baseline.mjs),
+which holds this page's numbers as a machine-readable baseline and fails CI on:
+
+- **any critical finding**, with no baseline to appeal to. Every critical finding
+  this project has ever had was unbounded arithmetic standing on somebody's
+  deposit.
+- **any detector rising above the count published above.** Adding a finding
+  therefore costs a deliberate edit to that baseline *and* a decision written
+  into this page — which is the discipline this page claims to follow, enforced
+  rather than promised.
+- **an empty report.** Zero findings is not a pass: a detector build that fails
+  leaves an empty file behind, and that looks identical to a clean run.
+
+Counts that *drop* are reported but never auto-lowered. Tightening the baseline
+is its own commit, so a fix and a regression in the same push can't cancel out.
+
+It was `continue-on-error: true` until the triage was finished, and that was the
+right default for exactly as long as it lasted: a job that is permanently red on
+73 known findings is a job everybody learns to scroll past.
