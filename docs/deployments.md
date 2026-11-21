@@ -35,7 +35,8 @@ use the keyless commands to read what the chain says now.
 | Factory wasm hash — at the SOW 3 freeze | `09c8ba280e8d8d711afd8c53ba73a7e52d764c78f4e9745ea897a3bc9a629488` |
 | Factory wasm hash — previous | `40d69765c45bc8d2f01fde373a732161876b30cb794b734a0363ea7dc21bda10` |
 | Native XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| Deployer / admin | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
+| **Admin — current**, 2 of 3 signatures | [`GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF`](https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF) |
+| Deployer, and admin until 21.11.2026 | `GDL3H646S6HGGJTH2BBNCBDONJDN5E7L56ZRFWGCOSPXEDHOJLZOZKI5` |
 
 Six event wasm hashes because the factory has been pointed at a new event
 revision five times — 08.08.2026, 23.09.2026, 24.09.2026, 17.11.2026 and
@@ -724,8 +725,9 @@ stellar contract invoke --id CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQL
   --policy ToOrganizer --admission Open
 # Error(Contract, #30)  — AmountsTooLarge
 
-# The same call with ordinary amounts still simulates all the way through,
-# including the registration with the reputation ledger.
+# The same call with ordinary amounts goes all the way through, including the
+# registration with the reputation ledger. Run for real rather than simulated:
+# https://stellar.expert/explorer/testnet/tx/a296f8e8016c31411ddda06d3a688a779a0ae63b137ac58e7a42a7764e76c91a
 #   CDFGVEIJ… - Success - Event: [{"symbol":"event_registered"}]
 #   CD5AEMRB… - Success - Event: EventCreated (event_created) …
 
@@ -737,6 +739,37 @@ stellar contract invoke --id CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQL
 
 Events created before this upgrade keep the revision they were born with, as
 always: `set_event_wasm_hash` governs the next event, never an existing one.
+
+### The first event after an upgrade costs far more than the rest, and it must not be a stranger's
+
+The `create_event` above was the first event deployed from `5f5e0ec5…`, and it
+was charged **36.73 XLM**. The ordinary cost of creating an event on this factory
+is about **0.04 XLM** — three orders of magnitude less.
+
+It is not an anomaly. The same thing happened on 26.09.2026, two days after the
+previous event revision went live: a `create_event` charged
+[**106.38 XLM**](https://stellar.expert/explorer/testnet/tx/84470cca8cdbfc51a36f5573578dbf717c4feab6d961ed7007bf11b50a033b86),
+against a median of 0.56 across every other event this factory has deployed.
+Both were the first event created from a freshly uploaded wasm, and both were
+paid by us because we happened to be the one creating it.
+
+**On Mainnet that bill lands on whoever creates the first event after an
+upgrade** — a real organiser, charged tens of XLM with no explanation, for
+nothing they did. So this goes in the upgrade runbook as a step rather than a
+footnote:
+
+> After every `set_event_wasm_hash`, create one event from the new revision and
+> finalize it immediately, from our own wallet. The next organiser then pays the
+> ordinary fee.
+
+Which is what [`a296f8e8…`](https://stellar.expert/explorer/testnet/tx/a296f8e8016c31411ddda06d3a688a779a0ae63b137ac58e7a42a7764e76c91a)
+is, and it was settled the same day with nobody reserved and the fee pool
+returned in full:
+[`5947c536…`](https://stellar.expert/explorer/testnet/tx/5947c536fa531fcfbdc5575ca516bdf6b2ed5d788053e107b73be08452db7b63)
+— `Finalized { showed: 0, no_shows: 0, forfeited: 0 }`.
+
+Every fee quoted here was read back off the chain with
+`horizon-testnet.stellar.org/transactions/<hash>`, not estimated.
 
 ## The admin handover, rehearsed on the live contracts (21.11.2026)
 
@@ -768,12 +801,18 @@ for the mistake this design exists to survive: an address nobody controls can
 never call `accept_admin`, so the handover cannot complete and the contract
 cannot be stranded.
 
-### Where the key is going: an account no single signature can move
+### Where the key went: an account no single signature can move
 
-A hardware wallet is one key in one place. The admin is instead becoming a
-**2-of-3 Stellar account** — three signers of weight 1, with the low, medium
-*and* high thresholds all at 2. No single signature can call `upgrade`, can call
-`set_event_wasm_hash`, or can even change the signer list.
+A hardware wallet is one key in one place. The admin is instead a **2-of-3
+Stellar account** — three signers of weight 1, with the low, medium *and* high
+thresholds all at 2. No single signature can call `upgrade`, can call
+`set_event_wasm_hash`, or can even change the signer list. One of the three keys
+is on the machine this project is built from; the other two are held elsewhere by
+the one person who holds them, and neither of those ever reached this machine.
+
+High matters as much as medium. Left lower, one key could still rewrite the
+signer list and hand itself everything — the same key holding the whole account
+by a slower route.
 
 It is also the stronger thing to publish. Account signers and thresholds are
 ordinary public ledger state, so "this account requires two signatures" is
@@ -833,6 +872,64 @@ It accepts only the six functions the admin ever calls — `propose_admin`,
 characters beginning `G` or `C` is an address, 64 hex characters is a 32-byte
 hash, and anything else is refused. A mistyped admin argument is the one class of
 mistake that is expensive here.
+
+### The rotation itself (21.11.2026)
+
+**Both contracts are now governed by
+[`GBWMYPV6…5QQF`](https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF),
+an account that requires two signatures out of three.** Neither address changed,
+and the factory's 27 events and the reputation ledger's records are untouched.
+
+| Step | Transaction |
+| :-- | :-- |
+| `factory.propose_admin` | [`67ca4b21…`](https://stellar.expert/explorer/testnet/tx/67ca4b21e726345c7b9951f8ca98e2544c953b44efac6e02239b68e361c50404) |
+| `factory.accept_admin`, signed by the incoming account | [`8b67a200…`](https://stellar.expert/explorer/testnet/tx/8b67a200836b9fae3b349353ab8ab49fc0cb0d08b7814395f2cae19242c85f21) |
+| `reputation.propose_admin` | [`3a60b117…`](https://stellar.expert/explorer/testnet/tx/3a60b117db1b9de20716d7b92e435684a73e4fc4f71f7444923536817e686397) |
+| `reputation.accept_admin` | [`b7a5a31d…`](https://stellar.expert/explorer/testnet/tx/b7a5a31d627c71d5ad0add0d985227e2397b69f014555afbeef64221d2faccc9) |
+| The two other holders added as signers | [`e0169a05…`](https://stellar.expert/explorer/testnet/tx/e0169a0585355da51cee1f8218a00c6306a8af76661a1fc092f52e81dd1ad10d) |
+| **A live admin call with two signatures** | [`6c8a1437…`](https://stellar.expert/explorer/testnet/tx/6c8a14375849a71b3a490a06b228809072bb5c7cb21cbd5a1f73aa0504463a67) |
+
+And the two refusals that are the actual security property, neither of which has
+a hash because the network rejected them before inclusion:
+
+- **The retired key can no longer govern anything.** The command-line keypair
+  that administered both contracts until today — the one the SOW describes as
+  "a command-line keypair on a laptop" — now gets its `set_event_wasm_hash`
+  refused, because the contract demands the new admin's authorisation.
+- **One signature of the new account is not enough.** A `set_event_wasm_hash`
+  carrying only the build machine's signature is refused `txBadAuth` by the live
+  factory. One of the three keys is on the machine this was built from; it cannot
+  act alone, and that is the whole point.
+
+The ordering was chosen to make the dangerous step impossible rather than
+careful. An account's signing rules are nothing to do with the contracts, so the
+handover happened first while the incoming account still needed one signature,
+and the threshold was raised afterwards. Doing it the other way round would have
+meant gathering two signatures to complete a handover that had not been proven
+to work yet.
+
+### How the holders were checked before anything depended on them
+
+Raising a threshold to 2 is irreversible by one key: lowering it again needs the
+threshold met. An account whose other holders cannot actually sign is therefore
+not inconvenienced but finished — no `upgrade`, no `set_event_wasm_hash`, no way
+back. "The holder says they have the key" is not evidence of this.
+
+So before the threshold went up, both other holders signed the same real
+transaction, and **both signatures were verified against its hash**. That is
+proof of possession in the only form that counts, and it needed no transaction
+to be submitted at all — a valid signature over a known payload is the evidence,
+and sending it adds nothing to it.
+
+That turned out to matter, because submitting it was not even possible: at the
+time, the account's threshold was still 1, and Stellar refuses a transaction
+carrying **more** signatures than the account needs — `txBadAuthExtra`. Two
+holders cannot be proven in one submitted transaction on a 1-of-N account. They
+can be proven in one signed envelope, which is what was done.
+
+The last row of the table above is the end-to-end confirmation, performed after
+the threshold was raised: a real admin call on the live factory, one signature
+from the build machine and one from another holder, accepted.
 
 ## Deliverable 1 evidence — the app itself moves money
 
