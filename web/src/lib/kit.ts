@@ -1,7 +1,7 @@
 "use client";
 
 import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit/types";
-import { NETWORK_PASSPHRASE } from "./stellar";
+import { network, siteUrlFor, type Network, type NetworkId } from "./networks";
 
 export type { ISupportedWallet };
 
@@ -81,6 +81,7 @@ type Kit = typeof import("@creit.tech/stellar-wallets-kit/sdk")["StellarWalletsK
 type KitEvents = typeof import("@creit.tech/stellar-wallets-kit/types")["KitEventType"];
 
 let pending: Promise<{ kit: Kit; events: KitEvents }> | null = null;
+let initialisedFor: NetworkId | null = null;
 
 /**
  * Load and initialise the wallet kit — lazily, and never during server render.
@@ -94,8 +95,21 @@ let pending: Promise<{ kit: Kit; events: KitEvents }> | null = null;
  * The kit is a global singleton with static methods, so this resolves once and
  * every later caller gets the same initialised instance.
  */
-export function getKit() {
-  pending ??= load();
+export function getKit(on: NetworkId) {
+  // The kit is a global singleton with the network baked into `init`, so it can
+  // only ever serve one. That is sound here because the network is decided by
+  // the hostname and cannot change within a page load — and this says so out
+  // loud rather than quietly handing back a kit configured for the other
+  // network, which would mean a signature the network rejects at best and a
+  // real-money signature from a Testnet screen at worst.
+  if (pending && initialisedFor !== on) {
+    throw new Error(
+      `The wallet kit was initialised for ${initialisedFor} and is now being asked ` +
+        `for ${on}. Reload the page — a network change is a new page load.`,
+    );
+  }
+  initialisedFor = on;
+  pending ??= load(on);
   return pending;
 }
 
@@ -104,7 +118,8 @@ export function kitReady(): boolean {
   return pending !== null;
 }
 
-async function load() {
+async function load(on: NetworkId) {
+  const target = network(on);
   const [sdk, types, freighter, xbull, albedo, hana] = await Promise.all([
     import("@creit.tech/stellar-wallets-kit/sdk"),
     import("@creit.tech/stellar-wallets-kit/types"),
@@ -114,8 +129,15 @@ async function load() {
     import("@creit.tech/stellar-wallets-kit/modules/hana"),
   ]);
 
-  if (types.Networks.TESTNET !== NETWORK_PASSPHRASE) {
-    throw new Error("The wallet kit and the app disagree about which network this is.");
+  // The kit ships its own copy of the passphrases. If its idea of a network ever
+  // stopped matching ours, every signature would be produced for a network the
+  // app is not on — so the two are compared rather than assumed equal.
+  const kitPassphrase =
+    on === "mainnet" ? types.Networks.PUBLIC : types.Networks.TESTNET;
+  if (kitPassphrase !== target.passphrase) {
+    throw new Error(
+      `The wallet kit and the app disagree about what ${target.label} is.`,
+    );
   }
 
   // Listed explicitly rather than via defaultModules(), which instantiates
@@ -128,10 +150,10 @@ async function load() {
   ];
 
   if (walletConnectConfigured) {
-    modules.push(await walletConnectModule());
+    modules.push(await walletConnectModule(target));
   }
 
-  sdk.StellarWalletsKit.init({ modules, network: types.Networks.TESTNET });
+  sdk.StellarWalletsKit.init({ modules, network: kitPassphrase });
 
   return { kit: sdk.StellarWalletsKit, events: types.KitEventType };
 }
@@ -146,22 +168,30 @@ async function load() {
  * reaches Lobstr and any other WalletConnect-speaking Stellar wallet, which is
  * why the row is labelled for what it is rather than for Freighter.
  */
-async function walletConnectModule() {
+async function walletConnectModule(on: Network) {
   const wc = await import("@creit.tech/stellar-wallets-kit/modules/wallet-connect");
+  const site = siteUrlFor(on);
 
   return new wc.WalletConnectModule({
     projectId: WALLETCONNECT_PROJECT_ID,
     // Not decoration: this is what a phone shows in the approval sheet, and an
-    // unnamed request is one people decline.
+    // unnamed request is one people decline. The network is in the name because
+    // this sheet is the last thing somebody sees before authorising a session,
+    // and it is the one place the app cannot label for them.
     metadata: {
-      name: "Showup",
+      name: on.isRealMoney ? "Showup" : `Showup (${on.label})`,
       description: "Put a refundable deposit on showing up.",
-      url: typeof window === "undefined" ? "https://showup.click" : window.location.origin,
-      icons: ["https://showup.click/icon.svg"],
+      url: typeof window === "undefined" ? site : window.location.origin,
+      icons: [`${site}/icon.svg`],
     },
-    // The module defaults this to `stellar:pubnet`. Left alone, every session
-    // would be negotiated for mainnet while the rest of the app is on Testnet,
-    // and the mismatch would only surface at signing time.
-    allowedChains: [wc.WalletConnectTargetChain.TESTNET],
+    // The module defaults this to `stellar:pubnet`. Left alone, a Testnet
+    // session would be negotiated for Mainnet and the mismatch would only
+    // surface at signing time — which, on the network that holds real money, is
+    // the wrong moment to find out.
+    allowedChains: [
+      on.id === "mainnet"
+        ? wc.WalletConnectTargetChain.PUBLIC
+        : wc.WalletConnectTargetChain.TESTNET,
+    ],
   });
 }

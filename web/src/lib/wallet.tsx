@@ -10,10 +10,11 @@ import {
   useState,
 } from "react";
 import { getKit, type ISupportedWallet } from "./kit";
+import { useNetwork } from "./network-context";
+import type { NetworkId } from "./networks";
 import { readWalletError } from "./wallet-errors";
 import { track } from "./funnel";
 import {
-  NETWORK_PASSPHRASE,
   fetchAccountState,
   errMessage,
   type AccountState,
@@ -74,12 +75,13 @@ type WalletContextValue = {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 /** Drop the kit's remembered wallet and address. Emits DISCONNECT, which resets us. */
-async function forgetWallet(): Promise<void> {
-  const { kit } = await getKit();
+async function forgetWallet(on: NetworkId): Promise<void> {
+  const { kit } = await getKit(on);
   await kit.disconnect();
 }
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const activeNetwork = useNetwork();
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>("restoring");
   const [walletName, setWalletName] = useState<string | null>(null);
@@ -93,23 +95,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
   const refreshNetwork = useCallback(async () => {
-    const { kit } = await getKit();
+    const { kit } = await getKit(activeNetwork.id);
     try {
       const net = await kit.getNetwork();
       setNetwork({ passphrase: net.networkPassphrase ?? null, known: true });
     } catch {
       setNetwork({ passphrase: null, known: false });
     }
-  }, []);
+  }, [activeNetwork.id]);
 
   const readWalletName = useCallback(async () => {
-    const { kit } = await getKit();
+    const { kit } = await getKit(activeNetwork.id);
     try {
       setWalletName(kit.selectedModule.productName);
     } catch {
       setWalletName(null);
     }
-  }, []);
+  }, [activeNetwork.id]);
 
   const refreshBalance = useCallback(async () => {
     if (!address) {
@@ -157,7 +159,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       let kit, events;
       try {
-        ({ kit, events } = await getKit());
+        ({ kit, events } = await getKit(activeNetwork.id));
       } catch (e) {
         if (!cancelled) {
           setError(errMessage(e) || "Couldn't load wallet support.");
@@ -175,7 +177,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       try {
         void kit.selectedModule;
       } catch {
-        await forgetWallet();
+        await forgetWallet(activeNetwork.id);
       }
 
       // Set from inside the subscription, which the kit runs synchronously as a
@@ -218,7 +220,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
-  }, [refreshNetwork, readWalletName]);
+  }, [refreshNetwork, readWalletName, activeNetwork.id]);
 
   // Separated from `openPicker` so it can be asked again without reopening
   // anything: installing an extension doesn't notify the page it happened, so
@@ -227,14 +229,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const refreshWallets = useCallback(async () => {
     setWalletsLoading(true);
     try {
-      const { kit } = await getKit();
+      const { kit } = await getKit(activeNetwork.id);
       setWallets(await kit.refreshSupportedWallets());
     } catch (e) {
       setError(errMessage(e) || "Couldn't load the wallet list.");
     } finally {
       setWalletsLoading(false);
     }
-  }, []);
+  }, [activeNetwork.id]);
 
   const openPicker = useCallback(() => {
     setError(null);
@@ -255,7 +257,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setStatus("connecting");
     try {
-      const { kit } = await getKit();
+      const { kit } = await getKit(activeNetwork.id);
       kit.setWallet(walletId);
       // Goes to the wallet itself rather than reading the kit's memory, which is
       // the point here: this is the call that prompts the user.
@@ -276,29 +278,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setError(failure.message);
       // Whatever the kit remembered can't be resolved, so clear it rather than let
       // every later call fail the same way.
-      if (failure.stale) await forgetWallet();
+      if (failure.stale) await forgetWallet(activeNetwork.id);
     }
-  }, []);
+  }, [activeNetwork.id]);
 
   const disconnect = useCallback(async () => {
     setError(null);
-    await forgetWallet();
-  }, []);
+    await forgetWallet(activeNetwork.id);
+  }, [activeNetwork.id]);
 
   // The kit throws on rejection rather than returning an error field, which is
   // exactly what the generated contract clients expect, so this passes straight
   // through with the network filled in.
   const sign = useCallback<SignFn>(async (xdr, opts) => {
-    const { kit } = await getKit();
+    const { kit } = await getKit(activeNetwork.id);
     return kit.signTransaction(xdr, {
-      networkPassphrase: NETWORK_PASSPHRASE,
+      networkPassphrase: activeNetwork.passphrase,
       ...(address ? { address } : {}),
       ...opts,
     });
-  }, [address]);
+  }, [address, activeNetwork.id, activeNetwork.passphrase]);
 
   const wrongNetwork =
-    status === "connected" && network.known && network.passphrase !== NETWORK_PASSPHRASE;
+    status === "connected" && network.known && network.passphrase !== activeNetwork.passphrase;
 
   const value = useMemo<WalletContextValue>(
     () => ({
@@ -356,4 +358,3 @@ export function useWallet(): WalletContextValue {
   return ctx;
 }
 
-export { NETWORK_PASSPHRASE };
