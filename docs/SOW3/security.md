@@ -200,12 +200,26 @@ complete the handover, so a mistyped address cannot strand the contract — it i
 corrected by proposing again.
 
 The single-call version the detector expects would require a signed
-authorisation entry from an address that is not the transaction's source, which
-is exactly what a hardware wallet cannot conveniently produce. Since the whole
-purpose of this handover is to move the admin **onto** hardware, the one-call
-form would have been the version that could not be executed.
+authorisation entry from an address that is not the transaction's source. That is
+exactly what a key held outside the signing machine cannot conveniently produce
+— and the whole purpose of this handover is to move the admin **off** the
+machine, so the one-call form would have been the version that could not be
+executed.
 
-**Status: not changed. The two-step handover is the mitigation.**
+The destination makes the point sharper rather than softer. The admin is becoming
+a **2-of-3 account**, where authorisation comes from two signatures gathered in
+two places; an auth entry from a non-source address would have needed both of
+them, assembled by hand, for every admin call forever. The two-step handover
+keeps each half an ordinary single-source transaction that ordinary multisig
+rules already know how to check.
+
+Both halves were run end to end on the live Testnet factory and then undone, and
+the 2-of-3 authorisation was proven against a throwaway factory before anything
+depended on it — one signature refused `txBadAuth`, two accepted.
+[The transactions are recorded here.](../deployments.md#the-admin-handover-rehearsed-on-the-live-contracts-21112026)
+
+**Status: not changed. The two-step handover is the mitigation, and it is
+demonstrated rather than asserted.**
 
 ---
 

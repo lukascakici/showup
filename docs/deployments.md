@@ -738,6 +738,102 @@ stellar contract invoke --id CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQL
 Events created before this upgrade keep the revision they were born with, as
 always: `set_event_wasm_hash` governs the next event, never an existing one.
 
+## The admin handover, rehearsed on the live contracts (21.11.2026)
+
+One key governs the factory and the reputation ledger. Before moving it anywhere,
+the move itself was performed end to end on the **live Testnet factory** and then
+undone, so every property the design claims is a transaction somebody can open
+rather than a sentence in a document.
+
+The admin ended the rehearsal exactly where it started, and the event wasm hash
+was unchanged throughout.
+
+| What was being shown | Result |
+| :-- | :-- |
+| A mistyped nomination changes nothing on its own | [`c5a9d740…`](https://stellar.expert/explorer/testnet/tx/c5a9d7407182a92eb716d2b6ae9b0ee786932f9c1c687e16698a869604b4786d) — `get_pending_admin` answers, `get_admin` does not move |
+| The current admin cannot accept on the nominee's behalf | Simulation required authorisation from `GCK64ERP…QBX5`, the nominated address, and refused |
+| A wrong nomination is corrected by proposing again | [`ad6f3a94…`](https://stellar.expert/explorer/testnet/tx/ad6f3a94620018dda9d5dda7d997f327b42d644ce74c96c0d3dceb31c2bea72e) — pending replaced |
+| **The handover completes, authorised by the incoming key itself** | [`070ea820…`](https://stellar.expert/explorer/testnet/tx/070ea8208eeca1b8155d34adc75bb0fb39c9f775974e950888e2ae7d21e2fad8) — `AdminChanged`, and pending cleared |
+| The retired key can no longer govern anything | `set_event_wasm_hash` from it required authorisation from the new admin, and refused |
+| The new key governs everything | [`d41c85d9…`](https://stellar.expert/explorer/testnet/tx/d41c85d961d8089b6a44b9cc6262df3053ee393fbb41506734506bd58b5dd89a) |
+| **And it hands back the same way** | [`c4a55998…`](https://stellar.expert/explorer/testnet/tx/c4a55998e7c20ac67a20b970d6c216603ff70548822aa9e16d40ec2c149ea4c5) then [`79dbd10c…`](https://stellar.expert/explorer/testnet/tx/79dbd10cb6d8320262fc43030ae9f5213b90129111858250d95816786e4b3b49) — `AdminChanged`, back to `GDL3H646…ZKI5` |
+
+Two of the rows above have no transaction hash and cannot have one: Soroban
+simulates a call before submitting it, so a refusal is the simulation's answer.
+In both cases the simulation named the address whose signature was required —
+which is the thing being proven.
+
+The key nominated in the first row was generated and never funded. It stands in
+for the mistake this design exists to survive: an address nobody controls can
+never call `accept_admin`, so the handover cannot complete and the contract
+cannot be stranded.
+
+### Where the key is going: an account no single signature can move
+
+A hardware wallet is one key in one place. The admin is instead becoming a
+**2-of-3 Stellar account** — three signers of weight 1, with the low, medium
+*and* high thresholds all at 2. No single signature can call `upgrade`, can call
+`set_event_wasm_hash`, or can even change the signer list.
+
+It is also the stronger thing to publish. Account signers and thresholds are
+ordinary public ledger state, so "this account requires two signatures" is
+something a reviewer opens and reads for themselves — there is nothing to take
+on trust about where a key is kept.
+
+**Proven on Testnet before being relied on.** Authorisation for these contracts
+rides on the transaction's own signature set: every admin function calls
+`require_auth()` on the stored admin, and the admin is the transaction's source
+account, so Stellar checks the signatures against that account's medium
+threshold. That is the ordinary multisig rule with nothing Soroban-specific in
+it — but "ought to work" is not evidence, so it was run against a throwaway
+factory ([`CDLH3L62…IAC3`](https://stellar.expert/explorer/testnet/contract/CDLH3L62YUXLSQRMK7LY2QI7WWKLSG6CGFUMKQQHRVKHSBMZGRK3IAC3))
+deployed from the same factory wasm the live one runs:
+
+| | |
+| :-- | :-- |
+| The 2-of-3 account configured | [`0cf86c14…`](https://stellar.expert/explorer/testnet/tx/0cf86c14700bfd3bdb0ffbf399069a830975300c5378e6d9e9a4c8eaa8c6ed16) |
+| `initialize(admin = that account)` with **one** signature | refused, `txBadAuth` |
+| `initialize(admin = that account)` with **two** | [`f20fc178…`](https://stellar.expert/explorer/testnet/tx/f20fc178dae03fc2fe96eea6e080d13b5466c19108133254cc44f12f4a2d028a) |
+| `set_event_wasm_hash` with one signature | refused, `txBadAuth` |
+| `set_event_wasm_hash` with two | [`b1ce9e05…`](https://stellar.expert/explorer/testnet/tx/b1ce9e05d441c6d7a066e65100a0b6bf4962e0fdf6cb6be53335d8573bbf0573) |
+| The same call again, through the committed tool | [`e46cfb4b…`](https://stellar.expert/explorer/testnet/tx/e46cfb4bbe1ae0c28969b2a3b5c0cd4c7ba08f7813b92a8a4deaff07eb384b72) |
+
+`txBadAuth` is transaction result code `-6`, returned by the network before the
+transaction is included — the threshold refusing, not the contract. The refusals
+matter more than the successes here: a 2-of-3 account that accepted one signature
+would be a single key wearing three names.
+
+Those three keys were throwaways and are abandoned; the account exists only as
+the record of this proof.
+
+### Why the admin calls now go through a script
+
+`stellar contract invoke` signs with exactly one key, which is correct while the
+admin is one keypair and impossible once it is not. Admin calls therefore run
+through **[`web/scripts/admin-tx.mjs`](../web/scripts/admin-tx.mjs)** (`npm run
+admin`), which splits the work the way multi-party signing actually needs:
+
+```bash
+# One machine prepares. It reads the admin off the contract rather than being
+# told it, because the source account has to *be* the admin for the signature
+# check to mean anything.
+npm run admin -- build <contract> set_event_wasm_hash <hash>   # prints base64
+
+# Each holder signs what they were handed, wherever they are. The secret is
+# prompted for with no echo, so it reaches neither a file nor the shell history.
+npm run admin -- sign <base64>                                 # prints base64
+
+# Whoever ends up with a complete envelope submits it.
+npm run admin -- send <base64>
+```
+
+It accepts only the six functions the admin ever calls — `propose_admin`,
+`accept_admin`, `set_event_wasm_hash`, `set_reputation`, `set_factory`,
+`upgrade` — and infers argument types from their shape rather than guessing: 56
+characters beginning `G` or `C` is an address, 64 hex characters is a 32-byte
+hash, and anything else is refused. A mistyped admin argument is the one class of
+mistake that is expensive here.
+
 ## Deliverable 1 evidence — the app itself moves money
 
 SOW §6.1 asks Deliverable 1 for the live link, the repo with CI passing, and two
