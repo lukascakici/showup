@@ -1,29 +1,38 @@
 import {
   Client as FactoryClient,
-  networks as factoryNetworks,
   type Admission,
   type ForfeitPolicy,
 } from "factory-client";
 import { Client as EventClient } from "event-client";
-import {
-  Client as ReputationClient,
-  networks as reputationNetworks,
-  type Score,
-} from "reputation-client";
-import { NETWORK_PASSPHRASE, errMessage, type SignFn } from "./stellar";
+import { Client as ReputationClient, type Score } from "reputation-client";
+import { errMessage, type SignFn } from "./stellar";
+import { defaultNetwork, type Network, type NetworkContracts } from "./networks";
 import { readWalletError } from "./wallet-errors";
 
-export const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+/**
+ * The default network's addresses, for callers not yet given a network.
+ *
+ * The contract addresses come out of the generated bindings rather than being
+ * typed anywhere — see `networks.ts` — so a redeploy is a regeneration and never
+ * an edit somebody can forget. `contracts.test.ts` pins them against
+ * docs/deployments.md, because a binding regenerated against a stale contract
+ * looks exactly like working code.
+ */
+const fallback = defaultNetwork();
+const fallbackContracts = fallback.contracts!; // `defaultNetwork` only returns live networks
 
-// Both addresses come out of the generated bindings rather than being typed
-// here, so a redeploy is a regeneration and never an edit somebody can forget.
-// `contracts.test.ts` pins them against docs/deployments.md, because a binding
-// regenerated against a stale contract looks exactly like working code.
-export const FACTORY_ID = factoryNetworks.testnet.contractId;
-export const REPUTATION_ID = reputationNetworks.testnet.contractId;
+export const SOROBAN_RPC_URL = fallback.sorobanRpcUrl;
+export const FACTORY_ID = fallbackContracts.factoryId;
+export const REPUTATION_ID = fallbackContracts.reputationId;
 
-/** The Stellar Asset Contract for native XLM on Testnet. */
-export const NATIVE_SAC = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+/**
+ * The Stellar Asset Contract for native XLM.
+ *
+ * Derived from the network passphrase rather than written down: this address is
+ * a hash of the asset and the network, so Mainnet's is a different value and
+ * transcribing either is a silent way to point a deposit at the wrong contract.
+ */
+export const NATIVE_SAC = fallback.nativeSac;
 
 export const STROOPS_PER_XLM = 10_000_000n;
 
@@ -35,20 +44,38 @@ export type { Admission, ForfeitPolicy };
 type ClientOpts = {
   publicKey?: string;
   signTransaction?: SignFn;
+  /**
+   * Which network to talk to. Omitted means the default one, which is right for
+   * a caller that has no event in hand and wrong for one that does — an event
+   * belongs to exactly one network, and reading it on the other finds nothing.
+   */
+  network?: Network;
 };
 
 function baseOptions(opts: ClientOpts) {
+  const on = opts.network ?? fallback;
   return {
-    networkPassphrase: NETWORK_PASSPHRASE,
-    rpcUrl: SOROBAN_RPC_URL,
+    networkPassphrase: on.passphrase,
+    rpcUrl: on.sorobanRpcUrl,
     allowHttp: false,
     publicKey: opts.publicKey,
     signTransaction: opts.signTransaction,
   };
 }
 
+/** The addresses for a network, refusing one that has none deployed. */
+function contractsOn(opts: ClientOpts): NetworkContracts {
+  const on = opts.network ?? fallback;
+  if (!on.contracts) {
+    throw new Error(
+      `Showup is not deployed on ${on.label}, so there is nothing to read there.`,
+    );
+  }
+  return on.contracts;
+}
+
 export function factory(opts: ClientOpts = {}) {
-  return new FactoryClient({ ...baseOptions(opts), contractId: FACTORY_ID });
+  return new FactoryClient({ ...baseOptions(opts), contractId: contractsOn(opts).factoryId });
 }
 
 export function event(contractId: string, opts: ClientOpts = {}) {
@@ -63,7 +90,10 @@ export function event(contractId: string, opts: ClientOpts = {}) {
  * of someone actually checking in or actually failing to.
  */
 export function reputation(opts: ClientOpts = {}) {
-  return new ReputationClient({ ...baseOptions(opts), contractId: REPUTATION_ID });
+  return new ReputationClient({
+    ...baseOptions(opts),
+    contractId: contractsOn(opts).reputationId,
+  });
 }
 
 export type { Score };

@@ -1,15 +1,31 @@
 import { Horizon, Networks } from "@stellar/stellar-sdk";
+import {
+  defaultNetwork,
+  EXPLORER_ACCOUNT as explorerAccount,
+  EXPLORER_CONTRACT as explorerContract,
+  EXPLORER_TX as explorerTx,
+} from "./networks";
 
-export const NETWORK = "TESTNET" as const;
-export const NETWORK_PASSPHRASE = Networks.TESTNET;
-export const HORIZON_URL = "https://horizon-testnet.stellar.org";
-export const FRIENDBOT_URL = "https://friendbot.stellar.org";
-export const EXPLORER_TX = (hash: string) =>
-  `https://stellar.expert/explorer/testnet/tx/${hash}`;
-export const EXPLORER_ACCOUNT = (id: string) =>
-  `https://stellar.expert/explorer/testnet/account/${id}`;
-export const EXPLORER_CONTRACT = (id: string) =>
-  `https://stellar.expert/explorer/testnet/contract/${id}`;
+/**
+ * The default network's values, for the callers that have not been given one.
+ *
+ * These used to be the only network there was. They are now a view onto
+ * `networks.ts`, which is the single place anything network-shaped is defined —
+ * so these exports keep working while callers are moved over one at a time, and
+ * none of them can drift away from the registry in the meantime.
+ *
+ * A caller that handles an event, a wallet or a transaction should take its
+ * network as an argument instead: once both networks are live, "the default
+ * network" is the wrong question to ask about something that belongs to one of
+ * them.
+ */
+const fallback = defaultNetwork();
+
+export const NETWORK_PASSPHRASE = fallback.passphrase;
+export const HORIZON_URL = fallback.horizonUrl;
+export const EXPLORER_TX = (hash: string) => explorerTx(fallback, hash);
+export const EXPLORER_ACCOUNT = (id: string) => explorerAccount(fallback, id);
+export const EXPLORER_CONTRACT = (id: string) => explorerContract(fallback, id);
 
 export const horizon = new Horizon.Server(HORIZON_URL);
 
@@ -52,12 +68,21 @@ export async function fetchAccountState(address: string): Promise<AccountState> 
 export type FaucetResult = "funded" | "already_funded";
 
 /**
- * Fund an account on Testnet via Friendbot.
- * Returns "funded" when it created/funded the account, or "already_funded" when
- * the account already exists (Friendbot only funds a new account once).
+ * Fund an account via Friendbot on a network that has one.
+ *
+ * Only Testnet does. The guard is not defensive housekeeping: a faucet button
+ * that appeared to work on Mainnet, or failed there with a network error, would
+ * both be worse than the button not being there — so the absence of a faucet is
+ * a fact callers have to read off the network rather than assume away.
  */
-export async function fundWithFriendbot(address: string): Promise<FaucetResult> {
-  const res = await fetch(`${FRIENDBOT_URL}/?addr=${encodeURIComponent(address)}`);
+export async function fundWithFriendbot(
+  address: string,
+  on: { friendbotUrl: string | null; label: string } = fallback,
+): Promise<FaucetResult> {
+  if (!on.friendbotUrl) {
+    throw new Error(`${on.label} has no faucet. Accounts there are funded with real XLM.`);
+  }
+  const res = await fetch(`${on.friendbotUrl}/?addr=${encodeURIComponent(address)}`);
   if (res.ok) return "funded";
   const body = await res.text();
   if (
