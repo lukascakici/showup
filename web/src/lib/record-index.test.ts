@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { network, type Network } from "./networks";
 import {
   RECORD_TTL_MS,
   isStale,
@@ -18,6 +19,7 @@ import {
  */
 
 const ADDRESS = "GBQRAWAAWGSS2G5G4BWAN3XJBGGEXYDJM66S7Z6TPULGLEDC7RE2O4PW";
+const TESTNET = network("testnet");
 
 const mocks = vi.hoisted(() => ({
   mirrored: null as unknown,
@@ -39,7 +41,10 @@ vi.mock("firebase/firestore", () => ({
 
 vi.mock("./record", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./record")>()),
-  loadRecord: (address: string) => mocks.chain(address),
+  // Both arguments forwarded, so the assertions below see which ledger was
+  // asked as well as which wallet. A mock that drops an argument is a mock that
+  // cannot notice a read going to the wrong network.
+  loadRecord: (on: Network, address: string) => mocks.chain(on, address),
 }));
 
 const doc = (over: Partial<IndexedRecord> = {}): IndexedRecord => ({
@@ -89,7 +94,7 @@ describe("how old a mirrored record is allowed to be", () => {
 describe("reading a record for display", () => {
   it("does not touch the chain when the mirror is current", async () => {
     mocks.mirrored = doc();
-    const record = await loadRecordForDisplay(ADDRESS);
+    const record = await loadRecordForDisplay(TESTNET, ADDRESS);
 
     expect(record.shows).toBe(3);
     // The whole point of the mirror: an open page costs a Firestore read, not an
@@ -99,7 +104,7 @@ describe("reading a record for display", () => {
 
   it("serves a stale snapshot immediately and refreshes behind it", async () => {
     mocks.mirrored = doc({ shows: 2, syncedAt: Date.now() - 10 * RECORD_TTL_MS });
-    const record = await loadRecordForDisplay(ADDRESS);
+    const record = await loadRecordForDisplay(TESTNET, ADDRESS);
 
     // Answered from the copy rather than waiting on RPC — and the page that
     // renders this says how old it is.
@@ -122,9 +127,9 @@ describe("reading a record for display", () => {
       eventsOrganised: 2,
     });
 
-    const record = await loadRecordForDisplay(ADDRESS);
+    const record = await loadRecordForDisplay(TESTNET, ADDRESS);
     expect(record.shows).toBe(7);
-    expect(mocks.chain).toHaveBeenCalledWith(ADDRESS);
+    expect(mocks.chain).toHaveBeenCalledWith(TESTNET, ADDRESS);
   });
 
   it("lets a failed chain read throw rather than inventing an empty record", async () => {
@@ -133,7 +138,7 @@ describe("reading a record for display", () => {
 
     // "We couldn't ask" must not become "this person has never shown up". The
     // caller renders a loading state for `null`, which is the honest answer.
-    await expect(loadRecordForDisplay(ADDRESS)).rejects.toThrow(/rpc down/);
+    await expect(loadRecordForDisplay(TESTNET, ADDRESS)).rejects.toThrow(/rpc down/);
   });
 });
 

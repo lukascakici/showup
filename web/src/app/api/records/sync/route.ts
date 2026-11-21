@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { adminFirestore } from "@/lib/firebase-admin";
 import { server } from "@/lib/chain";
 import { isAccountAddress, loadRecord } from "@/lib/record";
-import { RECORDS_COLLECTION, type IndexedRecord } from "@/lib/record-index";
+import { RECORDS_COLLECTION, recordDocId, type IndexedRecord } from "@/lib/record-index";
+import { requestNetwork } from "@/lib/network.server";
 
 /**
  * Read wallets' show-up records off the chain and mirror them into Firestore.
@@ -65,13 +66,23 @@ export async function POST(request: Request) {
 
   // One ledger number for the whole batch, read alongside rather than after: it
   // is what a reviewer uses to check a mirrored number against the chain, and
+  // Which ledger to read is not a parameter and must not become one: this route
+  // is reached on the same origin the page was served from, so the host already
+  // says which network is being asked about. A caller cannot name a network, and
+  // therefore cannot mirror one network's records into the other's documents.
+  const network = await requestNetwork();
+  const reputationId = network.contracts?.reputationId;
+  if (!reputationId) {
+    return NextResponse.json({ error: `no reputation ledger on ${network.label}` }, { status: 503 });
+  }
+
   // "roughly now" is the honest precision for it.
   const [ledger, results] = await Promise.all([
     server
       .getLatestLedger()
       .then((l: { sequence: number }) => l.sequence)
       .catch(() => 0),
-    Promise.allSettled(addresses.map((address) => loadRecord(address))),
+    Promise.allSettled(addresses.map((address) => loadRecord(network, address))),
   ]);
 
   const syncedAt = Date.now();
@@ -88,6 +99,7 @@ export async function POST(request: Request) {
     }
     const record: IndexedRecord = {
       address: addresses[i],
+      reputation: reputationId,
       ...result.value,
       syncedAt,
       syncedLedger: ledger,
@@ -95,7 +107,11 @@ export async function POST(request: Request) {
     // Merged rather than replaced, matching the event index: it costs nothing and
     // it means a field added to this document by something else is not silently
     // erased on the next refresh.
-    batch.set(db.collection(RECORDS_COLLECTION).doc(addresses[i]), record, { merge: true });
+    batch.set(
+      db.collection(RECORDS_COLLECTION).doc(recordDocId(reputationId, addresses[i])),
+      record,
+      { merge: true },
+    );
     synced += 1;
   });
 

@@ -10,7 +10,8 @@ import {
   LogOut,
 } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { EXPLORER_ACCOUNT } from "@/lib/stellar";
+import { EXPLORER_ACCOUNT } from "@/lib/networks";
+import { useNetwork } from "@/lib/network-context";
 import { formatXlm, shortAddr } from "@/lib/format";
 import { Button, ButtonLink, Skeleton, SectionLabel } from "./ui";
 import { FaucetButton } from "./Faucet";
@@ -24,6 +25,7 @@ export function WalletMenu() {
     refreshBalance,
     disconnect,
   } = useWallet();
+  const network = useNetwork();
 
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -159,7 +161,7 @@ export function WalletMenu() {
               )}
             </button>
             <a
-              href={EXPLORER_ACCOUNT(address)}
+              href={EXPLORER_ACCOUNT(network, address)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex min-h-11 shrink-0 items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"

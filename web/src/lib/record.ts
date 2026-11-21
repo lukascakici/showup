@@ -1,3 +1,4 @@
+import type { Network } from "./networks";
 import { reputation } from "./contracts";
 
 /**
@@ -93,8 +94,8 @@ export function canVouch(r: Record): boolean {
  * failure would turn "we couldn't ask" into "this person has never shown up",
  * which is the one wrong answer that does damage.
  */
-export async function loadRecord(member: string): Promise<Record> {
-  const tx = await reputation().get_record({ member });
+export async function loadRecord(network: Network, member: string): Promise<Record> {
+  const tx = await reputation({ network }).get_record({ member });
   const r = tx.result;
   return {
     shows: Number(r.shows),

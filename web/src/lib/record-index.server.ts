@@ -2,7 +2,7 @@ import "server-only";
 
 import { adminFirestore } from "./firebase-admin";
 import { EMPTY_RECORD } from "./record";
-import { RECORDS_COLLECTION, type IndexedRecord } from "./record-index";
+import { RECORDS_COLLECTION, recordDocId, type IndexedRecord } from "./record-index";
 
 /**
  * The same read as `readIndexedRecord`, through the Admin SDK.
@@ -22,11 +22,17 @@ import { RECORDS_COLLECTION, type IndexedRecord } from "./record-index";
  * `server-only` makes a stray client import a build error rather than a leaked
  * service-account key.
  */
-export async function readIndexedRecordAdmin(address: string): Promise<IndexedRecord | null> {
+export async function readIndexedRecordAdmin(
+  reputationId: string,
+  address: string,
+): Promise<IndexedRecord | null> {
   const db = adminFirestore();
   if (!db) return null;
 
-  const snapshot = await db.collection(RECORDS_COLLECTION).doc(address).get();
+  const snapshot = await db
+    .collection(RECORDS_COLLECTION)
+    .doc(recordDocId(reputationId, address))
+    .get();
   if (!snapshot.exists) return null;
   // Spread over the defaults for the same reason as the client reader: a document
   // written before a counter existed is still a good snapshot of the ones that

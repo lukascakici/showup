@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { EXPLORER_ACCOUNT, EXPLORER_CONTRACT } from "@/lib/stellar";
-import { REPUTATION_ID } from "@/lib/contracts";
+import { EXPLORER_ACCOUNT, EXPLORER_CONTRACT, type Network } from "@/lib/networks";
+import { requestNetwork } from "@/lib/network.server";
 import { shortAddr } from "@/lib/format";
 import { SITE_NAME } from "@/lib/og";
 import { isAccountAddress } from "@/lib/record";
@@ -46,6 +46,7 @@ export default async function RecordPage({
   params: Promise<{ address: string }>;
 }) {
   const { address } = await params;
+  const network = await requestNetwork();
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14">
@@ -58,15 +59,15 @@ export default async function RecordPage({
       </Link>
 
       {!isAccountAddress(address) ? (
-        <NotAnAddress value={address} />
+        <NotAnAddress value={address} network={network} />
       ) : (
-        <RecordBody address={address} />
+        <RecordBody address={address} network={network} />
       )}
 
       <p className="mt-10 border-t border-border pt-5 text-xs leading-relaxed text-muted-2">
         Every number on this page is read live from the{" "}
         <a
-          href={EXPLORER_CONTRACT(REPUTATION_ID)}
+          href={EXPLORER_CONTRACT(network, network.contracts?.reputationId ?? "")}
           target="_blank"
           rel="noreferrer"
           className="text-foreground-2 underline decoration-border-hover underline-offset-2"
@@ -87,7 +88,7 @@ export default async function RecordPage({
  * Not a 404. A 404 says "no such page", and the page exists — it is the address
  * that is wrong, which is a thing the reader can fix, so it says which part.
  */
-function NotAnAddress({ value }: { value: string }) {
+function NotAnAddress({ value, network }: { value: string; network: Network }) {
   return (
     <div className="mt-8">
       <h1 className="font-display text-3xl tracking-tight text-foreground">
@@ -104,7 +105,7 @@ function NotAnAddress({ value }: { value: string }) {
       </p>
       {value.startsWith("C") && (
         <a
-          href={EXPLORER_ACCOUNT(value)}
+          href={EXPLORER_ACCOUNT(network, value)}
           target="_blank"
           rel="noreferrer"
           className="mt-5 inline-block text-sm text-accent-lift underline decoration-accent/40 underline-offset-2"

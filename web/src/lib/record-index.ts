@@ -1,5 +1,6 @@
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "./firebase";
+import type { Network } from "./networks";
 import { EMPTY_RECORD, type Record } from "./record";
 
 /**
@@ -20,8 +21,18 @@ import { EMPTY_RECORD, type Record } from "./record";
  * is being *shown* comes from here, with the time it was read attached.
  */
 export type IndexedRecord = Record & {
-  /** The wallet, and the document id. */
+  /** The wallet. No longer the document id on its own — see `recordDocId`. */
   address: string;
+  /**
+   * Which ledger these counters were read from.
+   *
+   * Recorded for the same reason the event index records its factory: a
+   * redeployed ledger becomes visible instead of confusing. It is also what
+   * keeps two networks apart — see `recordDocId`. Optional because documents
+   * written before Mainnet existed have no such field, and they are still good
+   * snapshots of the only ledger there was.
+   */
+  reputation?: string;
   /** ms since epoch, so a page can say how old this is and mean it. */
   syncedAt: number;
   /** Which ledger the read saw, for a reviewer checking it against the chain. */
@@ -29,6 +40,25 @@ export type IndexedRecord = Record & {
 };
 
 export const RECORDS_COLLECTION = "records";
+
+/**
+ * Where one wallet's mirrored record lives.
+ *
+ * **The reputation address is in the key, not just in a field.** A record used
+ * to be stored under the bare wallet address, which is correct for exactly as
+ * long as there is one ledger. With two networks live, the same wallet has a
+ * record on each, they would land in the same document, and whichever synced
+ * last would win — so a Mainnet profile would quietly show Testnet numbers.
+ * Quietly, on the network that holds real money, about the one number this
+ * product sells.
+ *
+ * Documents written under the old scheme are simply not found and get written
+ * again on the next sync, which costs nothing: this index is a derived cache and
+ * has never been an authority.
+ */
+export function recordDocId(reputationId: string, address: string): string {
+  return `${reputationId}_${address}`;
+}
 
 /** How long a mirrored record is served before the chain is asked again. */
 export const RECORD_TTL_MS = 60_000;
@@ -56,11 +86,14 @@ export function toRecord(doc: IndexedRecord): Record {
  * here, and only the chain can tell them apart — so a caller that needs to say
  * "never seen" has to ask the contract, not this.
  */
-export async function readIndexedRecord(address: string): Promise<IndexedRecord | null> {
+export async function readIndexedRecord(
+  reputationId: string,
+  address: string,
+): Promise<IndexedRecord | null> {
   const db = firestore();
   if (!db) return null;
 
-  const snapshot = await getDoc(doc(db, RECORDS_COLLECTION, address));
+  const snapshot = await getDoc(doc(db, RECORDS_COLLECTION, recordDocId(reputationId, address)));
   if (!snapshot.exists()) return null;
   // Spread over the defaults: a document written before a counter existed is
   // still a good snapshot of the counters that did, and reading `undefined` into
@@ -103,8 +136,13 @@ export async function requestRecordSync(address: string | string[]): Promise<voi
  * nobody has ever synced would otherwise read as a wallet with no record, and
  * those are opposite claims.
  */
-export async function loadRecordForDisplay(address: string): Promise<Record> {
-  const mirrored = await readIndexedRecord(address).catch(() => null);
+export async function loadRecordForDisplay(
+  network: Network,
+  address: string,
+): Promise<Record> {
+  const reputationId = network.contracts?.reputationId;
+  if (!reputationId) throw new Error(`No reputation ledger on ${network.label}.`);
+  const mirrored = await readIndexedRecord(reputationId, address).catch(() => null);
 
   if (mirrored && !isStale(mirrored)) return toRecord(mirrored);
 
@@ -117,7 +155,7 @@ export async function loadRecordForDisplay(address: string): Promise<Record> {
   }
 
   const { loadRecord } = await import("./record");
-  const fresh = await loadRecord(address);
+  const fresh = await loadRecord(network, address);
   void requestRecordSync(address);
   return fresh;
 }

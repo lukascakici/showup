@@ -29,7 +29,8 @@ import {
   fromStroops,
   secretToBuffer,
 } from "@/lib/contracts";
-import { EXPLORER_CONTRACT, EXPLORER_TX } from "@/lib/stellar";
+import { EXPLORER_CONTRACT, EXPLORER_TX } from "@/lib/networks";
+import { useNetwork } from "@/lib/network-context";
 import { useSigner } from "@/lib/signer";
 import { useWallet } from "@/lib/wallet";
 import { recallSecret, rememberSecret } from "@/lib/secrets";
@@ -760,14 +761,15 @@ function WhenTile({ startsAt }: { startsAt: number }) {
 
 /** The chain is the venue. It is the only address this event actually has. */
 function WhereTile({ id }: { id: string }) {
+  const network = useNetwork();
   return (
     <Tile icon={<Globe className="size-5" />}>
-      <div className="text-base font-medium">Stellar Testnet</div>
+      <div className="text-base font-medium">Stellar {network.label}</div>
       {/* This is the link a reviewer taps to open the event on Stellar Expert,
           and it was 20px tall. Nothing else sits in this row, so the hit area
           can grow without landing on top of anything. */}
       <a
-        href={EXPLORER_CONTRACT(id)}
+        href={EXPLORER_CONTRACT(network, id)}
         target="_blank"
         rel="noreferrer"
         title={id}
@@ -1952,9 +1954,10 @@ function OrganizerPanel({
 }
 
 export function TxLink({ hash }: { hash: string }) {
+  const network = useNetwork();
   return (
     <a
-      href={EXPLORER_TX(hash)}
+      href={EXPLORER_TX(network, hash)}
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-1 text-accent-soft hover:underline"

@@ -3,7 +3,8 @@
 import { CalendarPlus, CheckCircle2, DoorOpen, ExternalLink, Flag, Hand, HeartHandshake, Lock, UserCheck, Users } from "lucide-react";
 import { activityId, type Activity } from "@/lib/events";
 import { fromStroops } from "@/lib/contracts";
-import { EXPLORER_TX } from "@/lib/stellar";
+import { EXPLORER_TX } from "@/lib/networks";
+import { useNetwork } from "@/lib/network-context";
 import { formatMoment, shortAddr, shortHash } from "@/lib/format";
 import { Button, SectionLabel, Skeleton } from "./ui";
 
@@ -31,6 +32,7 @@ export function ActivityFeed({
   truncated?: boolean;
   onRetry?: () => void;
 }) {
+  const network = useNetwork();
   const empty = activity.length === 0;
 
   return (
@@ -74,7 +76,7 @@ export function ActivityFeed({
                     copying; the link carries them for opening. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <a
-                    href={EXPLORER_TX(a.txHash)}
+                    href={EXPLORER_TX(network, a.txHash)}
                     target="_blank"
                     rel="noreferrer"
                     title={a.txHash}

@@ -1,5 +1,5 @@
 import { CalendarCheck, HeartHandshake, UserX } from "lucide-react";
-import { EXPLORER_ACCOUNT } from "@/lib/stellar";
+import { EXPLORER_ACCOUNT, type Network } from "@/lib/networks";
 import { formatMoment, shortAddr } from "@/lib/format";
 import { Card, Chip, Panel, SectionLabel, Stat } from "@/components/ui";
 import { CopyLink } from "@/components/CopyLink";
@@ -29,10 +29,22 @@ import { readIndexedRecordAdmin } from "@/lib/record-index.server";
  * says so. `readAt` is rendered underneath, always, and the refresh lands within a
  * second or two.
  */
-export async function RecordBody({ address }: { address: string }) {
+export async function RecordBody({
+  address,
+  network,
+}: {
+  address: string;
+  network: Network;
+}) {
+  // Passed in rather than read here: the page above already resolved it from the
+  // host, and two server components reading the same header is two chances for
+  // them to disagree about which network's record is on screen.
+  const reputationId = network.contracts?.reputationId;
+  if (!reputationId) return <Unreadable address={address} />;
+
   // Admin SDK, not the client one: see `record-index.server.ts`. The client
   // Firestore SDK fails silently in this runtime and returns "no document".
-  const mirrored = await readIndexedRecordAdmin(address).catch(() => null);
+  const mirrored = await readIndexedRecordAdmin(reputationId, address).catch(() => null);
 
   let record: Record;
   let readAt: number | null = null;
@@ -44,7 +56,7 @@ export async function RecordBody({ address }: { address: string }) {
     // thing that can tell "never synced" from "no record". This is also the only
     // path that can fail, which is why it is the only one with a fallback.
     try {
-      record = await loadRecord(address);
+      record = await loadRecord(network, address);
     } catch {
       return <Unreadable address={address} />;
     }
@@ -79,7 +91,7 @@ export async function RecordBody({ address }: { address: string }) {
           </Chip>
         )}
         <a
-          href={EXPLORER_ACCOUNT(address)}
+          href={EXPLORER_ACCOUNT(network, address)}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-muted-2 underline decoration-border-hover underline-offset-2 transition-colors hover:text-foreground-2"

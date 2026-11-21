@@ -20,6 +20,7 @@ import {
   type IndexedEvent,
 } from "./event-index";
 import { hiddenIds } from "./listing";
+import { useNetwork } from "./network-context";
 import { loadRecordForDisplay } from "./record-index";
 import { usePolled } from "./polled";
 import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
@@ -219,9 +220,10 @@ export function useRecord(
   enabled: boolean,
   intervalMs = 15_000,
 ) {
+  const network = useNetwork();
   const load = useCallback(
-    () => (address && enabled ? loadRecordForDisplay(address) : Promise.resolve(null)),
-    [address, enabled],
+    () => (address && enabled ? loadRecordForDisplay(network, address) : Promise.resolve(null)),
+    [address, enabled, network],
   );
   return usePolled(load, intervalMs);
 }
