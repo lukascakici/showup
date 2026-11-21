@@ -84,17 +84,18 @@ export default function TrustPage() {
           What the admin key can change
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
-          There is an admin key. It governs the{" "}
+          There is an admin. It governs the{" "}
           <Link_ href={EXPLORER_CONTRACT(FACTORY_ID)}>event factory</Link_> and
           the{" "}
           <Link_ href={EXPLORER_CONTRACT(REPUTATION_ID)}>reputation ledger</Link_>
           . Its powers are about <em>future</em> events — events nobody has
-          committed money to yet.
+          committed money to yet. It is not one key: every one of the powers
+          below needs two signatures out of three.
         </p>
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-border-strong">
           <div className="border-b border-border-strong bg-surface-3 px-5 py-3 text-sm text-foreground-2">
-            The admin key
+            The admin, acting with two of its three signatures
           </div>
           <div className="divide-y divide-border bg-surface-2">
             <div className="px-5 py-4">
@@ -109,7 +110,7 @@ export default function TrustPage() {
                   Replace the factory&apos;s or the ledger&apos;s own code, keeping
                   their addresses and their history.
                 </li>
-                <li>Hand the role to another key.</li>
+                <li>Hand the role to another address.</li>
               </ul>
             </div>
             <div className="px-5 py-4">
@@ -151,25 +152,42 @@ export default function TrustPage() {
 
       <section className="mt-12">
         <h2 className="font-display text-xl tracking-tight text-foreground">
-          If the admin key were stolen
+          If one admin key were stolen
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
-          Whoever held it could make future events run code of their choosing,
-          and could point new events at a reputation ledger they control. That is
-          serious: somebody creating an event after such a theft could be
-          deploying something that is not Showup.
+          Nothing would happen. The admin is not a key — it is an account that
+          requires <strong className="text-foreground">two signatures out of
+          three</strong>, and the three keys are not kept together. A single
+          stolen key cannot change what future events run, cannot move the
+          reputation ledger, cannot upgrade anything, and cannot even add itself
+          weight: the threshold that governs changing the signer list is two as
+          well.
         </p>
         <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
-          What they could not do is reach a single deposit already locked, or
-          alter a single record already written. Every event standing at the
-          moment of the theft would go on settling under the rules it was born
-          with.
+          You do not have to take our word for any of that. An account&apos;s
+          signers and thresholds are public, so{" "}
+          <a
+            className="underline decoration-foreground-3 underline-offset-4 hover:decoration-foreground"
+            href="https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF"
+            target="_blank"
+            rel="noreferrer"
+          >
+            the admin account
+          </a>{" "}
+          states its own rules on the chain.
         </p>
         <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
-          The key is held on a hardware wallet, and handing the role over takes
-          two transactions signed by two different keys — a proposal, and an
-          acceptance that only the incoming key can send. A wrong address
-          therefore cannot complete a handover.
+          If two were stolen, whoever held them could make future events run code
+          of their choosing. What they still could not do is reach a single
+          deposit already locked, or alter a single record already written. Every
+          event standing at that moment would go on settling under the rules it
+          was born with.
+        </p>
+        <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
+          Handing the role on takes two transactions signed by two different
+          parties — a proposal, and an acceptance only the incoming address can
+          send. A wrong address therefore cannot complete a handover, and cannot
+          strand the contracts by being nominated.
         </p>
       </section>
 
