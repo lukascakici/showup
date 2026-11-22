@@ -5,17 +5,23 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
-import { Button, Skeleton } from "./ui";
+import { Button, Chip, Skeleton } from "./ui";
+import { useNetwork } from "@/lib/network-context";
 import { WalletMenu } from "./WalletMenu";
 import { Logo } from "./Logo";
 
 export function TopBar() {
   const { status, openPicker } = useWallet();
+  const network = useNetwork();
   const pathname = usePathname();
   const onEvents = pathname === "/" || pathname.startsWith("/e/");
 
+  // Flat and opaque. The header used to be translucent with a 16px backdrop
+  // blur — the one place a "liquid glass" treatment was allowed — and that
+  // exception was withdrawn. A solid bar over scrolling content also means text
+  // never passes under text, which is the practical half of the rule.
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-[rgba(10,10,12,0.82)] backdrop-blur-[16px]">
+    <header className="sticky top-0 z-50 border-b border-border bg-surface-2">
       {/* `min-w-0` on the left of the row and `shrink-0` on the wallet: the chip
           is a fixed-width mono address, so without this the lockup and the
           Create tab push it off the edge below ~340px instead of giving up
@@ -30,6 +36,13 @@ export function TopBar() {
         >
           <Logo />
         </Link>
+
+        {/* Not a status dot and not a colour: green and red belong to
+            attendance in this palette, so the word carries this on its own.
+            `shrink-0` because the bar gives up room from the left at 280px. */}
+        <Chip pill className="shrink-0">
+          {network.label}
+        </Chip>
 
         <nav className="hidden items-center gap-5 text-[14.5px] text-muted sm:flex">
           <NavItem href="/" label="Events" active={onEvents} />

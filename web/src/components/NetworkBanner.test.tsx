@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { Networks } from "@stellar/stellar-sdk";
 import { NetworkBanner } from "./NetworkBanner";
@@ -20,9 +20,21 @@ const wallet = vi.hoisted(() => ({
 
 vi.mock("@/lib/wallet", () => ({ useWallet: () => wallet.value }));
 
-const connectedTo = (passphrase: string, walletName = "Freighter") => {
+/**
+ * A wallet reporting `passphrase`, against an app serving `serving`.
+ *
+ * `serving` is a parameter rather than a constant because the mismatch this
+ * banner exists for is now symmetric: a Mainnet wallet on the Testnet site, and
+ * a Testnet wallet on the Mainnet one. The first version of this helper computed
+ * `wrongNetwork` against `Networks.TESTNET`, which quietly made every test a
+ * Testnet test and left the other direction unreachable.
+ */
+const connectedTo = (
+  passphrase: string,
+  { serving = Networks.TESTNET, walletName = "Freighter" } = {},
+) => {
   wallet.value = {
-    wrongNetwork: passphrase !== Networks.TESTNET,
+    wrongNetwork: passphrase !== serving,
     network: { passphrase, known: true },
     walletName,
     refreshNetwork: vi.fn(),
@@ -58,6 +70,19 @@ describe("NetworkBanner", () => {
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Freighter is on Mainnet.");
     expect(alert).toHaveTextContent(/switch networks in Freighter/i);
+    // Both halves, because naming only the wallet's network leaves the reader
+    // to guess which one it should have been.
+    expect(alert).toHaveTextContent("Showup on Stellar Testnet");
+  });
+
+  // The same mismatch the other way round, which is the case that exists only
+  // once Mainnet is live: a wallet left on Testnet, on the real-money domain.
+  it("names the served network rather than assuming Testnet", () => {
+    connectedTo(Networks.TESTNET, { serving: Networks.PUBLIC });
+    render(<NetworkBanner />, { network: "mainnet" });
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Freighter is on Testnet.");
+    expect(alert).toHaveTextContent("Showup on Stellar Mainnet");
   });
 
   // The passphrase is a sentence — "Public Global Stellar Network ; September
@@ -75,7 +100,7 @@ describe("NetworkBanner", () => {
   });
 
   it("falls back to 'your wallet' when the wallet has no name", () => {
-    connectedTo(Networks.PUBLIC, null as unknown as string);
+    connectedTo(Networks.PUBLIC, { walletName: null as unknown as string });
     render(<NetworkBanner />);
     expect(screen.getByRole("alert")).toHaveTextContent("Your wallet is on Mainnet.");
   });

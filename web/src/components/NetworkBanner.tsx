@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { networkName } from "@/lib/stellar";
+import { useNetwork } from "@/lib/network-context";
 import { Button } from "./ui";
 
 /**
@@ -20,6 +21,10 @@ import { Button } from "./ui";
  */
 export function NetworkBanner() {
   const { wrongNetwork, network, walletName, refreshNetwork } = useWallet();
+  // The network the *app* is on, as against the one the wallet reports. Both
+  // are needed to say anything useful: naming only the wallet's leaves the
+  // reader to guess what it should have been.
+  const serving = useNetwork();
   const [checking, setChecking] = useState(false);
 
   if (!wrongNetwork) return null;
@@ -49,8 +54,8 @@ export function NetworkBanner() {
               {walletName ?? "Your wallet"} is on {networkName(network.passphrase)}.
             </strong>{" "}
             <span className="text-muted">
-              Showup runs on Stellar Testnet. Switch networks in {wallet} — nothing here
-              can be signed until you do.
+              This is Showup on Stellar {serving.label}. Switch networks in {wallet} —
+              nothing here can be signed until you do.
             </span>
           </p>
         </div>
