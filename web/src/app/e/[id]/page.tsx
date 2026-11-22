@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requestNetwork } from "@/lib/network.server";
 import { Suspense } from "react";
 import { loadEvent } from "@/lib/chain";
 import { eventPreview, FALLBACK_PREVIEW, OG_IMAGE_PATH, SITE_NAME } from "@/lib/og";
@@ -30,7 +31,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
 
-  const preview = await withTimeout(loadEvent(id), PREVIEW_TIMEOUT_MS)
+  const network = await requestNetwork();
+  const preview = await withTimeout(loadEvent(network, id), PREVIEW_TIMEOUT_MS)
     .then(eventPreview)
     .catch(() => FALLBACK_PREVIEW);
 

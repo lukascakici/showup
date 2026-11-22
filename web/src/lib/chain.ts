@@ -2,10 +2,10 @@ import { rpc, scValToNative } from "@stellar/stellar-sdk";
 import {
   factory,
   event as eventClient,
-  SOROBAN_RPC_URL,
   type Admission,
   type ForfeitPolicy,
 } from "./contracts";
+import type { Network } from "./networks";
 import type { Phase } from "event-client";
 
 /**
@@ -50,10 +50,27 @@ export type EventState = {
   phase: Phase["tag"];
 };
 
-export const server = new rpc.Server(SOROBAN_RPC_URL);
+/**
+ * One RPC client per network, built on first use.
+ *
+ * This used to be a single module-level client pointed at a compiled-in URL,
+ * which is the whole of what made these reads single-network. Memoised rather
+ * than rebuilt per call because `rpc.Server` holds connection state, and reads
+ * here happen on a poll.
+ */
+const servers = new Map<string, rpc.Server>();
 
-export async function listEventIds(): Promise<string[]> {
-  const tx = await factory().list_events();
+export function serverFor(network: Network): rpc.Server {
+  let existing = servers.get(network.id);
+  if (!existing) {
+    existing = new rpc.Server(network.sorobanRpcUrl);
+    servers.set(network.id, existing);
+  }
+  return existing;
+}
+
+export async function listEventIds(network: Network): Promise<string[]> {
+  const tx = await factory({ network }).list_events();
   return tx.result;
 }
 
@@ -68,8 +85,8 @@ export async function listEventIds(): Promise<string[]> {
  * of the two mistakes by a distance, so nothing claims it without asking here
  * first.
  */
-export async function isKnownEvent(id: string): Promise<boolean> {
-  return (await listEventIds()).includes(id);
+export async function isKnownEvent(network: Network, id: string): Promise<boolean> {
+  return (await listEventIds(network)).includes(id);
 }
 
 /**
@@ -89,8 +106,8 @@ async function loadTerms(client: ReturnType<typeof eventClient>) {
   }
 }
 
-export async function loadEvent(id: string): Promise<EventState> {
-  const client = eventClient(id);
+export async function loadEvent(network: Network, id: string): Promise<EventState> {
+  const client = eventClient(id, { network });
   const [config, reserved, checkedIn, phase, terms] = await Promise.all([
     client.get_config(),
     client.get_reserved(),
@@ -138,8 +155,12 @@ export async function loadEvent(id: string): Promise<EventState> {
  *
  * `null` means no record, which is what never having asked looks like.
  */
-export async function loadStanding(id: string, guest: string): Promise<string | null> {
-  const tx = await eventClient(id).get_attendance({ guest });
+export async function loadStanding(
+  network: Network,
+  id: string,
+  guest: string,
+): Promise<string | null> {
+  const tx = await eventClient(id, { network }).get_attendance({ guest });
   return tx.result?.tag ?? null;
 }
 
@@ -160,11 +181,15 @@ export async function loadStanding(id: string, guest: string): Promise<string | 
  * So: candidates from the feed, truth from the contract. Only `Applied`
  * survives, which is also exactly the set `approve` and `decline` will accept.
  */
-export async function loadApplicants(id: string, candidates: string[]): Promise<string[]> {
+export async function loadApplicants(
+  network: Network,
+  id: string,
+  candidates: string[],
+): Promise<string[]> {
   const settled = await Promise.all(
     candidates.map(async (guest) => {
       try {
-        return (await loadStanding(id, guest)) === "Applied" ? guest : null;
+        return (await loadStanding(network, id, guest)) === "Applied" ? guest : null;
       } catch {
         // One unreadable address must not empty a queue. Dropping it shows the
         // host a shorter list; failing the lot shows them none at all.
@@ -183,8 +208,12 @@ export async function loadApplicants(id: string, candidates: string[]): Promise<
  * count is the contract's own, so it is the number `rsvp` will compare against
  * the threshold rather than the number a feed happens to have seen.
  */
-export async function loadVouches(id: string, guest: string): Promise<number> {
-  const tx = await eventClient(id).get_vouches({ guest });
+export async function loadVouches(
+  network: Network,
+  id: string,
+  guest: string,
+): Promise<number> {
+  const tx = await eventClient(id, { network }).get_vouches({ guest });
   return Number(tx.result);
 }
 
@@ -289,11 +318,13 @@ export type ActivityFeedResult = { activity: Activity[]; truncated: boolean };
  * the results; only a cursor that has caught up with the head is.
  */
 async function sweep(
+  network: Network,
   contractIds: string[],
   startLedger: number,
   maxPages: number,
   deadline = Infinity,
 ): Promise<{ raw: rpc.Api.EventResponse[]; truncated: boolean; sweptTo: number }> {
+  const server = serverFor(network);
   const filters = [{ type: "contract" as const, contractIds }];
   const latest = await server.getLatestLedger();
 
@@ -426,14 +457,16 @@ function decodeActivity(raw: rpc.Api.EventResponse[], eventId: string): Activity
  * (`activity-archive.ts`), which is written from the sweep below.
  */
 export async function fetchActivity(
+  network: Network,
   contractId: string,
   lookback = 17_280, // ~24h at ~5s/ledger
   maxPages = 6,
 ): Promise<ActivityFeedResult> {
+  const server = serverFor(network);
   const [latest, health] = await Promise.all([server.getLatestLedger(), server.getHealth()]);
   const startLedger = Math.max(health.oldestLedger, latest.sequence - lookback, 1);
 
-  const { raw, truncated } = await sweep([contractId], startLedger, maxPages);
+  const { raw, truncated } = await sweep(network, [contractId], startLedger, maxPages);
   return { activity: decodeActivity(raw, contractId).reverse(), truncated };
 }
 
@@ -449,6 +482,7 @@ export async function fetchActivity(
  * worst case, which is fine on a server once and unacceptable on a poll.
  */
 export async function sweepEventActivity(
+  network: Network,
   eventId: string,
   factoryId: string,
   {
@@ -457,12 +491,13 @@ export async function sweepEventActivity(
     deadline = Infinity,
   }: { from?: number; maxPages?: number; deadline?: number } = {},
 ): Promise<{ activity: Activity[]; truncated: boolean; sweptFrom: number; sweptTo: number }> {
-  const health = await server.getHealth();
+  const health = await serverFor(network).getHealth();
   // The retained range moves while it is being read, so the floor comes from the
   // server rather than from arithmetic on the head.
   const sweptFrom = Math.max(health.oldestLedger, from ?? 0, 1);
 
   const { raw, truncated, sweptTo } = await sweep(
+    network,
     [eventId, factoryId],
     sweptFrom,
     maxPages,

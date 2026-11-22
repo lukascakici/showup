@@ -21,6 +21,7 @@ import {
 } from "./event-index";
 import { hiddenIds } from "./listing";
 import { useNetwork } from "./network-context";
+import type { Network } from "./networks";
 import { loadRecordForDisplay } from "./record-index";
 import { usePolled } from "./polled";
 import { mergeActivity, reachesCreation, readArchivedActivity } from "./activity-archive";
@@ -42,7 +43,7 @@ export {
   loadApplicants,
   loadEvent,
   loadStanding,
-  server,
+  serverFor,
   spotsLeft,
 } from "./chain";
 export type { Activity, ActivityFeedResult, EventState, Phase } from "./chain";
@@ -118,12 +119,12 @@ function syncIndexIfStale(chainIds: string[], indexed: IndexedEvent[], now: numb
   void requestSync().then(forgetIndexCache);
 }
 
-export async function loadEventList(): Promise<EventList> {
+export async function loadEventList(network: Network): Promise<EventList> {
   // One index read serves both jobs: it carries the `hidden` flags, and it is
   // the fallback for anything the chain cannot answer for. Before this it was
   // fetched only on the failure path, and twice when that path was taken.
   const [idsOrNull, indexed] = await Promise.all([
-    listEventIds().catch(() => {
+    listEventIds(network).catch(() => {
       // The factory itself is unreadable. Rare, and exactly when the index earns
       // its keep — but it is a genuine outage, so say nothing false about it.
       return null;
@@ -150,7 +151,7 @@ export async function loadEventList(): Promise<EventList> {
   syncIndexIfStale(idsOrNull, indexed, Date.now());
 
   const ids = idsOrNull.filter((id) => !hidden.has(id));
-  const settled = await Promise.allSettled(ids.map((id) => loadEvent(id)));
+  const settled = await Promise.allSettled(ids.map((id) => loadEvent(network, id)));
 
   // Slots rather than pushes, so the factory's ordering survives a partial
   // failure — the page relies on it to put the newest event first.
@@ -176,7 +177,8 @@ export async function loadEventList(): Promise<EventList> {
 }
 
 export function useEventList(intervalMs = 10_000) {
-  const load = useCallback(() => loadEventList(), []);
+  const network = useNetwork();
+  const load = useCallback(() => loadEventList(network), [network]);
   return usePolled(load, intervalMs);
 }
 
@@ -194,9 +196,10 @@ export function useStanding(
   enabled: boolean,
   intervalMs = 5_000,
 ) {
+  const network = useNetwork();
   const load = useCallback(
-    () => (address && enabled ? loadStanding(id, address) : Promise.resolve(null)),
-    [id, address, enabled],
+    () => (address && enabled ? loadStanding(network, id, address) : Promise.resolve(null)),
+    [network, id, address, enabled],
   );
   return usePolled(load, intervalMs);
 }
@@ -241,9 +244,10 @@ export function useVouches(
   enabled: boolean,
   intervalMs = 5_000,
 ) {
+  const network = useNetwork();
   const load = useCallback(
-    () => (address && enabled ? loadVouches(id, address) : Promise.resolve(null)),
-    [id, address, enabled],
+    () => (address && enabled ? loadVouches(network, id, address) : Promise.resolve(null)),
+    [network, id, address, enabled],
   );
   return usePolled(load, intervalMs);
 }
@@ -261,16 +265,18 @@ export function useApplicants(
   enabled: boolean,
   intervalMs = 10_000,
 ) {
+  const network = useNetwork();
   const key = candidates.join(",");
   const load = useCallback(
-    () => (enabled && key ? loadApplicants(id, key.split(",")) : Promise.resolve([])),
-    [id, key, enabled],
+    () => (enabled && key ? loadApplicants(network, id, key.split(",")) : Promise.resolve([])),
+    [network, id, key, enabled],
   );
   return usePolled(load, intervalMs);
 }
 
 export function useEvent(id: string, intervalMs = 5_000) {
-  const load = useCallback(() => loadEvent(id), [id]);
+  const network = useNetwork();
+  const load = useCallback(() => loadEvent(network, id), [network, id]);
   return usePolled(load, intervalMs);
 }
 
@@ -289,7 +295,8 @@ export function useEvent(id: string, intervalMs = 5_000) {
  * being asked to go and verify, long after Soroban RPC dropped the ledgers.
  */
 export function useActivity(id: string, intervalMs = 5_000) {
-  const load = useCallback(() => fetchActivity(id), [id]);
+  const network = useNetwork();
+  const load = useCallback(() => fetchActivity(network, id), [network, id]);
   const live = usePolled(load, intervalMs);
 
   // Stamped with the event it was read for, rather than cleared when `id`

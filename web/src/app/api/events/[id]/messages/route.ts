@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requestNetwork } from "@/lib/network.server";
 import { adminFirestore } from "@/lib/firebase-admin";
 import { loadEvent } from "@/lib/chain";
 import { readSession, sessionSecret } from "@/lib/wallet-proof";
@@ -68,7 +69,7 @@ async function member(request: Request, id: string): Promise<Member | NextRespon
 
   let event;
   try {
-    event = await loadEvent(id);
+    event = await loadEvent(await requestNetwork(), id);
   } catch {
     // Not a soft failure. Falling back to the mirrored guest list would be
     // deciding who may speak from a snapshot, which is the exact thing this route

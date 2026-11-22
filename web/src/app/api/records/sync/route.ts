@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminFirestore } from "@/lib/firebase-admin";
-import { server } from "@/lib/chain";
+import { serverFor } from "@/lib/chain";
 import { isAccountAddress, loadRecord } from "@/lib/record";
 import { RECORDS_COLLECTION, recordDocId, type IndexedRecord } from "@/lib/record-index";
 import { requestNetwork } from "@/lib/network.server";
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
   // "roughly now" is the honest precision for it.
   const [ledger, results] = await Promise.all([
-    server
+    serverFor(network)
       .getLatestLedger()
       .then((l: { sequence: number }) => l.sequence)
       .catch(() => 0),

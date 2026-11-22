@@ -85,6 +85,7 @@ type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: st
 
 export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string | null }) {
   const { address, status, balance, openPicker, refreshBalance } = useWallet();
+  const network = useNetwork();
   const signer = useSigner();
   const { data: event, error, loading, refreshing, refresh } = useEvent(id);
   const {
@@ -148,13 +149,13 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
   useEffect(() => {
     if (event || !error) return;
     let live = true;
-    isKnownEvent(id)
+    isKnownEvent(network, id)
       .then((answer) => live && setKnown(answer))
       .catch(() => live && setKnown(null));
     return () => {
       live = false;
     };
-  }, [event, error, id]);
+  }, [event, error, id, network]);
 
   /**
    * Archive this event's history while the chain still has it.

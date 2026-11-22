@@ -3,7 +3,9 @@ import type { Firestore } from "firebase-admin/firestore";
 import { adminFirestore } from "@/lib/firebase-admin";
 import { cronVerdict } from "@/lib/cron";
 import { FACTORY_ID } from "@/lib/contracts";
-import { activityId, listEventIds, loadEvent, server, sweepEventActivity } from "@/lib/chain";
+import { activityId, listEventIds, loadEvent, serverFor, sweepEventActivity } from "@/lib/chain";
+import { requestNetwork } from "@/lib/network.server";
+import { liveNetworks, type Network } from "@/lib/networks";
 import { EVENTS_COLLECTION, type IndexedEvent } from "@/lib/event-index";
 import {
   ACTIVITY_COLLECTION,
@@ -88,14 +90,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not a contract address" }, { status: 400 });
   }
 
-  const state = await indexState(db, id);
+  // The host decides which network this is for. Not a body field: a caller
+  // able to name a network could mirror one network's events into the other's
+  // documents, and the index is what the event list is drawn from.
+  const network = await requestNetwork();
+  if (!network.contracts) {
+    return NextResponse.json({ indexed: 0, reason: "network-not-deployed" }, { status: 200 });
+  }
+
+  const state = await indexState(db, network, id);
   if ("failed" in state) return state.failed;
 
   // Only ever for a named event. A factory-wide sweep would be one full history
   // page-through per event, which is minutes of RPC calls in a single request —
   // the scheduled GET below is what covers the rest, at its own pace.
   const activity =
-    id && state.indexed > 0 ? await archiveActivity(db, id, state.syncedAt) : undefined;
+    id && state.indexed > 0 ? await archiveActivity(db, network, id, state.syncedAt) : undefined;
 
   return NextResponse.json({
     indexed: state.indexed,
@@ -140,8 +150,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ indexed: 0, reason: "index-not-configured" }, { status: 200 });
   }
 
-  const state = await indexState(db);
-  if ("failed" in state) return state.failed;
+  // **Every live network, not the one this request arrived on.** Vercel Cron
+  // calls the production hostname, so a host-scoped sweep would quietly stop
+  // archiving the other network — and the archive is the only thing standing
+  // between an event's transaction hashes and the week after which Soroban RPC
+  // drops the ledgers they live in. Those hashes are submitted evidence.
+  //
+  // One deadline for the whole run, shared across networks rather than given to
+  // each: the function has a single `maxDuration`, and two networks each
+  // helping themselves to the full budget is how the second one gets killed
+  // halfway through a sweep.
+  const deadline = Date.now() + CRON_BUDGET_MS;
+  const networks: Record<string, unknown> = {};
+
+  for (const network of liveNetworks()) {
+    networks[network.id] = await sweepNetwork(db, network, deadline);
+  }
+
+  return NextResponse.json({ networks });
+}
+
+/** One network's share of the scheduled sweep. */
+async function sweepNetwork(db: Firestore, network: Network, deadline: number) {
+  const state = await indexState(db, network);
+  if ("failed" in state) return { error: "could not index", network: network.id };
 
   // Never archived at all sorts first — those are the ones with something to
   // lose. After that, whichever was archived longest ago.
@@ -149,7 +181,7 @@ export async function GET(request: Request) {
   try {
     const snapshot = await db
       .collection(EVENTS_COLLECTION)
-      .where("factory", "==", FACTORY_ID)
+      .where("factory", "==", network.contracts!.factoryId)
       .get();
     for (const d of snapshot.docs) staleness.set(d.id, Number(d.get("activitySyncedAt") ?? 0));
   } catch (e) {
@@ -159,7 +191,6 @@ export async function GET(request: Request) {
     (a, b) => (staleness.get(a) ?? 0) - (staleness.get(b) ?? 0),
   );
 
-  const deadline = Date.now() + CRON_BUDGET_MS;
   const archived: Record<string, number> = {};
   let skipped = 0;
 
@@ -171,28 +202,30 @@ export async function GET(request: Request) {
       skipped += 1;
       continue;
     }
-    const result = await archiveActivity(db, each, state.syncedAt);
+    const result = await archiveActivity(db, network, each, state.syncedAt);
     archived[each] = result.written;
   }
 
   // Said out loud, because a run that quietly stopped early looks exactly like a
   // run that had nothing to do.
-  if (skipped > 0) console.warn(`[sync] out of time with ${skipped} events unarchived`);
+  if (skipped > 0) {
+    console.warn(`[sync] ${network.id}: out of time with ${skipped} events unarchived`);
+  }
 
-  return NextResponse.json({
+  return {
     indexed: state.indexed,
     unreadable: state.unreadable,
     syncedLedger: state.ledger,
     archived,
     skipped,
-  });
+  };
 }
 
 /**
  * Mirror event state into the index — the original job of this route, lifted out
  * so both the on-demand POST and the scheduled GET run exactly the same one.
  */
-async function indexState(db: Firestore, id?: string) {
+async function indexState(db: Firestore, network: Network, id?: string) {
   let ids: string[];
   let truncated = false;
   try {
@@ -200,7 +233,7 @@ async function indexState(db: Firestore, id?: string) {
       // Only index events this factory actually made. Without this check the
       // endpoint would happily mirror any contract on the network into a
       // collection the app treats as its own event list.
-      const known = await listEventIds();
+      const known = await listEventIds(network);
       if (!known.includes(id)) {
         return {
           failed: NextResponse.json(
@@ -211,7 +244,7 @@ async function indexState(db: Firestore, id?: string) {
       }
       ids = [id];
     } else {
-      ids = await listEventIds();
+      ids = await listEventIds(network);
       if (ids.length > MAX_EVENTS_PER_SWEEP) {
         ids = ids.slice(-MAX_EVENTS_PER_SWEEP);
         truncated = true;
@@ -224,7 +257,7 @@ async function indexState(db: Firestore, id?: string) {
     };
   }
 
-  const ledger = await server
+  const ledger = await serverFor(network)
     .getLatestLedger()
     .then((l) => l.sequence)
     .catch(() => 0);
@@ -233,7 +266,7 @@ async function indexState(db: Firestore, id?: string) {
   // allSettled, not all: an event whose state has archived must not stop the
   // other ninety-nine from being indexed. That failure mode is precisely what
   // this index exists to soften.
-  const results = await Promise.allSettled(ids.map((each) => loadEvent(each)));
+  const results = await Promise.allSettled(ids.map((each) => loadEvent(network, each)));
 
   const batch = db.batch();
   let indexed = 0;
@@ -290,7 +323,7 @@ async function indexState(db: Firestore, id?: string) {
  * called on every page view and after every action without any coordination —
  * and what lets a sweep that ran out of time simply be called again.
  */
-async function archiveActivity(db: Firestore, id: string, syncedAt: number) {
+async function archiveActivity(db: Firestore, network: Network, id: string, syncedAt: number) {
   const ref = db.collection(EVENTS_COLLECTION).doc(id);
 
   let wasComplete = false;
@@ -311,7 +344,7 @@ async function archiveActivity(db: Firestore, id: string, syncedAt: number) {
 
   let swept;
   try {
-    swept = await sweepEventActivity(id, FACTORY_ID, {
+    swept = await sweepEventActivity(network, id, network.contracts!.factoryId, {
       from,
       deadline: Date.now() + ARCHIVE_BUDGET_MS,
     });
