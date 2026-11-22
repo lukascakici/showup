@@ -84,6 +84,14 @@ vi.mock("@/lib/wallet", () => ({
 
 vi.mock("@/lib/signer", () => ({ useSigner: () => ({ publicKey: state.address }) }));
 
+// `fromStroops` and the rest stay real — the amounts on screen are what the
+// assertions below read. Only the call that would reach a network is replaced.
+const chain = vi.hoisted(() => ({ rsvp: vi.fn() }));
+vi.mock("@/lib/contracts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/contracts")>()),
+  event: () => ({ rsvp: chain.rsvp }),
+}));
+
 function anEvent(over: Partial<EventState> = {}): EventState {
   return {
     id: ID,
@@ -119,6 +127,8 @@ beforeEach(() => {
   state.vouches = null;
   state.record = null;
   localStorage.clear();
+  chain.rsvp.mockReset();
+  chain.rsvp.mockResolvedValue({ signAndSend: vi.fn().mockResolvedValue({}) });
 });
 
 describe("EventDetail — not found versus couldn't ask", () => {
@@ -725,5 +735,69 @@ describe("EventDetail — the gate is legible before you connect", () => {
     render(<EventDetail id={ID} linkSecret={null} />);
     await screen.findByText(/how this works/i);
     expect(screen.queryByText(/ask to come|get a vouch|have shown up before/i)).toBeNull();
+  });
+});
+
+/**
+ * The deposit is 10 XLM in `anEvent`, and on Mainnet that is 10 real XLM. What
+ * is being tested is not the wording but the *gate*: that the gesture which
+ * commits the money is never the first one, and that it still is on Testnet,
+ * where the full-width button is the correct control.
+ */
+describe("EventDetail — the real-money confirmation", () => {
+  const readyToReserve = () => {
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.event = anEvent();
+  };
+
+  it("reserves on the first click on Testnet, where the deposit is faucet XLM", async () => {
+    readyToReserve();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /lock deposit and reserve/i }));
+    expect(chain.rsvp).toHaveBeenCalledWith({ guest: GUEST });
+  });
+
+  it("does not reserve on the first click on Mainnet", async () => {
+    readyToReserve();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+
+    await userEvent.click(screen.getByRole("button", { name: /reserve a spot/i }));
+    // The whole point: the first gesture asks, it does not pay.
+    expect(chain.rsvp).not.toHaveBeenCalled();
+    expect(screen.getByText(/about to lock real XLM/i)).toBeInTheDocument();
+  });
+
+  it("names the amount leaving the wallet, before anything is signed", async () => {
+    readyToReserve();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+    await userEvent.click(screen.getByRole("button", { name: /reserve a spot/i }));
+
+    expect(screen.getByText(/leaves your wallet now/i)).toBeInTheDocument();
+    // The deposit, and the amount on the button that commits it — the same
+    // number twice, so neither can be the one somebody didn't read.
+    expect(screen.getAllByText(/10 XLM/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /lock 10 XLM/i })).toBeInTheDocument();
+    expect(screen.getByText(/you lose the deposit/i)).toBeInTheDocument();
+  });
+
+  it("takes the confirmation to the chain only when it is confirmed", async () => {
+    readyToReserve();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+    await userEvent.click(screen.getByRole("button", { name: /reserve a spot/i }));
+    await userEvent.click(screen.getByRole("button", { name: /lock 10 XLM/i }));
+
+    expect(chain.rsvp).toHaveBeenCalledWith({ guest: GUEST });
+  });
+
+  it("lets somebody back out without paying", async () => {
+    readyToReserve();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+    await userEvent.click(screen.getByRole("button", { name: /reserve a spot/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^back$/i }));
+
+    expect(chain.rsvp).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /reserve a spot/i })).toBeInTheDocument();
   });
 });

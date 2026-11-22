@@ -1484,7 +1484,27 @@ function Offer({
   busy: boolean;
   onReserve: () => void;
 }) {
+  const network = useNetwork();
   const blocked = blocksReservation(funding);
+  const [confirming, setConfirming] = useState(false);
+
+  // On Testnet the full-width button is the right control: the deposit is faucet
+  // XLM and the only cost of a misclick is a second one to undo it. On Mainnet
+  // the same gesture moves somebody's money, so it buys a step that names the
+  // amount instead of performing it. The SOW asks for exactly this, and the
+  // asymmetry is the point — a confirmation on both would train people to click
+  // through the one that matters.
+  if (confirming && network.isRealMoney) {
+    return (
+      <Confirm
+        deposit={deposit}
+        refund={refund}
+        onBack={() => setConfirming(false)}
+        onConfirm={onReserve}
+        busy={busy}
+      />
+    );
+  }
 
   return (
     <div>
@@ -1516,20 +1536,112 @@ function Offer({
       )}
 
       <Button
-        onClick={onReserve}
+        onClick={network.isRealMoney ? () => setConfirming(true) : onReserve}
         size="lg"
         fullWidth
         disabled={left <= 0 || blocked || busy}
         loading={busy}
       >
         <Lock className="size-4" />
-        {left <= 0 ? "Event is full" : "Lock deposit and reserve"}
+        {left <= 0
+          ? "Event is full"
+          : network.isRealMoney
+            ? "Reserve a spot"
+            : "Lock deposit and reserve"}
       </Button>
 
       <p className="mt-3 text-center text-[12.5px] text-muted-3">
         {fromStroops(feeAllowance)} XLM of that refund is the organizer’s, put up
         so attending costs you nothing in fees.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The step between wanting a spot and paying for one, on Mainnet only.
+ *
+ * It exists because the control that is right for faucet XLM is wrong for
+ * somebody's money. The job here is not to add friction for its own sake but to
+ * make the amount unmissable **before** a wallet asks for a signature — at which
+ * point the question has already been framed by the wallet, in the wallet's
+ * words, as a transaction rather than as a deposit.
+ *
+ * Deliberately rendered in place rather than as a dialog over the page. A dialog
+ * would need a scrim and a focus trap to be correct, and on a phone it would
+ * cover the event it is asking about. This replaces the offer, says the same
+ * numbers back, and keeps a way out that is as easy to hit as the way forward.
+ */
+function Confirm({
+  deposit,
+  refund,
+  onBack,
+  onConfirm,
+  busy,
+}: {
+  deposit: bigint;
+  refund: bigint;
+  onBack: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div>
+      <h3 className="font-display text-lg font-bold tracking-tight">
+        You are about to lock real XLM
+      </h3>
+
+      <div className="mt-5 overflow-hidden rounded-2xl border border-border-strong">
+        <div className="divide-y divide-border bg-surface-2">
+          <Row label="Leaves your wallet now" value={`${fromStroops(deposit)} XLM`} strong />
+          <Row label="Comes back when you check in" value={`${fromStroops(refund)} XLM`} />
+          <Row label="If you don’t show up" value="You lose the deposit" />
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-relaxed text-muted">
+        This is Mainnet, so the deposit is real XLM and the loss is real too. It is
+        held by the event&apos;s own contract — not by us — and no key anywhere can
+        change the rules it settles under after you sign.
+      </p>
+
+      {/* Equal weight, side by side. A full-width confirm with a small "cancel"
+          underneath is the shape that gets clicked through, which is the exact
+          behaviour this step exists to interrupt. */}
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <Button variant="secondary" size="lg" onClick={onBack} disabled={busy}>
+          Back
+        </Button>
+        <Button size="lg" onClick={onConfirm} loading={busy} className="sm:flex-1">
+          <Lock className="size-4" />
+          Lock {fromStroops(deposit)} XLM
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-5 py-3.5">
+      <span className="text-sm text-muted">{label}</span>
+      <span
+        className={
+          strong
+            ? "font-mono text-lg text-accent-lift"
+            : "font-mono text-sm text-foreground-2"
+        }
+      >
+        {value}
+      </span>
     </div>
   );
 }
