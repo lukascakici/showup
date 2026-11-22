@@ -205,13 +205,17 @@ export function WalletMenu() {
             </div>
           </div>
 
-          {/* Faucet */}
-          <div className="mt-5">
-            <SectionLabel>TEST FAUCET</SectionLabel>
-            <div className="mt-2.5">
-              <FaucetButton />
+          {/* Only where there is one. Mainnet has no faucet, and a section
+              headed TEST FAUCET on the network holding real deposits would be
+              both useless and alarming. */}
+          {network.friendbotUrl !== null && (
+            <div className="mt-5">
+              <SectionLabel>TEST FAUCET</SectionLabel>
+              <div className="mt-2.5">
+                <FaucetButton />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="my-5 h-px bg-border" />
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Droplets } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { fundWithFriendbot, errMessage } from "@/lib/stellar";
+import { useNetwork } from "@/lib/network-context";
 import { Button } from "./ui";
 
 /**
@@ -37,16 +38,22 @@ export function FaucetButton({
   label?: string;
 }) {
   const { address, refreshBalance } = useWallet();
+  const network = useNetwork();
   const [funding, setFunding] = useState(false);
   const [message, setMessage] = useState<FaucetMsg>(null);
 
   if (!address) return null;
+  // Belt as well as braces: callers already hide this where there is no faucet,
+  // but the version that fell back to a default network would have aimed
+  // Testnet's Friendbot at a Mainnet address and reported "Funded" for doing
+  // nothing anybody wanted.
+  if (!network.friendbotUrl) return null;
 
   const request = async () => {
     setFunding(true);
     setMessage(null);
     try {
-      const result = await fundWithFriendbot(address);
+      const result = await fundWithFriendbot(address, network);
       await refreshBalance();
       setMessage(
         result === "funded"

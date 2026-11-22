@@ -801,3 +801,44 @@ describe("EventDetail — the real-money confirmation", () => {
     expect(screen.getByRole("button", { name: /reserve a spot/i })).toBeInTheDocument();
   });
 });
+
+/**
+ * The funding notice is the one screen somebody reaches *because* something is
+ * wrong, so it is the worst place to be told something untrue. It used to name
+ * "Testnet" and offer a faucet unconditionally — on Mainnet, where the shortfall
+ * is real XLM, both were wrong and the button could not have worked.
+ */
+describe("EventDetail — funding advice that fits the network", () => {
+  const unfunded = () => {
+    state.address = GUEST;
+    state.balance = { funded: false, xlm: "0" };
+    state.event = anEvent();
+  };
+
+  it("offers the faucet on Testnet", () => {
+    unfunded();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.getByText(/isn['’]t on testnet yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /request test XLM/i })).toBeInTheDocument();
+  });
+
+  it("names Mainnet, and offers no faucet there", () => {
+    unfunded();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+
+    expect(screen.getByText(/isn['’]t on mainnet yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /request test XLM/i })).toBeNull();
+    // And it says what actually works instead of what does not exist.
+    expect(screen.getByText(/send at least 1 XLM/i)).toBeInTheDocument();
+  });
+
+  it("stops calling a real shortfall a shortfall of test XLM", () => {
+    state.address = GUEST;
+    state.balance = funded("1.5");
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />, { network: "mainnet" });
+
+    expect(screen.getByText(/^Not enough XLM$/)).toBeInTheDocument();
+    expect(screen.queryByText(/not enough test XLM/i)).toBeNull();
+  });
+});

@@ -1433,7 +1433,14 @@ function ColdStart({
  * look there, so it comes to them instead.
  */
 function FundingNotice({ funding }: { funding: Funding }) {
+  const network = useNetwork();
   if (funding.kind !== "unfunded" && funding.kind !== "short") return null;
+
+  // There is no faucet on Mainnet, and this notice used to offer one and name
+  // "Testnet" while doing it. On the network where the account really is short
+  // of real XLM, both halves of that were wrong — and the one thing a person in
+  // this state must not be given is a button that cannot work.
+  const faucet = network.friendbotUrl !== null;
 
   return (
     <div className="rounded-xl border border-danger/40 bg-danger/5 p-3.5">
@@ -1442,12 +1449,16 @@ function FundingNotice({ funding }: { funding: Funding }) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">
             {funding.kind === "unfunded"
-              ? "Your account isn't on Testnet yet"
-              : "Not enough test XLM"}
+              ? `Your account isn't on ${network.label} yet`
+              : faucet
+                ? "Not enough test XLM"
+                : "Not enough XLM"}
           </p>
           <p className="mt-1 text-xs leading-[1.55] text-muted">
             {funding.kind === "unfunded"
-              ? "A Stellar account only exists once something funds it. The faucet creates yours and hands you 10,000 test XLM."
+              ? faucet
+                ? "A Stellar account only exists once something funds it. The faucet creates yours and hands you 10,000 test XLM."
+                : "A Stellar account only exists once something funds it. Send at least 1 XLM to this address from a wallet or an exchange, and it will."
               : `Reserving needs about ${fromStroops(funding.need)} XLM — the ${fromStroops(
                   funding.need - BASE_RESERVE_STROOPS - FEE_HEADROOM_STROOPS,
                 )} deposit, the 1 XLM Stellar locks in every account, and a little for fees. You hold ${fromStroops(
@@ -1456,9 +1467,11 @@ function FundingNotice({ funding }: { funding: Funding }) {
           </p>
         </div>
       </div>
-      <div className="mt-3">
-        <FaucetButton />
-      </div>
+      {faucet && (
+        <div className="mt-3">
+          <FaucetButton />
+        </div>
+      )}
     </div>
   );
 }
