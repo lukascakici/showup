@@ -371,25 +371,17 @@ function EventRow({ event, you }: { event: ListedEvent; you: string | null }) {
         href={`/e/${event.id}`}
         className="group relative mb-0 flex gap-5 rounded-2xl border border-border-strong bg-surface p-5 transition-colors hover:border-border-hover hover:bg-surface-3 md:mb-[22px]"
       >
-        {/* The bead on the timeline, sitting in the gutter between the two columns. */}
-        <span
-          aria-hidden
-          className={`absolute -left-[25px] top-[26px] hidden size-[9px] rounded-full shadow-[0_0_0_4px_var(--background)] md:block ${
-            checkingIn ? "bg-accent" : "bg-border-hover"
-          }`}
-        />
-
         <div className="min-w-0 flex-1">
           <div className="mb-2.5 flex items-center gap-2.5">
+            {/* The words, with no dot beside them and no bead in the gutter.
+                Both were indicator dots in a design language that bans them, and
+                both were saying a second time what this label already says.
+                accent-soft rather than the accent itself: at 12.5px the darker
+                tone lands under 4.5:1 on this surface. */}
             {checkingIn && (
-              <>
-                <span className="pulse-dot size-1.5 rounded-full bg-accent" />
-                {/* accent-soft rather than the accent itself: at 12.5px the
-                    darker violet lands under 4.5:1 on this surface. */}
-                <span className="text-[12.5px] font-medium tracking-[0.06em] text-accent-soft">
-                  CHECK-IN OPEN
-                </span>
-              </>
+              <span className="text-[12.5px] font-medium tracking-[0.06em] text-accent-soft">
+                CHECK-IN OPEN
+              </span>
             )}
             {time && (
               <span className="font-mono text-[13.5px] text-[#7e7f86]">{time}</span>

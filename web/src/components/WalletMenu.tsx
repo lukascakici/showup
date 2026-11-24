@@ -73,8 +73,9 @@ export function WalletMenu() {
       >
         {/* "—" used to mean both "still fetching" and "this account doesn't
             exist", which are different answers to different questions. */}
-        <span className="hidden items-center gap-2 rounded-full border border-border-strong bg-surface px-2.5 py-1.5 transition-colors hover:border-border-hover sm:flex">
-          <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent-soft" />
+        {/* The figure alone: the accent dot that used to sit in front of it was
+            decoration, and this design language does not have indicator dots. */}
+        <span className="hidden items-center rounded-full border border-border-strong bg-surface px-2.5 py-1.5 transition-colors hover:border-border-hover sm:flex">
           <span className="font-mono text-[12.5px] text-foreground">
             {balance?.funded
               ? `${formatXlm(balance.xlm, 2)} XLM`

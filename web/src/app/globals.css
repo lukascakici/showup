@@ -445,22 +445,6 @@ body {
   animation-name: flow-share-c;
 }
 
-/* A reserved spot that is still filling — the one thing on the page that beats. */
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(0.8);
-  }
-}
-
-.pulse-dot {
-  animation: pulse-dot 1.6s ease-in-out infinite;
-}
 
 /* The welcome arriving. The panel rises into place instead of being there
    already, because it is the answer to an action the visitor just took in the
@@ -507,8 +491,7 @@ body {
     opacity: 0;
   }
 
-  .blob,
-  .pulse-dot {
+  .blob {
     animation: none;
   }
 

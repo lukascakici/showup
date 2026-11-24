@@ -96,15 +96,19 @@ function NavItem({
   active: boolean;
 }) {
   return (
+    // The active tab is the brighter word, and nothing else. It carried a 5px
+    // accent dot beside the label until 25.11.2026 — which is the indicator dot
+    // the design rules ban outright, sitting two elements away from a comment
+    // congratulating itself for not using one on the network chip. Found by
+    // looking at a screenshot rather than at the code.
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-1.5 py-1 transition-colors ${
+      className={`py-1 transition-colors ${
         active ? "text-foreground" : "hover:text-foreground"
       }`}
     >
       {label}
-      {active && <span className="size-[5px] rounded-full bg-accent" />}
     </Link>
   );
 }
