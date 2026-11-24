@@ -118,7 +118,22 @@ const SHOTS = [
 ];
 
 mkdirSync(OUT, { recursive: true });
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+
+/**
+ * Chrome if the machine has it, Playwright's own Chromium if not.
+ *
+ * It said `channel: "chrome"` outright until 25.11.2026, which assumed a browser
+ * this project never installs — and the machine taking these very screenshots did
+ * not have it, so the whole set failed before the first navigation. The fallback is
+ * `npx playwright install chromium` once; both are the same engine, and a set
+ * nobody can reproduce is not evidence.
+ */
+const browser = await chromium
+  .launch({ channel: "chrome", headless: true })
+  .catch(async (e) => {
+    console.log(`no installed Chrome (${String(e.message).split("\n")[0]}) — using Playwright's Chromium`);
+    return chromium.launch({ headless: true });
+  });
 let taken = 0;
 const failed = [];
 
