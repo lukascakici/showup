@@ -78,12 +78,27 @@ import { Who } from "./Who";
 import { FirstRun } from "./FirstRun";
 import { EventPoster } from "./EventPoster";
 import { FaucetButton } from "./Faucet";
+import { EventDescription } from "./EventDescription";
+import type { EventDescription as EventDescriptionRecord } from "@/lib/event-description";
 import { AvatarStack, Identicon } from "./Identicon";
 import { QrCode } from "./QrCode";
 
 type Action = { kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string };
 
-export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string | null }) {
+export function EventDetail({
+  id,
+  linkSecret,
+  description = null,
+}: {
+  id: string;
+  linkSecret: string | null;
+  /**
+   * Read on the server and handed down, so it is in the HTML rather than
+   * appearing a moment later — see `page.tsx`. Defaulted so the forty-nine
+   * existing tests that render this component unchanged stay unchanged.
+   */
+  description?: EventDescriptionRecord | null;
+}) {
   const { address, status, balance, openPicker, refreshBalance } = useWallet();
   const network = useNetwork();
   const signer = useSigner();
@@ -445,6 +460,8 @@ export function EventDetail({ id, linkSecret }: { id: string; linkSecret: string
             <span className="font-mono text-2xl">{shortAddr(id, 8, 8)}</span>
           )}
         </h1>
+
+        <EventDescription description={description} />
 
         <div className="mt-6 flex flex-col gap-4">
           <WhenTile startsAt={event.startsAt} />

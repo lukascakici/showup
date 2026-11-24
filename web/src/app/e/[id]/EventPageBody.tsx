@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { EventDetail } from "@/components/EventDetail";
 import { CHECK_IN_PARAM } from "@/lib/links";
+import type { EventDescription } from "@/lib/event-description";
 
 /**
  * The client half of the event page.
@@ -13,7 +14,13 @@ import { CHECK_IN_PARAM } from "@/lib/links";
  * `generateMetadata` — a `"use client"` module cannot, which is why an invite
  * link previewed as a bare URL for the whole of weeks 1 to 3.
  */
-export function EventPageBody({ id }: { id: string }) {
+export function EventPageBody({
+  id,
+  description,
+}: {
+  id: string;
+  description: EventDescription | null;
+}) {
   const search = useSearchParams();
   const linkSecret = search.get(CHECK_IN_PARAM);
 
@@ -31,7 +38,7 @@ export function EventPageBody({ id }: { id: string }) {
 
       {/* The heading lives in EventDetail: it is the event's own name, and only
           the component that loads the event knows it. */}
-      <EventDetail id={id} linkSecret={linkSecret} />
+      <EventDetail id={id} linkSecret={linkSecret} description={description} />
     </div>
   );
 }

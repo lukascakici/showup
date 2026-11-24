@@ -1,5 +1,6 @@
 import { spotsLeft, type EventState } from "./chain";
 import { fromStroops } from "./contracts";
+import { toShareText } from "./event-description";
 import { formatXlm } from "./format";
 
 /**
@@ -50,7 +51,7 @@ function depositPhrase(event: EventState): string {
  * for every Turkish guest, and the preview is the one they read first. Every
  * other fact here is timezone-free, so the whole line is safe to trust.
  */
-export function eventPreview(event: EventState): Preview {
+export function eventPreview(event: EventState, described?: string | null): Preview {
   const title = `${event.title.trim() || UNTITLED} · ${SITE_NAME}`;
   const deposit = depositPhrase(event);
 
@@ -74,6 +75,18 @@ export function eventPreview(event: EventState): Preview {
       title,
       description: `${deposit} · full, all ${event.capacity} spots reserved.`,
     };
+  }
+
+  // The organizer's own words, but only here and only after the deposit.
+  //
+  // Only here, because in the three cases above the *state* is the news — an
+  // event that has settled, or opened check-in, or filled up. Only after the
+  // deposit, because that is the one fact that makes this card worth reading,
+  // and the plan for this originally said to replace the whole line with prose:
+  // that would have traded the most useful thing in the preview for the least
+  // verifiable.
+  if (described) {
+    return { title, description: `${deposit} · ${toShareText(described, 140)}` };
   }
 
   return {

@@ -842,3 +842,108 @@ describe("EventDetail — funding advice that fits the network", () => {
     expect(screen.queryByText(/not enough test XLM/i)).toBeNull();
   });
 });
+
+/**
+ * A description is the only thing on this page nobody verified. Everything
+ * beside it was read off a contract, so the tests that matter are the ones about
+ * keeping those two apart — in the markup and in the words.
+ */
+describe("EventDetail — the organizer's own words", () => {
+  const described = {
+    eventId: ID,
+    factory: "CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE",
+    body: "Kramponunu getir.\nKapı arkada.",
+    authoredBy: ORGANIZER,
+    updatedAt: 1_700_000_000_000,
+  };
+
+  it("shows nothing at all when there is none", () => {
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.queryByLabelText(/about this event/i)).toBeNull();
+  });
+
+  it("shows the text, with the line breaks people type", () => {
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} description={described} />);
+
+    const section = screen.getByLabelText(/about this event/i);
+    expect(section).toHaveTextContent("Kramponunu getir.");
+    expect(section).toHaveTextContent("Kapı arkada.");
+  });
+
+  it("attributes it, and links to the author's record", () => {
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} description={described} />);
+
+    const section = screen.getByLabelText(/about this event/i);
+    expect(section).toHaveTextContent(/described by/i);
+    // The question a description raises is "who is telling me this", and the
+    // answer is a page full of their attendance.
+    expect(section.querySelector(`a[href="/u/${ORGANIZER}"]`)).not.toBeNull();
+  });
+
+  it("keeps it out of the panel that states the deposit", () => {
+    // The layout is making a claim here: everything in that panel is enforced by
+    // a contract. Prose inside it would make the layout lie.
+    state.event = anEvent();
+    state.address = GUEST;
+    state.balance = funded("100");
+    render(<EventDetail id={ID} linkSecret={null} description={described} />);
+
+    const section = screen.getByLabelText(/about this event/i);
+
+    // The Panel root, not the header. `closest("div")` from the title lands on
+    // the header strip, which never contains the body — so asserting against it
+    // would pass whether or not the description were inside the panel, which is
+    // what the first version of this test did.
+    const header = screen.getByText(/reservation and deposit/i).closest("div");
+    const panel = header?.parentElement;
+    expect(panel).toBeTruthy();
+    expect(panel!.contains(section)).toBe(false);
+
+    // And the panel really is the one holding the deposit, so the assertion
+    // above is about the right element.
+    expect(panel).toHaveTextContent(/10 XLM/);
+    expect(section).not.toHaveTextContent(/XLM/);
+  });
+
+  it("renders markup as text rather than as markup", () => {
+    state.event = anEvent();
+    render(
+      <EventDetail
+        id={ID}
+        linkSecret={null}
+        description={{ ...described, body: "<b>bold</b> and <script>x</script>" }}
+      />,
+    );
+
+    const section = screen.getByLabelText(/about this event/i);
+    expect(section).toHaveTextContent("<b>bold</b> and <script>x</script>");
+    expect(section.querySelector("b")).toBeNull();
+    expect(section.querySelector("script")).toBeNull();
+  });
+
+  it("says when it was edited, and only when it was", () => {
+    state.event = anEvent();
+    const { unmount } = render(
+      <EventDetail id={ID} linkSecret={null} description={described} />,
+    );
+    expect(screen.getByLabelText(/about this event/i)).not.toHaveTextContent(/edited/i);
+    unmount();
+
+    render(
+      <EventDetail
+        id={ID}
+        linkSecret={null}
+        description={{
+          ...described,
+          history: [{ body: "older", authoredBy: ORGANIZER, at: 1_600_000_000_000 }],
+        }}
+      />,
+    );
+    // A description rewritten after somebody reserved is a changed offer against
+    // an unchanged contract, so the page owes the reader that difference.
+    expect(screen.getByLabelText(/about this event/i)).toHaveTextContent(/edited/i);
+  });
+});
