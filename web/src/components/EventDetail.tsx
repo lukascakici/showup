@@ -79,6 +79,7 @@ import { FirstRun } from "./FirstRun";
 import { EventPoster } from "./EventPoster";
 import { FaucetButton } from "./Faucet";
 import { EventDescription } from "./EventDescription";
+import { DescribeEvent } from "./DescribeEvent";
 import type { EventDescription as EventDescriptionRecord } from "@/lib/event-description";
 import { AvatarStack, Identicon } from "./Identicon";
 import { QrCode } from "./QrCode";
@@ -642,6 +643,14 @@ export function EventDetail({
             costs nothing and being stingy would hide the panel from somebody who
             belongs. */}
         <Conversation id={id} canTakePart={isHost || mine !== "none"} />
+
+        {/* Before the host list and the settlement controls: describing the
+            event is the thing a host does first and most often, and the two
+            below are for running it. Gated on the phase as well — once an event
+            has settled, its description is part of its record. */}
+        {isHost && !finalized && (
+          <DescribeEvent eventId={id} hosts={event.hosts} description={description} />
+        )}
 
         {isHost && !finalized && (
           <div className="mt-8">

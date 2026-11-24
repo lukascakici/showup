@@ -1,3 +1,4 @@
+import { serverMessage } from "./api";
 import type { SignFn } from "./stellar";
 
 /**
@@ -21,7 +22,7 @@ export async function claimName(
   sign: SignFn,
 ): Promise<string | null> {
   const issued = await fetch(`/api/names?address=${encodeURIComponent(address)}`);
-  if (!issued.ok) throw new Error(await message(issued, "Couldn't start the name claim."));
+  if (!issued.ok) throw new Error(await serverMessage(issued, "Couldn't start the name claim."));
   const { nonce, xdr } = (await issued.json()) as { nonce: string; xdr: string };
 
   const { signedTxXdr } = await sign(xdr, { address });
@@ -31,16 +32,7 @@ export async function claimName(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ address, name, nonce, signedXdr: signedTxXdr }),
   });
-  if (!claimed.ok) throw new Error(await message(claimed, "Couldn't save that name."));
+  if (!claimed.ok) throw new Error(await serverMessage(claimed, "Couldn't save that name."));
 
   return ((await claimed.json()) as { name: string | null }).name;
-}
-
-async function message(response: Response, fallback: string): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    return typeof body.error === "string" ? body.error : fallback;
-  } catch {
-    return fallback;
-  }
 }

@@ -37,6 +37,7 @@ const state = vi.hoisted(() => ({
   applicants: null as string[] | null,
   vouches: null as number | null,
   record: null as unknown,
+  sign: vi.fn(),
 }));
 
 vi.mock("@/lib/events", async (importOriginal) => ({
@@ -79,10 +80,18 @@ vi.mock("@/lib/wallet", () => ({
     openPicker: state.openPicker,
     refreshBalance: vi.fn(),
     walletName: "Freighter",
+    sign: state.sign,
   }),
 }));
 
 vi.mock("@/lib/signer", () => ({ useSigner: () => ({ publicKey: state.address }) }));
+
+// jsdom has no app router, and `DescribeEvent` refreshes through it after a save
+// — the description a guest reads is server-rendered, so there is nothing local
+// to update. Mocked here rather than globally: the router is only reached by one
+// component so far, and a stub in the shared setup would hide that from every
+// other test as well.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 // `fromStroops` and the rest stay real — the amounts on screen are what the
 // assertions below read. Only the call that would reach a network is replaced.
@@ -127,6 +136,7 @@ beforeEach(() => {
   state.vouches = null;
   state.record = null;
   localStorage.clear();
+  state.sign = vi.fn();
   chain.rsvp.mockReset();
   chain.rsvp.mockResolvedValue({ signAndSend: vi.fn().mockResolvedValue({}) });
 });
@@ -945,5 +955,92 @@ describe("EventDetail — the organizer's own words", () => {
     // A description rewritten after somebody reserved is a changed offer against
     // an unchanged contract, so the page owes the reader that difference.
     expect(screen.getByLabelText(/about this event/i)).toHaveTextContent(/edited/i);
+  });
+});
+
+/**
+ * The editor is offered to hosts and to nobody else — and the host list comes
+ * from the contract, by way of the event this page already loaded. A guest who
+ * was shown the field would be being invited to make an attempt the server
+ * already knows it will refuse.
+ */
+describe("EventDetail — describing your own event", () => {
+  const editor = /describe this event/i;
+
+  it("is not offered to somebody with no wallet", () => {
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.queryByText(editor)).toBeNull();
+  });
+
+  it("is not offered to a guest", () => {
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.queryByText(editor)).toBeNull();
+  });
+
+  it("is offered to the organizer", () => {
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.getByText(editor)).toBeInTheDocument();
+  });
+
+  it("is offered to a co-host, not just whoever created it", () => {
+    // `hosts` is the contract's answer, and it is the one that decides.
+    state.address = GUEST;
+    state.balance = funded("100");
+    state.event = anEvent({ hosts: [ORGANIZER, GUEST] });
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.getByText(editor)).toBeInTheDocument();
+  });
+
+  it("is gone once the event has settled", () => {
+    // By then the description is part of the record of what happened.
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    state.event = anEvent({ phase: "Finalized" });
+    render(<EventDetail id={ID} linkSecret={null} />);
+    expect(screen.queryByText(editor)).toBeNull();
+  });
+
+  it("seeds the field with what is already saved, and refuses an unchanged save", () => {
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    state.event = anEvent();
+    render(
+      <EventDetail
+        id={ID}
+        linkSecret={null}
+        description={{
+          eventId: ID,
+          factory: "CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE",
+          body: "Kapı arkada.",
+          authoredBy: ORGANIZER,
+          updatedAt: 1,
+        }}
+      />,
+    );
+
+    expect(screen.getByDisplayValue("Kapı arkada.")).toBeInTheDocument();
+    // Nothing to save means nothing to sign — the wallet is not asked.
+    expect(screen.getByRole("button", { name: /save description/i })).toBeDisabled();
+  });
+
+  it("refuses invisible characters before asking the wallet for anything", async () => {
+    state.address = ORGANIZER;
+    state.balance = funded("100");
+    state.event = anEvent();
+    render(<EventDetail id={ID} linkSecret={null} />);
+
+    const field = screen.getByPlaceholderText(/kapı arkada/i);
+    await userEvent.type(field, "Deposit is 1\u202eXLM");
+
+    expect(screen.getByRole("button", { name: /save description/i })).toBeDisabled();
+    expect(screen.getByText(/invisible characters/i)).toBeInTheDocument();
+    expect(state.sign).not.toHaveBeenCalled();
   });
 });
