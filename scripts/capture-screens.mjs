@@ -56,10 +56,10 @@ const WIDTHS = [
  * is the good example is a judgement, and it changes.
  */
 const EVENTS = {
-  open: "CCRN7I6ILH3CPTQTNWITGGXKYQ4MRHBIRJ7C4DARBWDCEIXBTBRIPCUP",
-  score: "CANOMZA2OBJ5OAYGBZC3QMILYLN3PNU4QZZLRKLGNYVI3GZ3IIPV6MPJ",
-  approval: "CCNOAF4MLQGHIIZYNW5VMJPT6LACR44CXEZO3CGS7L5IKRUHFBGXQKY3",
-  vouch: "CBANCBQPJX5MGCB5PIDF35OYIU5AKSPOG3OD2RIG6ENDZFRLQZZ3BBCH",
+  open: "CA7225ACDQPVKQ4IT2A6GI3PEQ7BBVV7HLJP4HH6KVKA4WTNYIXIK4W4",
+  score: "CADTPJYUB4QYY5THYKOJAPGSWUJXTMNRJABQGYIQ5PCDH7XL4SZX6XLM",
+  approval: "CCCHVUMR5XOUUQF6BTJ5ONA7MNNPBPPM3N3GA4LHWFD33PDS5CDSYYBS",
+  vouch: "CCQVQ4OJF4XGT2JJXOR7A4DAQTLBKTA2PQ2QWHCLQWPBORE27RRZNZTV",
 };
 
 const WITH_RECORD = "GB7TWPUDTFK7TZCX2JEJW675KE4B2T5UPOLKNJGRDGRY5H7MYXLVNKCL";
@@ -71,6 +71,10 @@ const WITHOUT_RECORD = "GBYT3TBN4FFMNP7RSG7KRTRK4HDHHKCXEVTLVLHMIC7DBQ3BN7WOV52K
  */
 const SHOTS = [
   { id: "home", path: "/", expect: /put a price on/i, full: true },
+  // The one that leads the README. Deliberately **not** `full`: the whole page is
+  // nearly 4000px tall, and a lead image that tall is a scroll rather than a look.
+  // One screen, which is what somebody arriving actually sees.
+  { id: "lead", path: "/", expect: /put a price on/i },
   {
     id: "home-past",
     path: "/",
@@ -81,10 +85,10 @@ const SHOTS = [
       await page.waitForTimeout(2000);
     },
   },
-  { id: "event-open", path: `/e/${EVENTS.open}`, expect: /stellar night seoul/i, full: true },
-  { id: "event-score", path: `/e/${EVENTS.score}`, expect: /madrid/i, full: true },
-  { id: "event-approval", path: `/e/${EVENTS.approval}`, expect: /vip mixer/i, full: true },
-  { id: "event-vouch", path: `/e/${EVENTS.vouch}`, expect: /riserva/i, full: true },
+  { id: "event-open", path: `/e/${EVENTS.open}`, expect: /soroban çalışma/i, full: true },
+  { id: "event-score", path: `/e/${EVENTS.score}`, expect: /kasım demo gecesi/i, full: true },
+  { id: "event-approval", path: `/e/${EVENTS.approval}`, expect: /kapalı oturum/i, full: true },
+  { id: "event-vouch", path: `/e/${EVENTS.vouch}`, expect: /hafta sonu kahvesi/i, full: true },
   // Disconnected, /create is a connect prompt rather than the form — the wallet is
   // the event's organizer, so there is nothing to fill in until there is one. That
   // prompt is a real screen and worth having; the form itself needs a wallet and is
