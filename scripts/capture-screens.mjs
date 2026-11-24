@@ -94,6 +94,7 @@ const SHOTS = [
   // prompt is a real screen and worth having; the form itself needs a wallet and is
   // captured with one.
   { id: "create-connect", path: "/create", expect: /connect first/i, full: true },
+  { id: "trust", path: "/trust", expect: /what we can and cannot do/i, full: true },
   { id: "record", path: `/u/${WITH_RECORD}`, expect: /show-up record/i, full: true },
   { id: "record-empty", path: `/u/${WITHOUT_RECORD}`, expect: /never seen this wallet/i, full: true },
   { id: "record-bad-address", path: "/u/GBEDUGG", expect: /not a wallet address/i },

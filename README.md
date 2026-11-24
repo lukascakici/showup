@@ -440,6 +440,16 @@ three separate commands so a signed envelope can travel between machines) and
 signers and raising the threshold as two commands for the same reason: raising it is
 the one move a single key cannot undo.
 
+**And it is written down for the people whose money it is.** `/trust` says, in the
+product rather than in a repository, what can be upgraded, what cannot, who holds
+the keys and what that means for a deposit already locked — including the parts
+that are a limit on us: the event contract has no `upgrade` at all, so the rules a
+deposit was placed under cannot be rewritten afterwards by anybody, us included.
+
+| [`/trust`](https://testnet.showup.click/trust) — what we can and cannot do |
+| :--: |
+| ![The trust page: what can be upgraded, what cannot, and who holds the keys](docs/screenshots/sow3/trust-desktop.png) |
+
 ### Deployed contracts (Testnet)
 
 | What | Address |
@@ -677,6 +687,14 @@ door is, what to bring, or who the evening is for. Hosts can now write that down
 - **Refused before it is stored**, with the same rules the rest of the project uses
   for text somebody else will read: a length limit, and no invisible or
   direction-flipping characters.
+
+| An event with a description, above the deposit it explains |
+| :--: |
+| ![An event page: the title, the host's own description attributed to them, and the reservation panel below it](docs/screenshots/sow3/event-open-desktop.png) |
+
+The description sits **above** the deposit panel and outside it, attributed to the
+wallet that wrote it with a link to that wallet's record. Inside the panel it would
+read as part of the terms, and the terms are the contract's to state.
 
 ---
 
