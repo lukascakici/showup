@@ -80,11 +80,19 @@ export default async function EventPage({
 }) {
   const { id } = await params;
 
-  // Read here so the organizer's words are in the HTML, which is the same
-  // argument `RecordBody` makes about a record: a thing somebody followed a link
-  // to read must not arrive as an empty space that fills in. One Firestore
-  // document, and it is allowed to fail — a page without a description is the
-  // ordinary case, so there is nothing to report if it cannot be fetched.
+  // Read here and handed down, so the browser makes no second round trip for it
+  // and it appears together with everything else about the event.
+  //
+  // **Not** so that it lands in the server-rendered markup — it does not, and it
+  // is worth saying because the obvious reading of this code is that it does.
+  // `EventDetail` loads the event in the browser, so nothing about an event is
+  // in the HTML: not the description, not even the title. What reaches the HTML
+  // is this value inside the RSC payload, which is why there is no flash and no
+  // extra fetch, and that is the whole benefit on offer here.
+  //
+  // One Firestore document, and it is allowed to fail — a page without a
+  // description is the ordinary case, so there is nothing to report if it
+  // cannot be fetched.
   const network = await requestNetwork();
   const description = network.contracts
     ? await readDescription(network.contracts.factoryId, id).catch(() => null)

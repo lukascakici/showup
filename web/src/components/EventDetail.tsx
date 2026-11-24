@@ -94,9 +94,10 @@ export function EventDetail({
   id: string;
   linkSecret: string | null;
   /**
-   * Read on the server and handed down, so it is in the HTML rather than
-   * appearing a moment later — see `page.tsx`. Defaulted so the forty-nine
-   * existing tests that render this component unchanged stay unchanged.
+   * Read on the server and handed down, so it needs no fetch of its own and
+   * arrives with the rest of the event — see `page.tsx` for what that does and
+   * does not mean. Defaulted so the tests that render this component without
+   * one stay unchanged.
    */
   description?: EventDescriptionRecord | null;
 }) {

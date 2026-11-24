@@ -18,9 +18,12 @@ import {
  * behaves as though the document were missing — which here would render an
  * event as having no description rather than as having one we could not read.
  *
- * There is no public GET route for this. The page that shows a description is
- * server-rendered, so it reads here directly and hands the text down; adding an
- * endpoint nothing calls would be one more surface to get wrong.
+ * There is no public GET route for this, and none is needed: `/e/[id]` is a
+ * server component, so it reads here and passes the text down as a prop. The
+ * browser therefore never fetches a description — but note that it does not
+ * arrive as *markup* either, because the component that renders it loads the
+ * event client-side. See the comment in `page.tsx`. Adding an endpoint nothing
+ * calls would be one more surface to get wrong.
  */
 
 /** How many previous versions to keep. */
