@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  DESCRIPTION_PROBLEMS,
   MAX_DESCRIPTION_LENGTH,
   descriptionDocId,
-  isBody,
+  descriptionProblem,
   normalizeBody,
   toShareText,
 } from "./event-description";
@@ -25,30 +26,52 @@ describe("where a description is stored", () => {
 });
 
 describe("what counts as a body", () => {
-  it("accepts ordinary text", () => {
-    expect(isBody("Halı saha, Perşembe. Kramponunu getir.")).toBe(true);
+  it("accepts what an organizer actually writes, including lists", () => {
+    expect(descriptionProblem("Halı saha, Perşembe. Kramponunu getir.")).toBeNull();
+    expect(descriptionProblem("Getir:\n- krampon\n- su\n\nKapı arkada.")).toBeNull();
   });
 
   it("refuses empty and whitespace-only", () => {
     // Not the same as deleting a description, and conflating them would make
     // "cleared by the organizer" and "never written" indistinguishable.
-    expect(isBody("")).toBe(false);
-    expect(isBody("   ")).toBe(false);
-    expect(isBody("\n\n\t")).toBe(false);
+    expect(descriptionProblem("")).toBe("empty");
+    expect(descriptionProblem("   ")).toBe("empty");
+    expect(descriptionProblem("\n\n\t")).toBe("empty");
   });
 
   it("refuses anything that isn't a string", () => {
     // These arrive from a JSON body, so the types are whatever was posted.
     for (const value of [null, undefined, 42, {}, [], true]) {
-      expect(isBody(value)).toBe(false);
+      expect(descriptionProblem(value)).toBe("not-text");
     }
   });
 
   it("measures the trimmed length, at the boundary", () => {
-    expect(isBody("a".repeat(MAX_DESCRIPTION_LENGTH))).toBe(true);
-    expect(isBody("a".repeat(MAX_DESCRIPTION_LENGTH + 1))).toBe(false);
+    expect(descriptionProblem("a".repeat(MAX_DESCRIPTION_LENGTH))).toBeNull();
+    expect(descriptionProblem("a".repeat(MAX_DESCRIPTION_LENGTH + 1))).toBe("too-long");
     // Padding does not buy room, and does not cost any either.
-    expect(isBody(`  ${"a".repeat(MAX_DESCRIPTION_LENGTH)}  `)).toBe(true);
+    expect(descriptionProblem(`  ${"a".repeat(MAX_DESCRIPTION_LENGTH)}  `)).toBeNull();
+  });
+
+  it("refuses invisible characters that disguise text", () => {
+    // The same rule display-name and message text are held to, and the reason is
+    // stronger here: this sits above the panel where somebody locks a deposit,
+    // written by the one person on the page with a motive for it to read a
+    // particular way.
+    expect(descriptionProblem("Deposit is 1\u202eXLM")).toBe("control-characters");
+    expect(descriptionProblem("zero\u200bwidth")).toBe("control-characters");
+    expect(descriptionProblem("\u2066isolate\u2069")).toBe("control-characters");
+    expect(descriptionProblem("bell\u0007")).toBe("control-characters");
+  });
+
+  it("still allows the whitespace people really type", () => {
+    expect(descriptionProblem("line\nbreak\ttab")).toBeNull();
+  });
+
+  it("has a message for every problem it can report", () => {
+    for (const problem of ["not-text", "empty", "too-long", "control-characters"] as const) {
+      expect(DESCRIPTION_PROBLEMS[problem]).toBeTruthy();
+    }
   });
 });
 

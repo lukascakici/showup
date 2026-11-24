@@ -28,7 +28,7 @@
  * a border with prose.
  */
 
-/** Plain text only. See `isBody`. */
+/** Plain text only. See `descriptionProblem`. */
 export const MAX_DESCRIPTION_LENGTH = 2_000;
 
 export const DESCRIPTIONS_COLLECTION = "eventDescriptions";
@@ -68,20 +68,43 @@ export function descriptionDocId(factoryId: string, eventId: string): string {
   return `${factoryId}_${eventId}`;
 }
 
+export type DescriptionProblem = "not-text" | "empty" | "too-long" | "control-characters";
+
 /**
- * Is this text something we will store?
+ * What is wrong with this, or `null`.
  *
- * Trimmed first, because trailing whitespace is not content and a body of
- * nothing but spaces is an empty description typed slowly. Empty is **not**
- * valid here — removing a description is deleting the document, which is a
- * different operation from writing an empty one, and conflating them would make
- * "cleared by the organizer" and "never written" indistinguishable.
+ * Shaped like `messageProblem` in `messages.ts`, and sharing its
+ * control-character rule rather than inventing a looser one. That rule exists
+ * because bidi overrides and invisible controls are there "to make a string
+ * render as something other than what it is" — and the argument is *stronger*
+ * here than for a message: a description is longer, it sits above the panel
+ * where somebody is about to lock a deposit, and it is written by the one
+ * person on the page with a reason to want it read a particular way.
+ *
+ * Newlines and tabs are deliberately allowed. People write lists of what to
+ * bring, which is most of what was asked for.
+ *
+ * Empty is a problem rather than a way to clear: removing a description deletes
+ * the document, and conflating the two would make "cleared by the organizer"
+ * and "never written" the same state spelled two ways.
  */
-export function isBody(value: unknown): value is string {
-  if (typeof value !== "string") return false;
+export function descriptionProblem(value: unknown): DescriptionProblem | null {
+  if (typeof value !== "string") return "not-text";
   const trimmed = value.trim();
-  return trimmed.length > 0 && trimmed.length <= MAX_DESCRIPTION_LENGTH;
+  if (trimmed.length === 0) return "empty";
+  if (trimmed.length > MAX_DESCRIPTION_LENGTH) return "too-long";
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​-‏‪-‮⁦-⁩]/.test(trimmed)) {
+    return "control-characters";
+  }
+  return null;
 }
+
+export const DESCRIPTION_PROBLEMS: Record<DescriptionProblem, string> = {
+  "not-text": "A description is text.",
+  empty: "Nothing to save.",
+  "too-long": `${MAX_DESCRIPTION_LENGTH} characters at most.`,
+  "control-characters": "That contains invisible characters that can disguise text.",
+};
 
 /**
  * The text as it will be stored.
