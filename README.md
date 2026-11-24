@@ -17,7 +17,13 @@ a "skin in the game" layer that a group chat can never enforce.
 - **Demo video:** **[the full flow, start to finish](https://youtu.be/QaT61imDXkk)**
 
 <p align="center">
-  <img src="docs/screenshots/home.png" alt="Showup landing page" width="720" />
+  <img src="docs/screenshots/sow3/lead-desktop.png" alt="The Showup home page: the hero, the turnout comparison, and the next events with their deposits and gates" width="820" />
+</p>
+
+<p align="center">
+  <sub>The live site on 25.11.2026. The one it replaced, from 15.07.2026, is still in
+  <code>docs/screenshots/home.png</code> — amber, a floating glass bar, and "connect your
+  Freighter wallet", none of which are true any more.</sub>
 </p>
 
 This README is organised by the deliverables it is built against, in order. It is
@@ -174,21 +180,32 @@ contract directly, so every one of these refuses on-chain with its own error.
 
 **Built for a phone**
 
-The home page, the create page, a live event page and the wallet picker are each
-measured at 280, 320, 375 and 390 px wide and in landscape, by a script that
-drives a real browser: 16px inputs so iOS never force-zooms a form, 44px tap
-targets, a picker that scrolls instead of putting its own button off-screen, and
-no horizontal scroll anywhere.
+The home page, the create page, a live event page and the wallet picker were each
+measured at 280, 320, 375 and 390 px wide and in landscape: 16px inputs so iOS
+never force-zooms a form, 44px tap targets, a picker that scrolls instead of
+putting its own button off-screen, and no horizontal scroll anywhere.
+
+Three of those are now checked on **every push** rather than the once somebody
+remembers. [`scripts/mobile-audit.mjs`](scripts/mobile-audit.mjs) reads the source
+and fails the build on an input under 16px, a tap target under 44px, or a fixed
+width wide enough to hang off a 320px screen — each rule earned by a fault that
+had already shipped. It also prints, every run, the three things it **cannot** see:
+overlapping text, a heading that wraps badly at 280px, and a sheet that opens off
+the bottom of the screen. A checker that implies it has looked at the phone for you
+is worse than no checker.
 
 **Continuous integration**
 
-Every push runs two jobs. **Contracts:** pinned Rust toolchain, `cargo fmt
+Every push runs three jobs. **Contracts:** pinned Rust toolchain, `cargo fmt
 --check`, build the wasm *before* clippy and tests (the event tests
 `contractimport!` it), a check that the committed TypeScript bindings still match
 the contract source, a check that **the wasm hash published in this README is
 what the deployed factory actually deploys** — asked of the live chain, not of a
-local build — then clippy with `-D warnings`, then 119 contract tests. **Web:**
-lint with `--max-warnings=0`, typecheck, 290 tests, build.
+local build — then clippy with `-D warnings`, then 166 contract tests. **Web:**
+lint with `--max-warnings=0`, typecheck, 355 tests, build. **Security:** static
+analysis of the contracts, failing the build on anything the triaged baseline
+does not already account for — see
+[*A security pass with a gate behind it*](#a-security-pass-with-a-gate-behind-it).
 
 ### Architecture
 
@@ -200,13 +217,21 @@ showup/
 │   ├── factory/           # deploys events, funds fee pools, registers them for scoring
 │   └── reputation/        # the show-up ledger (Deliverable 2)
 ├── web/
-│   └── src/
-│       ├── app/           # Next.js App Router: /, /create, /e/[id], /api/events/sync
-│       ├── components/    # UI; the states worth pinning have component tests
-│       ├── lib/           # chain reads, wallet kit, contract clients, pure helpers
-│       └── test/          # test-only helpers (a controllable matchMedia)
+│   ├── src/
+│   │   ├── app/           # Next.js App Router: pages (/, /create, /e/[id],
+│   │   │                  #   /u/[address], /trust, the check-in link) and the
+│   │   │                  #   API routes the pages and the cron call
+│   │   ├── components/    # UI; the states worth pinning have component tests
+│   │   ├── lib/           # chain reads, wallet kit, contract clients, the
+│   │   │                  #   network registry, pure helpers
+│   │   └── test/          # test-only helpers (a render that supplies a network,
+│   │                      #   a controllable matchMedia)
+│   └── scripts/           # evidence collection, the admin multisig tools
+├── scripts/               # CI checks and the measuring tools (mobile audit,
+│                          #   wasm hash, bindings, the Scout gate)
 ├── docs/
 │   ├── deployments.md     # every address, every hash, what each one cost
+│   ├── SOW1/ SOW2/ SOW3/  # one short page per deliverable, per engagement
 │   └── screenshots/
 └── .github/workflows/ci.yml
 ```
@@ -220,10 +245,29 @@ showup/
 | Package manager | **npm** | the lockfile CI installs from |
 | Inter-contract calls | via the **`interfaces`** crate | depending on another *contract* crate pollutes the wasm spec |
 
-`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is the one environment variable the app
-needs, and it is public by design — it identifies the app to the WalletConnect
-relay and ships in the client bundle. Without it, the WalletConnect row simply
-isn't offered; everything else works.
+**Nothing in the configuration is load-bearing for the chain.** Every address the
+app needs is compiled in, so a checkout with an empty `.env` still connects a
+wallet, reserves a spot and reclaims a deposit. What the variables below buy is
+the off-chain half — the parts that remember things the ledger does not — and each
+one is written to be *absent*, not assumed:
+
+| Variable | What it is for | Without it |
+| :-- | :-- | :-- |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | identifies the app to the WalletConnect relay | the WalletConnect row isn't offered; the other four wallets work |
+| `NEXT_PUBLIC_FIREBASE_*` (six) | the client SDK's project config — the read side of the index | the app reads events, activity and records straight from the chain, exactly as it did before the index existed |
+| `FIREBASE_SERVICE_ACCOUNT` | server-side Firestore, for names, mirrored records and event descriptions | each reads as *not written yet* rather than failing |
+| `SESSION_SECRET` | signs the token that proves a guest holds a spot | `/api/session` answers 503 and says so |
+| `CRON_SECRET` | authenticates Vercel Cron to the sweep | the sweep **refuses to run** rather than running unauthenticated |
+| `NEXT_PUBLIC_MAINNET_RPC_URL` | the Mainnet RPC endpoint | Mainnet is not a live network and every hostname serves Testnet |
+| `NEXT_PUBLIC_SITE_URL` | overrides the host invite links are built from | links use `testnet.showup.click`, or `showup.click` on Mainnet |
+
+The `NEXT_PUBLIC_` ones are public by design: they ship in the client bundle, and
+all of them identify rather than authorise. The other three are server-only and
+read in code that can never run in a browser. The pattern they share is the
+interesting part — `CRON_SECRET` was unset once and the sweep ran anyway, because
+the guard was written as "reject if the secret is set and does not match". Both
+secrets now refuse on absence, and `SESSION_SECRET` was written that way from the
+start *because* of that bug.
 
 ### Evidence
 
@@ -350,6 +394,51 @@ as the money it describes, so the score and the settlement can never disagree.
 - **The event contract deliberately has no `upgrade`.** A deployed event holds
   other people's deposits under rules they agreed to; being able to rewrite those
   rules afterwards is not a feature.
+
+### A security pass with a gate behind it
+
+Before these contracts go anywhere near real money they were frozen at one commit
+and put through the static analysis an audit expects to have been run first. The
+result is **[docs/SOW3/security.md](docs/SOW3/security.md)**: every finding, what
+was done about it, and the reasoning for everything deliberately left alone.
+
+- **73 findings. Twelve fixed, including every critical one**; the remaining 61
+  each carry a written decision. A report with no findings is a report nobody
+  believes — eleven `integer_overflow_or_underflow` criticals were real, and the
+  arithmetic they pointed at is now bounded.
+- **[CoinFabrik Scout](https://github.com/CoinFabrik/scout-audit) `0.3.17`, pinned**,
+  39 detectors, run over all four crates. Pinned because a detector set that moves
+  underneath a report makes every finding in it unreproducible.
+- **It runs on every push that touches the contracts, and it blocks.** It spent its
+  first weeks as `continue-on-error` while the findings were untriaged, because a
+  job that is red on 73 known findings is a job everybody learns to ignore.
+- **The gate is a baseline, not a count of zero.**
+  [`scripts/check-scout-baseline.mjs`](scripts/check-scout-baseline.mjs) fails the
+  build on any critical, on any detector that rises above the number recorded
+  against it — and, deliberately, **on an empty report**. Zero findings does not
+  mean the code got clean; it usually means the analysis never ran, and that is the
+  failure a gate has to be able to tell from success.
+- **The scope rule is the whole push, not the last commit.** A push of two commits
+  where only the earlier one touches the contracts is exactly the case the narrower
+  form gets wrong — and it got it wrong here, letting the fix to this very job reach
+  `main` unanalysed, alongside a web-only commit.
+
+**Both contracts are now governed by a 2-of-3 account.** `propose_admin` /
+`accept_admin` moved the admin of the factory and the reputation ledger to
+[`GBWMYPV6…LEAF5QQF`](https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF),
+whose low, medium and high thresholds are all 2 across three signers held in three
+places. Soroban needs nothing special for this: a contract's `require_auth` on a
+classic account is satisfied by the transaction's own signature set, checked against
+that account's medium threshold, so an admin call is now a transaction two people
+sign. The order of the hand-over was chosen so the irreversible step came last —
+rehearsed on the live factory and undone, proved end to end on a throwaway one,
+handed over while a single signature still sufficed, both holders' signatures
+verified against the transaction hash, **then** the threshold raised. The tools are
+[`web/scripts/admin-tx.mjs`](web/scripts/admin-tx.mjs) (build · sign · send, as
+three separate commands so a signed envelope can travel between machines) and
+[`web/scripts/admin-account.mjs`](web/scripts/admin-account.mjs), which keeps adding
+signers and raising the threshold as two commands for the same reason: raising it is
+the one move a single key cannot undo.
 
 ### Deployed contracts (Testnet)
 
@@ -529,6 +618,66 @@ every `reserved`, `checked_in`, `phase_changed` and `finalized` event straight
 off the chain and prints it as markdown — `npm run evidence -- <event>` from
 `web/` reproduces this section, and disagrees with it if anyone edits a hash.
 
+### Two networks, one build
+
+Mainnet is in scope for the third engagement, which means the app can no longer
+have a network compiled into it. It has a registry of two —
+[`web/src/lib/networks.ts`](web/src/lib/networks.ts) — and **the hostname decides
+which one you are on**.
+
+- **Mainnet is an allowlist of exactly one hostname.** `showup.click` and its `www`
+  form are Mainnet; every other host in the world — `testnet.showup.click`, a Vercel
+  preview URL, `localhost`, a typo — is Testnet. The rule is written that way round
+  on purpose: the failure of a default-deny list is somebody on Testnet when they
+  expected Mainnet, and the failure of the other kind is somebody signing a real
+  transaction because a preview deployment answered to the wrong name.
+- **A network with no contracts is not a network.** `liveNetworks()` requires both a
+  deployed contract set and an RPC URL, and a hostname asking for a network that
+  isn't live falls back rather than half-working. So today, with the Mainnet
+  addresses still empty, `showup.click` serves Testnet — and the day they are filled
+  in is the only thing that changes.
+- **The native XLM contract is derived, never transcribed.** Each network's SAC
+  comes from `Asset.native().contractId(passphrase)`, because a 56-character address
+  copied from a document into the wrong network's config is a mistake with no
+  symptom until money moves.
+- **Two networks share one database, so every document key carries the contract that
+  produced it.** A record keyed by address alone would have let a Mainnet record and
+  a Testnet record for the same wallet overwrite each other — which was a live bug in
+  the records index, found by asking what the key would mean with two networks, and
+  pre-empted in event descriptions before they shipped.
+- **Invite links are built from the network's canonical host**, not from
+  `window.location.origin`. An invite created on a preview deployment has to open for
+  somebody else, and an invite that lands on the wrong network shows a stranger an
+  event that does not exist there.
+- **The nightly sweep visits every live network under one deadline**, because Vercel
+  Cron only ever calls the production hostname — so a per-host sweep would index
+  whichever network that hostname happened to resolve to and quietly leave the other
+  one stale.
+
+### An event can say what the contract cannot
+
+A contract knows a deposit, a capacity and a start time. It does not know where the
+door is, what to bring, or who the evening is for. Hosts can now write that down.
+
+- **Off-chain, deliberately.** The text lives in Firestore, not in contract storage:
+  it is prose that gets edited, Soroban rents state by the byte, and nothing about a
+  paragraph needs to be adjudicated by a contract.
+- **Who may write it is read from the chain anyway.** The route loads the event and
+  checks the wallet against `hosts` — the contract's own list, not a mirrored one —
+  before it will accept a word. The check happens **before** the signature is spent,
+  so an RPC failure costs a retry rather than another trip to the wallet.
+- **Proved by a signature, like a name.** The host signs a challenge transaction
+  that is never submitted, which is the one proof of wallet control that works in
+  every wallet here. Nothing is sent and no fee is paid, and the UI says so before
+  the prompt appears.
+- **Edits keep their history, capped at twenty revisions, written in a transaction**
+  so two co-hosts saving at once cannot drop each other's version — and an edit that
+  changes nothing is not a revision, because the question the history exists to
+  answer is "did this change after I reserved?"
+- **Refused before it is stored**, with the same rules the rest of the project uses
+  for text somebody else will read: a length limit, and no invisible or
+  direction-flipping characters.
+
 ---
 
 ## Tech stack
@@ -599,19 +748,24 @@ out in **[docs/deployments.md](docs/deployments.md)** under *Reproducing*.
 ## Testing
 
 ```bash
-cargo test --workspace     # 60 contract tests
-cd web && npm run test:run # 137 frontend tests
+cargo test --workspace     # 166 contract tests
+cd web && npm run test:run # 355 frontend tests
 ```
 
-**Contracts — 60 tests.** 32 on the event contract (deposits, phases, capacity,
-wrong codes, double check-in, forfeit splitting, the organizer-vanished fallback),
-14 on the factory (deployment, fee funding, admin gating, the wasm-hash setter)
-and 14 on the reputation ledger (the factory gate, scoring in both directions,
-non-admin refusals).
+**Contracts — 166 tests.** 109 on the event contract (deposits, phases, capacity,
+wrong codes, double check-in, forfeit splitting, the organizer-vanished fallback,
+each of the four admission gates and every way they refuse, co-hosts, vouching,
+and reclaiming a deposit the organizer never finalised), 23 on the factory
+(deployment, fee funding, admin gating, the wasm-hash setter, the two-step admin
+hand-over) and 34 on the reputation ledger (the factory gate, scoring in both
+directions, the wider record decoded alongside scores written by the older wasm,
+broken vouches, `renew` from a stranger, non-admin refusals).
 
-**Frontend — 137 tests.** 76 over pure logic — stroop arithmetic, byte-counted
+**Frontend — 355 tests.** 216 over pure logic — stroop arithmetic, byte-counted
 titles, the day-grouping the event list uses, the funding pre-flight's base-reserve
-arithmetic, wallet-error mapping, link building — and 61 that render components.
+arithmetic, wallet-error mapping, link building, the wallet-proof challenge, the
+network registry and the document keys that keep two networks apart — and 139 that
+render components.
 The component tests deliberately cover the states that are hard to reach by hand,
 because reaching them means making the network fail on cue or owning a wallet
 deliberately set to the wrong chain: loading versus empty versus broken, "this
@@ -622,8 +776,16 @@ both halves of the wallet picker's device-dependent advice.
 
 ## Network
 
-Stellar **Testnet** only (`Test SDF Network ; September 2015`). Mainnet is
-explicitly out of scope, as are non-XLM assets and fee sponsorship.
+Every contract this README publishes an address for is on Stellar **Testnet**
+(`Test SDF Network ; September 2015`), and no real funds have moved through any of
+them. Non-XLM assets and fee sponsorship remain out of scope.
+
+Mainnet was out of scope for the first two engagements and is **in** scope for the
+third, so the app no longer has one network compiled into it: it has a registry of
+two, and which one you get is decided by the hostname you arrived on. The Mainnet
+addresses are not filled in yet, so every hostname serves Testnet today — see
+[*Two networks, one build*](#two-networks-one-build) for why that is the safe
+direction to fail in.
 
 ```
 Wallet ──connect──▶ Showup ──loadAccount──▶ Horizon (Testnet)
@@ -642,8 +804,9 @@ Soroban RPC. Either way the returned hash links straight to Stellar Explorer.
 ## Roadmap
 
 Showup was built as a 30-day [Instawards](https://stellar.org) engagement with the
-Stellar Türkiye chapter, in four weeks, and a second engagement followed it. This
-README grows with both — nothing that shipped ever disappears from the record.
+Stellar Türkiye chapter, in four weeks. A second engagement followed it, and a
+third is running now. This README grows with all three — nothing that shipped ever
+disappears from the record.
 
 - [x] **Week 1** · four wallets via StellarWalletsKit, every failure mode in plain
       language, public deployment, GitHub Actions CI on every push
