@@ -109,8 +109,17 @@ for (const file of files(root)) {
     //
     // Matched on the element rather than on every `text-sm` in the file, because
     // small type is correct nearly everywhere and wrong only in a focusable field.
-    if (/<(input|textarea)\b/.test(line)) {
-      const small = line.match(/\btext-(xs|sm)\b|\btext-\[1[0-5](\.\d+)?px\]/);
+    //
+    // Read through `openingTag`, like the buttons below, because the first
+    // version read only the line the tag began on. A multi-line `<textarea>`
+    // with its className eight lines down was therefore never measured at all,
+    // and the audit said "ok" about a field it had not looked at. Proven by
+    // setting one to `text-sm` and watching this pass.
+    const field = line.search(/<(input|textarea)\b/);
+    if (field !== -1) {
+      const offset = lines.slice(0, i).join("\n").length + (i > 0 ? 1 : 0) + field;
+      const tag = openingTag(source, offset);
+      const small = tag.match(/\btext-(xs|sm)\b|\btext-\[1[0-5](\.\d+)?px\]/);
       if (small) report(file, at, "ios-zoom", `${small[0]} on a focusable field`);
     }
 
