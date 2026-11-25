@@ -8,11 +8,16 @@ people who actually show up are the ones who get rewarded.
 It's the anti-flake primitive for meetups, study groups, game nights, and calls —
 a "skin in the game" layer that a group chat can never enforce.
 
-> **Network:** Stellar **Testnet** only. No real funds are used.
+> **Network:** every contract this README publishes an address for is on Stellar
+> **Testnet**, and no real funds have moved through any of them. Mainnet is in
+> scope for the engagement running now and is not deployed yet — see
+> [*Two networks, one build*](#two-networks-one-build).
 
 [![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
 
-- **Live demo:** **[showup.click](https://showup.click)**
+- **Live demo:** **[testnet.showup.click](https://testnet.showup.click)** — and
+  **[showup.click](https://showup.click)**, which serves Testnet until the Mainnet
+  contracts exist
 - **What it does, in 15 seconds:** **[the overview](https://youtu.be/0s9vVx6JVSg)**
 - **Demo video:** **[the full flow, start to finish](https://youtu.be/QaT61imDXkk)**
 
@@ -36,8 +41,8 @@ it.
 | **[2](#deliverable-2--the-on-chain-reputation-contract)** | An on-chain `reputation` contract, written by the events themselves | shipped |
 | **[3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video)** | One real event, 10+ real attendees, a demo video | shipped |
 
-**A second engagement followed, and it grew these same three sections rather than
-starting new ones** — one record, not two:
+**Two further engagements followed, and they grew these same three sections rather
+than starting new ones** — one record, not three:
 
 | Second engagement | What it is | Where it lives here |
 | :-- | :-- | :-- |
@@ -45,10 +50,22 @@ starting new ones** — one record, not two:
 | 2 | A reputation record worth reading | [Deliverable 2](#deliverable-2--the-on-chain-reputation-contract) — vouching, the full record, `/u/<address>` |
 | 3 | The product those mechanics need | [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci) — names, the conversation, onboarding — and [Deliverable 3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video) for the run it was proved on |
 
+| Third engagement | What it is | Where it lives here |
+| :-- | :-- | :-- |
+| 1 | A deposit nobody can strand | [Deliverable 1](#deliverable-1--a-deployed-multi-wallet-dapp-with-ci) — `reclaim`, the corrected settlement, bounded amounts |
+| 2 | Audit readiness | [Deliverable 2](#deliverable-2--the-on-chain-reputation-contract) — a blocking security gate, and an admin no single key can move |
+| 3 | Real money, and the product around it | [Deliverable 3](#deliverable-3--one-real-event-10-real-attendees-a-demo-video) — two networks from two hostnames, events in their host's own words |
+
+The third is **in progress** — it runs to 10.12.2026, and the Mainnet deployment
+it builds toward has not happened yet. Everything described below exists and is
+verifiable today; where something is still ahead, this README says so rather than
+writing it in the past tense.
+
 Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** and
 **[docs/SOW2](docs/SOW2/)** have one short page per deliverable, written against
-each SOW's §6.1 and readable without a technical background. The sections below are
-the same record with the engineering in it.
+each SOW's §6.1 and readable without a technical background; **[docs/SOW3](docs/SOW3/)**
+holds the third engagement's security report. The sections below are the same record
+with the engineering in it.
 
 The second engagement's contracts were upgraded **in place**, so nothing in the
 first engagement's evidence has been invalidated: every address on those pages is
@@ -168,6 +185,59 @@ contract directly, so every one of these refuses on-chain with its own error.
   request body can reach a stored number: the sync route accepts an address and
   reads every figure from the contract itself.
 
+**A deposit nobody can strand**
+
+The first two engagements had one gap nobody had been bitten by yet, which is the
+only kind worth closing before real money arrives: **every way a deposit came back
+required the organizer to do something.** Check-in needed them to open it, the
+settlement needed them to call `finalize`. An organizer who simply stopped — lost
+the key, lost interest, got hit by a bus — left everybody's money locked in a
+contract with no path out, forever.
+
+- **`reclaim(guest)`** — 48 hours after the start time, any guest holding a
+  reservation takes their own deposit back, signed by themselves, **with no
+  organizer involved and no admin anywhere in the path.** Not a refund somebody
+  grants; a door in the contract that opens on a clock. The 48 hours are the
+  organizer's to settle in: before that it refuses with `ReclaimTooEarly`, because
+  a reclaim and a `finalize` racing each other is the one case where both are
+  legitimate.
+- **The settlement was corrected to match.** `finalize` now subtracts reclaimers
+  before working out the no-shows. Without that term the contract tries to
+  redistribute money that has already left, the transfer traps, and an event that
+  was abandoned *and* partly reclaimed could never be settled at all — stranding
+  precisely the people who waited rather than walking out.
+- **The organizer's abandonment is recorded, on its own counter.** The *first*
+  reclaim writes `record_abandoned` against whoever created the event: there is no
+  `finalize` to carry that write, which is the whole point, so the first guest
+  giving up on the organizer is what carries it. It is `events_abandoned`, kept
+  separate from `events_organised`, and the guest's own record is untouched — a
+  reclaim is neither attendance nor absence.
+- **The guest never pays for the ledger being down.** The write goes through
+  `try_record_abandoned`: a reputation contract that is unreachable must never take
+  somebody's deposit with it.
+
+**Amounts that cannot overflow, and a settlement that refuses rather than guesses**
+
+- **The ceiling is fixed at creation.** `deposit + fee_allowance`, multiplied across
+  the whole capacity, has to fit in an `i128` or the event is never deployed —
+  refused with `AmountsTooLarge`. These three numbers are the organizer's to choose,
+  and creation is the only moment they can be rejected while nobody's money depends
+  on them yet.
+- **Every line of the money path is `checked_`**, and a failure returns
+  `InvariantViolated` rather than trapping. It is unreachable by construction — the
+  ceiling bounds the amounts, the capacity guard bounds the lists — but "provably in
+  range" rests on invariants enforced in *other* functions, and that is exactly the
+  reasoning that rots when somebody changes one of them. **A refusal can be
+  diagnosed and recovered from; a wrong payout cannot.**
+- **Deliberately not saturating arithmetic**, which is the obvious reading of an
+  overflow finding and would have been the wrong fix here: a saturating subtraction
+  turns a broken invariant into a plausible-looking wrong number, and in `finalize`
+  that number is how much money each attendee receives.
+- **Eight error codes stopped falling through to "please try again."** Codes 24–31 —
+  the four from vouching and the four from the reclaim and the bounds — were landing
+  on the generic retry message. Not one of them is helped by retrying, which is the
+  single piece of advice that whole list of messages exists to stop giving.
+
 **Honest states everywhere**
 
 - **Loading, empty and broken are three different things**, and are no longer
@@ -277,7 +347,7 @@ hash and Explorer link.
 
 | What | Where |
 | :-- | :-- |
-| Live link | **[showup.click](https://showup.click)** |
+| Live link | **[showup.click](https://showup.click)** — and **[testnet.showup.click](https://testnet.showup.click)**, which is where Testnet lives now that there are two hostnames |
 | CI passing | [the badge above](https://github.com/lukascakici/showup/actions/workflows/ci.yml), green on every push |
 | Wallet-selection dialog | below |
 | A completed transaction, with its hash and Explorer link | below |
@@ -304,6 +374,11 @@ screenshot alone cannot prove:
 | :--: | :--: |
 | ![Connected wallet on the home screen](docs/screenshots/connected.png) | ![Wallet menu showing XLM balance and faucet](docs/screenshots/balance.png) |
 
+Both from week 1 as well, and kept as that week's record rather than refreshed.
+The current equivalents are in
+[`docs/screenshots/sow3/`](docs/screenshots/sow3), captured from the live site on
+25.11.2026.
+
 | Successful transaction — from the send tool, since removed |
 | :--: |
 | ![Successful payment with transaction hash and Explorer link](docs/screenshots/transaction.png) |
@@ -316,6 +391,36 @@ nowhere a reader could see it. The same screenshot showed the heading `Event` on
 an event that by then had a name on-chain, because the detail page had never been
 taught to read `title`. Both are fixed. The screenshot requirement found two real
 gaps that the tests did not.
+
+#### A deposit recovered from an organizer who never came back
+
+The third engagement's addition to this deliverable, proved on the live chain
+rather than only in tests. An event was created with a start time two days in the
+past, reserved by a guest, and then **abandoned** — the organizer never called
+anything again.
+
+| | |
+| :-- | :-- |
+| Event | [`CAYQHGRP…V4L7KCAK5`](https://stellar.expert/explorer/testnet/contract/CAYQHGRPZ7SKAESRPNJRK6RQZBDYZWYZFHGYO2LW3U5MNETV4L7KCAK5) |
+| Organizer, who abandoned it | `GD2CEL7T…MXMPVMRY5H` |
+| Guest, who got their own money out | `GASUZI3H…R6FZWTODEDY` |
+| `rsvp` — 1 XLM locked | [`369dc200…9113f75d`](https://stellar.expert/explorer/testnet/tx/369dc200cc5555b9c7d08f74347382f7765ab1de942182af480022c29113f75d) |
+| **`reclaim` — 1 XLM back, no organizer in the transaction at all** | [**`dc0ec0e2…4232d0b3be`**](https://stellar.expert/explorer/testnet/tx/dc0ec0e27c1b6bb91d4f24475028c1e653597c4169853e7956c9594232d0b3be) |
+
+Read back afterwards with no key, no funded account and no signature: the
+organizer's `events_abandoned` went from 0 to **1**, the guest's own record stayed
+at all zeros — a reclaim is neither attendance nor absence — and a second
+`reclaim` from the same wallet is refused `Error(Contract, #29)`,
+`AlreadyReclaimed`. The commands to re-derive each of those are in
+[docs/deployments.md](docs/deployments.md#proven-on-the-live-chain-not-only-in-tests).
+
+The amount ceiling is demonstrable the same way, against the live factory:
+`create_event` with a deposit of `i128::MAX` is refused `Error(Contract, #30)`,
+`AmountsTooLarge`, and nothing is deployed. **Neither refusal has a transaction
+hash and neither can** — Soroban simulates before it submits, so a refused call
+never becomes a transaction. The error code and a command anybody can run are the
+honest evidence, and both are in
+[docs/deployments.md](docs/deployments.md#proven-on-the-live-chain).
 
 ---
 
@@ -533,6 +638,41 @@ it.
 
 Every hash, every refusal code, the storage timestamps and the durability policy
 are in **[docs/deployments.md](docs/deployments.md)**.
+
+#### The admin moved to an account no single key can move
+
+The third engagement's addition here. Both contracts were handed to a 2-of-3
+account, and the handover is on the chain rather than asserted:
+
+| Step | Transaction |
+| :-- | :-- |
+| `factory.propose_admin` | [`67ca4b21…`](https://stellar.expert/explorer/testnet/tx/67ca4b21e726345c7b9951f8ca98e2544c953b44efac6e02239b68e361c50404) |
+| `factory.accept_admin`, signed by the incoming account | [`8b67a200…`](https://stellar.expert/explorer/testnet/tx/8b67a200836b9fae3b349353ab8ab49fc0cb0d08b7814395f2cae19242c85f21) |
+| `reputation.propose_admin` | [`3a60b117…`](https://stellar.expert/explorer/testnet/tx/3a60b117db1b9de20716d7b92e435684a73e4fc4f71f7444923536817e686397) |
+| `reputation.accept_admin` | [`b7a5a31d…`](https://stellar.expert/explorer/testnet/tx/b7a5a31d627c71d5ad0add0d985227e2397b69f014555afbeef64221d2faccc9) |
+| The two other holders added as signers | [`e0169a05…`](https://stellar.expert/explorer/testnet/tx/e0169a0585355da51cee1f8218a00c6306a8af76661a1fc092f52e81dd1ad10d) |
+| **A live admin call carrying two signatures** | [**`6c8a1437…`**](https://stellar.expert/explorer/testnet/tx/6c8a14375849a71b3a490a06b228809072bb5c7cb21cbd5a1f73aa0504463a67) |
+
+**Neither address changed**, the factory's events and the ledger's records are
+untouched, and the handover is two-step on purpose: `propose_admin` alone is inert,
+so a proposal to an address nobody can sign for changes nothing.
+
+The security property is in the two refusals, and neither has a hash because the
+network rejected them before inclusion: the **retired** command-line key now gets
+`set_event_wasm_hash` refused outright, and a call carrying only *one* of the new
+account's three signatures is refused `txBadAuth` by the live factory. One of those
+keys is on the machine this was built from. It cannot act alone, which is the entire
+point.
+
+Proving the other two holders could sign had to happen **before** the threshold went
+up, because raising it is the one move a single key cannot undo — an account whose
+other holders cannot really sign is not inconvenienced, it is finished. Both signed
+the same real transaction and both signatures were verified against its hash.
+Submitting it was not even possible: at threshold 1, Stellar refuses a transaction
+carrying *more* signatures than the account needs (`txBadAuthExtra`). Two holders
+cannot be proven in one submitted transaction on a 1-of-N account — they can be
+proven in one signed envelope, and a valid signature over a known payload is the
+evidence either way.
 
 ---
 
@@ -858,6 +998,34 @@ disappears from the record.
 - [x] **A second run** — a guest list built entirely by vouching: 12 reserved, 10
       checked in, 20 XLM split among them, and two vouchers charged for the people
       they backed. [The record](#the-second-run--a-guest-list-built-entirely-by-vouching).
+
+**Third engagement** — 11.11.2026 to 10.12.2026, in progress
+
+- [x] **A deposit nobody can strand** — `reclaim` lets a guest take their own
+      deposit back 48 hours after the start time with no organizer and no admin in
+      the path, `finalize` was corrected to settle an event that was abandoned *and*
+      partly reclaimed, and the organizer's abandonment is recorded on its own
+      counter. [Proved on the live chain](#a-deposit-recovered-from-an-organizer-who-never-came-back).
+- [x] **Bounded amounts and a settlement that refuses rather than guesses** — a
+      ceiling fixed at creation, `checked_` arithmetic the whole way through the
+      money path, and eight error codes that stopped falling through to "please try
+      again".
+- [x] **Audit readiness** — 73 Scout findings triaged, twelve fixed including every
+      critical, the rest decided in writing; the analysis runs on every contract
+      change and [blocks the build](#a-security-pass-with-a-gate-behind-it).
+- [x] **An admin no single key can move** — both contracts handed to a 2-of-3
+      account, with the handover and the refusals
+      [on the chain](#the-admin-moved-to-an-account-no-single-key-can-move), and
+      `/trust` saying in the product what can and cannot be changed.
+- [x] **Two networks from one build** — the hostname decides, Mainnet is an
+      allowlist of exactly one, and a network with no contracts is not a network.
+      [How it fails safe](#two-networks-one-build).
+- [x] **Events in their host's own words** — a description written off-chain,
+      authorised against the contract's own host list.
+      [What that took](#an-event-can-say-what-the-contract-cannot).
+- [ ] **Mainnet** — the deployment itself, and the real-money confirmation step
+      that only renders there.
+- [ ] **A real event with real deposits**, and the demo video of it.
 
 ---
 
