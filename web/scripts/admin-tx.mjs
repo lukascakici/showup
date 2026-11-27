@@ -2,9 +2,16 @@
  * Run an admin call against the factory or the reputation ledger, with as many
  * signatures as the admin account requires.
  *
- *   node scripts/admin-tx.mjs build <contract> <fn> [value ...]
- *   node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>]
- *   node scripts/admin-tx.mjs send  <xdr|@file>
+ *   node scripts/admin-tx.mjs build <contract> <fn> [value ...] [--network mainnet]
+ *   node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>] [--network mainnet]
+ *   node scripts/admin-tx.mjs send  <xdr|@file>                 [--network mainnet]
+ *
+ * **Pass `--network` to every step of one envelope, or none.** The network
+ * passphrase is part of what gets signed, so a transaction built for one chain
+ * and signed on another produces a signature that is simply invalid — and the
+ * error arrives at `send`, after the holders have done their part. Testnet is
+ * the default, because the harmless mistake is doing this on the chain where
+ * nothing is worth anything.
  *
  * The `stellar` CLI signs with exactly one key, which is fine while the admin is
  * one keypair and impossible once it is a multisig account. This is the same
@@ -46,13 +53,58 @@ import {
   BASE_FEE,
 } from "@stellar/stellar-sdk";
 
-const RPC_URL = "https://soroban-testnet.stellar.org";
-const NETWORK = Networks.TESTNET;
-const EXPLORER = "https://stellar.expert/explorer/testnet";
+/**
+ * Which chain, named rather than inferred, defaulting to the cheap one.
+ *
+ * Mainnet's RPC is read from `MAINNET_RPC_URL` — the same server-only variable
+ * the web app uses — because every Mainnet provider authenticates and the key
+ * is inside the URL. There is deliberately no fallback: a wrong-but-present
+ * endpoint is worse than a missing one.
+ */
+const NETWORKS = {
+  testnet: {
+    rpcUrl: () => "https://soroban-testnet.stellar.org",
+    passphrase: Networks.TESTNET,
+    explorer: "https://stellar.expert/explorer/testnet",
+  },
+  mainnet: {
+    rpcUrl: () => {
+      const url = process.env.MAINNET_RPC_URL;
+      if (!url) {
+        console.error(
+          "\nMAINNET_RPC_URL is not set. Mainnet has no free public Soroban RPC,\n" +
+            "so there is nothing sensible to fall back to. Export the same value\n" +
+            "the deployment uses — see web/.env.example.\n",
+        );
+        process.exit(1);
+      }
+      return url;
+    },
+    passphrase: Networks.PUBLIC,
+    explorer: "https://stellar.expert/explorer/public",
+  },
+};
+
+const argv = process.argv.slice(2);
+const flag = argv.indexOf("--network");
+const chosen = flag === -1 ? "testnet" : argv[flag + 1];
+if (flag !== -1) argv.splice(flag, 2);
+if (!NETWORKS[chosen]) {
+  console.error(`\nUnknown network "${chosen}". Use testnet or mainnet.\n`);
+  process.exit(1);
+}
+
+const NETWORK = NETWORKS[chosen].passphrase;
+const EXPLORER = NETWORKS[chosen].explorer;
 /** Nobody's account. Only ever a sequence number for a read-only simulation. */
 const NULL_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 
-const server = new rpc.Server(RPC_URL);
+const server = new rpc.Server(NETWORKS[chosen].rpcUrl());
+
+// Printed on every step, to stderr so it never lands in a redirected envelope
+// file. Three commands run minutes apart by different people is exactly where
+// a silent default goes unnoticed.
+console.error(`network: ${chosen}`);
 
 /** What the admin is ever asked to do, and nothing else. */
 const ADMIN_FUNCTIONS = new Set([
@@ -352,14 +404,17 @@ function txCode(errorResult) {
   }
 }
 
-const [command, ...rest] = process.argv.slice(2);
+// `argv`, with `--network` already removed — reading process.argv again here
+// would pass the flag through as a contract-call argument, where the type
+// inference below would refuse it as neither an address nor a hash.
+const [command, ...rest] = argv;
 const commands = { build, sign, send };
 if (!commands[command]) {
   die(
     "Usage:\n" +
-      "  node scripts/admin-tx.mjs build <contract> <fn> [value ...]\n" +
-      "  node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>]\n" +
-      "  node scripts/admin-tx.mjs send  <xdr|@file>",
+      "  node scripts/admin-tx.mjs build <contract> <fn> [value ...] [--network mainnet]\n" +
+      "  node scripts/admin-tx.mjs sign  <xdr|@file> [--alias <identity>] [--network mainnet]\n" +
+      "  node scripts/admin-tx.mjs send  <xdr|@file>                 [--network mainnet]",
   );
 }
 await commands[command](rest);

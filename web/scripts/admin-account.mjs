@@ -2,9 +2,17 @@
  * Turn the admin into an account no single signature can move, and read back
  * what any account's signing rules actually are.
  *
- *   node scripts/admin-account.mjs show        <account>
- *   node scripts/admin-account.mjs add-signers <identity> <signer> [signer ...]
- *   node scripts/admin-account.mjs require     <identity> <n>
+ *   node scripts/admin-account.mjs show        <account>            [--network mainnet]
+ *   node scripts/admin-account.mjs add-signers <identity> <signer>… [--network mainnet]
+ *   node scripts/admin-account.mjs require     <identity> <n>       [--network mainnet]
+ *
+ * **The network is named, never inferred, and never defaulted to the one that
+ * costs money.** Testnet unless `--network mainnet` is passed. This file was
+ * written with Testnet's passphrase as a constant, which on Mainnet would have
+ * built a transaction signed for the wrong network — Stellar's passphrase is
+ * part of what gets signed, so the signature is simply invalid elsewhere. That
+ * fails safe rather than doing something wrong, but it fails at the end of a
+ * sequence whose whole point is that the dangerous step comes last.
  *
  * **Adding signers and requiring them are deliberately two commands**, and the
  * order between them is the whole safety story. An account whose threshold is
@@ -42,11 +50,45 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 
-const HORIZON_URL = "https://horizon-testnet.stellar.org";
-const NETWORK = Networks.TESTNET;
-const EXPLORER = "https://stellar.expert/explorer/testnet";
+/**
+ * Which chain this run is talking to.
+ *
+ * Read off `--network` and removed from argv before the commands parse their
+ * own arguments, so a flag at either end behaves the same. Anything other than
+ * `mainnet` is Testnet — a default-deny, the same rule the app's hostname
+ * registry uses, and for the same reason: the harmless failure is doing this on
+ * Testnet when Mainnet was meant.
+ */
+const NETWORKS = {
+  testnet: {
+    passphrase: Networks.TESTNET,
+    horizon: "https://horizon-testnet.stellar.org",
+    explorer: "https://stellar.expert/explorer/testnet",
+  },
+  mainnet: {
+    passphrase: Networks.PUBLIC,
+    horizon: "https://horizon.stellar.org",
+    explorer: "https://stellar.expert/explorer/public",
+  },
+};
+
+const argv = process.argv.slice(2);
+const flag = argv.indexOf("--network");
+const chosen = flag === -1 ? "testnet" : argv[flag + 1];
+if (flag !== -1) argv.splice(flag, 2);
+if (!NETWORKS[chosen]) {
+  console.error(`\nUnknown network "${chosen}". Use testnet or mainnet.\n`);
+  process.exit(1);
+}
+
+const { passphrase: NETWORK, horizon: HORIZON_URL, explorer: EXPLORER } = NETWORKS[chosen];
 
 const horizon = new Horizon.Server(HORIZON_URL);
+
+// Said out loud on every run. The commands below change who can move an
+// account, and "which chain was that?" is not a question to answer from
+// scrollback after the fact.
+console.log(`network: ${chosen}`);
 
 function die(message) {
   console.error(`\n${message}\n`);
@@ -211,14 +253,17 @@ async function require_([identity, n]) {
   await submit(tx, master);
 }
 
-const [command, ...rest] = process.argv.slice(2);
+// `argv`, not `process.argv` — the network flag has already been taken out of
+// it. Reading process.argv again here would hand `--network mainnet` to a
+// command as if it were a signer address.
+const [command, ...rest] = argv;
 const commands = { show, "add-signers": addSigners, require: require_ };
 if (!commands[command]) {
   die(
     "Usage:\n" +
-      "  node scripts/admin-account.mjs show        <account>\n" +
-      "  node scripts/admin-account.mjs add-signers <identity> <signer> [signer ...]\n" +
-      "  node scripts/admin-account.mjs require     <identity> <n>\n\n" +
+      "  node scripts/admin-account.mjs show        <account>            [--network mainnet]\n" +
+      "  node scripts/admin-account.mjs add-signers <identity> <signer>… [--network mainnet]\n" +
+      "  node scripts/admin-account.mjs require     <identity> <n>       [--network mainnet]\n\n" +
       "In that order, and with each new signer having signed something real in\n" +
       "between. See the note at the top of this file for why.",
   );
