@@ -859,6 +859,59 @@ The description sits **above** the deposit panel and outside it, attributed to t
 wallet that wrote it with a link to that wallet's record. Inside the panel it would
 read as part of the terms, and the terms are the contract's to state.
 
+### A wallet for the person who has never held one
+
+Ten strangers finishing a reservation on their own phones is what this deliverable
+asks for, and five of the six ways in assume they have already chosen a Stellar
+wallet. The sixth asks for nothing: **one tap generates a keypair in the browser.**
+No extension, no app, no pop-up.
+
+- **Testnet only, enforced in the library rather than in a screen.** The key is kept
+  in `localStorage`, readable by any script that reaches the page — a fair trade for
+  money that is free and worth nothing anywhere, and the wrong one for money that is
+  not. An in-app key holding real funds is custody, which is a different product with
+  obligations this one has not taken on. So
+  [`local-wallet.ts`](web/src/lib/local-wallet.ts) checks the network in `create`,
+  in `load` **and** in `signWith`: a component wired up by mistake still produces
+  nothing on Mainnet.
+- **`signWith` repeats a check the other two already make, on purpose.** It is the
+  function that would move money if either of them were ever wrong, so it does not
+  trust them to have been right.
+- **Each guard is proved rather than asserted.** Every one was confirmed to make a
+  test fail when it is removed, one at a time — a test that passes whether or not
+  the protection is there is worse than no test.
+- **A real wallet to the chain.** One created this way
+  [deployed its own event contract](https://stellar.expert/explorer/testnet/contract/CDNPAUKG6PBAPX5VOLPJRI3ZBICOHROTR4EJ3EFGILILZAMRLCOKGKRY)
+  and another [signed a deposit into one](https://stellar.expert/explorer/testnet/tx/5256d6a4c5b056ae25737f8fe45d0adc288c09cd2435ac8d0b42217457e92973),
+  carrying the same event wasm hash as every other event. This path produces the
+  same evidence as any other.
+- **Export is the feature.** A key the app holds and the person does not is the app's
+  key. The screen that appears on creation shows the address, offers the secret to
+  copy or save as a file, and says that Showup never had a copy of it — which is
+  literally true, because nothing here is ever sent anywhere.
+- **Deleting a wallet and disconnecting one are two controls, not one.**
+  Disconnecting a wallet app is reversible; deleting a browser key destroys the only
+  copy of it. The delete step names the balance it is about to take with it.
+
+### A wallet can say who it is, without the app vouching for it
+
+Wallets can attach an **X handle and an Ethereum address** to their record, each edit
+authorised by a signature from the wallet itself.
+
+- **Rendered as a claim.** The heading is *"This wallet says"*, and there is no tick,
+  no badge and no colour. A Stellar signature proves somebody holds *this Stellar
+  wallet*; it says nothing about the handle they typed. The one way this feature
+  causes harm is by implying otherwise inside our own chrome.
+- **Checked for characters that make one name read as another** — a right-to-left
+  override, a zero-width space, a Cyrillic `а` next to a Latin `a` — because the
+  value becomes an `href` beside an attendance record.
+- **Ethereum addresses keep the case exactly as typed.** Mixed case there is EIP-55
+  checksum information, and this is a field people paste by hand, which is exactly
+  when a checksum earns its place. Lowercasing it would throw away the only self-check
+  the string carries.
+- **Clearing one field leaves the other alone**, which takes a `FieldValue.delete()`
+  rather than a rewrite — a merge that writes `undefined` drops the sibling.
+
 ---
 
 ## Tech stack

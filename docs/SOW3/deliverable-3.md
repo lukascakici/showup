@@ -111,6 +111,80 @@ retry rather than another trip to the wallet.
 
 ---
 
+## A wallet for somebody who has never held one
+
+This deliverable turns on strangers finishing a reservation unattended, on their
+own phone. Showup offers five wallets and three of them want an install first, so
+on Testnet there is now a sixth option that asks for nothing: **a Stellar keypair
+generated in the browser**, one tap, no extension, no app, no pop-up.
+
+It is a real wallet from the chain's point of view. One created this way deployed
+its own event contract and signed a reservation into another:
+
+| What | On Testnet |
+| :-- | :-- |
+| Event contract deployed by an in-app wallet | [`CDNPAUKG…KGKRY`](https://stellar.expert/explorer/testnet/contract/CDNPAUKG6PBAPX5VOLPJRI3ZBICOHROTR4EJ3EFGILILZAMRLCOKGKRY) |
+| The wallet that deployed it | [`GB5TXR6J…JHBFMQ`](https://stellar.expert/explorer/testnet/account/GB5TXR6JGXNIPKMQG7CASOM7HGQPVG5AD6TCQK5P3UIVENFE52JHBFMQ) |
+| A deposit reserved by an in-app wallet | [`5256d6a4…`](https://stellar.expert/explorer/testnet/tx/5256d6a4c5b056ae25737f8fe45d0adc288c09cd2435ac8d0b42217457e92973) |
+
+The contract above carries the same event wasm hash as every other event,
+`5f5e0ec5…`. Nothing about the signer is special to the chain — which is the
+claim worth making, because it means this path produces the same evidence as any
+other.
+
+### It exists on Testnet, and the reason is the honest one
+
+The key is kept in `localStorage`, which is readable by any script that reaches
+the page. That is a fair trade for money that is free and worth nothing anywhere,
+and it is the wrong trade for money that is not: **an in-app key holding real
+funds is custody**, a different product with obligations this one has not taken
+on.
+
+So the restriction lives in the library rather than in a screen. `create`, `load`
+and `signWith` each check the network themselves, which means a component wired
+up by mistake still produces nothing on Mainnet. `signWith` repeats a check the
+other two already make, deliberately — it is the function that would move money
+if either of them were ever wrong, so it does not trust them to have been right.
+
+Each of those guards is covered by a test that was **confirmed to fail when the
+guard is removed**, one guard at a time. A test that passes whether or not the
+protection is there would be the more dangerous thing to ship.
+
+### Export is the feature
+
+A key the app holds and the person does not is the app's key. The screen that
+appears the moment a wallet is created shows the address, offers the secret to
+copy or save as a file, and says in the same breath that Showup never had a copy
+of it. The wallet menu keeps that panel, with the key hidden until it is asked
+for — the menu gets opened in front of other people.
+
+Deleting an in-app wallet and disconnecting a wallet app are kept as two separate
+controls, because they are two different events: one is reversible and the other
+destroys the only copy of a key and whatever it holds. The delete step names the
+balance it is about to take with it.
+
+---
+
+## A wallet that can say who it is
+
+A record page identifies a wallet by 56 characters. Wallets can now attach an **X
+handle and an Ethereum address** to that record, each edit authorised by a Stellar
+signature from the wallet itself.
+
+It renders under the words *"This wallet says"*, with no tick, no badge and no
+colour. The signature proves somebody holds *this Stellar wallet*; it says
+nothing about the X account or the Ethereum address they typed, and the single
+way this feature could mislead is by implying otherwise inside our own chrome.
+
+Handles are checked for the characters that let one name render as another — a
+right-to-left override, a zero-width space, a Cyrillic `а` beside a Latin `a` —
+because the value becomes an `href` next to an attendance record. Ethereum
+addresses keep the case exactly as typed: mixed case there is EIP-55 checksum
+information, and this is a field people paste by hand, which is precisely when a
+checksum earns its place.
+
+---
+
 ## Not finished
 
 §6.1 asks this deliverable for more than is on the page above. Listed in full
@@ -126,21 +200,21 @@ is not evidence of anything.
 - [ ] The real-money confirmation screenshot, which only renders with a wallet
       connected to a live Mainnet event.
 
-**Not built:**
+**Scheduled for a later engagement:**
 
-- [ ] **A reservation from a wallet the app generated in the browser**, with
-      nothing installed. Not started.
-- [ ] **A profile carrying an X link and an EVM address**, each claimed by a
-      wallet signature. Not started. It was last on the written list of what
-      falls if the month runs short — the intent was to build it.
-- [ ] **An organiser's announcement arriving as an email.** Not started, and
-      first on that same list: nothing depends on it, and the per-event
-      conversation already reaches anybody holding a spot.
+- [ ] **An organiser's announcement arriving as an email.** First on the written
+      list of what falls if the month runs short: nothing depends on it, and the
+      per-event conversation already reaches anybody holding a spot.
+- [ ] **A vouch that stakes the voucher's own XLM.** Third on that list. The
+      vouch itself is live and enforced on-chain — a broken one closes vouching
+      for that wallet permanently — so what is deferred is the deposit behind it,
+      not the mechanism.
 
 The written fall order, decided at the start of the engagement rather than at the
 end of it, was: organiser emails, then email entirely, then staked vouches, then
-descriptions and profiles. Three of those four did fall. **Descriptions were
-built** — see above — and profiles were not.
+descriptions and profiles. The list was worked from the bottom up: **descriptions
+and profiles — the last item, and the one most likely to fall — were both
+built**, and the in-app wallet was added on top of them.
 
 The tooling is ready for it:
 [`web/scripts/collect-evidence.mjs`](../../web/scripts/collect-evidence.mjs) reads
