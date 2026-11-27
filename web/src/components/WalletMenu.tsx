@@ -8,6 +8,8 @@ import {
   RefreshCw,
   ExternalLink,
   LogOut,
+  Trash2,
+  Wallet,
 } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { EXPLORER_ACCOUNT } from "@/lib/networks";
@@ -15,6 +17,7 @@ import { useNetwork } from "@/lib/network-context";
 import { formatXlm, shortAddr } from "@/lib/format";
 import { Button, ButtonLink, Skeleton, SectionLabel } from "./ui";
 import { FaucetButton } from "./Faucet";
+import { LocalWalletKey } from "./LocalWalletKey";
 
 export function WalletMenu() {
   const {
@@ -24,12 +27,16 @@ export function WalletMenu() {
     balanceError,
     refreshBalance,
     disconnect,
+    isLocal,
+    forgetLocal,
+    openPicker,
   } = useWallet();
   const network = useNetwork();
 
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,7 +72,11 @@ export function WalletMenu() {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+          // Reopening the menu must not land on an armed delete confirmation.
+          setConfirmingDelete(false);
+        }}
         className="flex h-11 items-center gap-3"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -221,12 +232,88 @@ export function WalletMenu() {
             </div>
           )}
 
+          {/* The in-app wallet is never left looking like an extension. It holds
+              its own key, the person is the only one who can back it up, and both
+              of those facts belong on the screen they would go looking for. */}
+          {isLocal && (
+            <div className="mt-5">
+              <SectionLabel>IN-APP WALLET</SectionLabel>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                This key was generated in this browser and is stored here. Save it
+                somewhere safe — Showup has no copy and cannot restore it.
+              </p>
+              <div className="mt-2.5">
+                <LocalWalletKey compact />
+              </div>
+            </div>
+          )}
+
           <div className="my-5 h-px bg-border" />
 
-          <Button variant="danger" fullWidth onClick={disconnect}>
-            <LogOut className="size-4" />
-            Disconnect
-          </Button>
+          {/* Two different actions, deliberately not one button.
+              Disconnecting a wallet app is reversible; deleting a local key is
+              not, and takes whatever the account holds with it. */}
+          {isLocal ? (
+            <div className="space-y-2">
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => {
+                  setOpen(false);
+                  openPicker();
+                }}
+              >
+                <Wallet className="size-4" />
+                Use a different wallet
+              </Button>
+
+              {confirmingDelete ? (
+                <div className="rounded-xl border border-border-strong bg-surface-2 p-3">
+                  <p className="text-xs leading-relaxed text-foreground-2">
+                    Delete this wallet from this browser? The key goes with it, and
+                    so does the{" "}
+                    {balance?.funded ? `${formatXlm(balance.xlm, 2)} XLM` : "balance"}{" "}
+                    it holds. This cannot be undone.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      fullWidth
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      Keep it
+                    </Button>
+                    <Button
+                      variant="danger"
+                      fullWidth
+                      onClick={() => {
+                        forgetLocal();
+                        setConfirmingDelete(false);
+                        setOpen(false);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="danger"
+                  fullWidth
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <Trash2 className="size-4" />
+                  Delete this wallet
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Button variant="danger" fullWidth onClick={disconnect}>
+              <LogOut className="size-4" />
+              Disconnect
+            </Button>
+          )}
         </div>
       )}
     </div>

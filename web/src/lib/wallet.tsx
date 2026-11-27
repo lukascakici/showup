@@ -15,6 +15,14 @@ import type { NetworkId } from "./networks";
 import { readWalletError } from "./wallet-errors";
 import { track } from "./funnel";
 import {
+  createLocalWallet,
+  forgetLocalWallet,
+  loadLocalWallet,
+  localWalletAllowed,
+  signWith,
+  type LocalWallet,
+} from "./local-wallet";
+import {
   fetchAccountState,
   errMessage,
   type AccountState,
@@ -50,6 +58,21 @@ type WalletContextValue = {
   address: string | null;
   status: WalletStatus;
   walletName: string | null;
+  /**
+   * The signer is a key this browser generated, not a wallet app.
+   *
+   * Screens read this to say so. Nothing about a local wallet should be hidden —
+   * it holds its own key, the person is responsible for backing it up, and a UI
+   * that rendered it identically to Freighter would be the one dishonest thing
+   * about the feature.
+   */
+  isLocal: boolean;
+  /** Whether this network can have one at all. False on Mainnet, always. */
+  localAllowed: boolean;
+  /** Generate a key here and connect with it. Returns null where not allowed. */
+  createLocal: () => LocalWallet | null;
+  /** Delete the local key. Irreversible, and the funds go with it. */
+  forgetLocal: () => void;
   wallets: ISupportedWallet[];
   walletsLoading: boolean;
   /** Ask every module again whether it is there — after installing one. */
@@ -82,8 +105,12 @@ async function forgetWallet(on: NetworkId): Promise<void> {
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const activeNetwork = useNetwork();
-  const [address, setAddress] = useState<string | null>(null);
-  const [status, setStatus] = useState<WalletStatus>("restoring");
+  // Prefixed `kit`, because the address and status this provider reports are no
+  // longer the same thing as the kit's: a local key can stand in for both. The
+  // derivation is below, and these two are only ever one input to it.
+  const [kitAddress, setKitAddress] = useState<string | null>(null);
+  const [kitStatus, setKitStatus] = useState<WalletStatus>("restoring");
+  const [local, setLocal] = useState<LocalWallet | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
   const [wallets, setWallets] = useState<ISupportedWallet[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
@@ -93,6 +120,28 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [balance, setBalance] = useState<AccountState | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+
+  const localAllowed = localWalletAllowed(activeNetwork);
+
+  /**
+   * Which of the two signers is the one in use, and why in this order.
+   *
+   * The kit wins whenever it has an address or is mid-connection: picking a real
+   * wallet is an explicit act and must take effect immediately, even if a local
+   * key is sitting in storage. A local key is the fallback, which is exactly what
+   * it is for — the person who got to the picker with nothing installed.
+   *
+   * Deriving it rather than storing a third "which one is active" flag is the
+   * point: there is no state that can disagree with itself, and no way to end up
+   * reporting an address that belongs to one signer while `sign` uses the other.
+   *
+   * The consequence to be aware of: disconnecting a real wallet while a local key
+   * exists falls back to the local key rather than to nobody. That is why every
+   * surface says which one it is holding.
+   */
+  const usingLocal = local !== null && kitAddress === null && kitStatus !== "connecting";
+  const address = usingLocal ? local.publicKey : kitAddress;
+  const status: WalletStatus = usingLocal ? "connected" : kitStatus;
 
   const refreshNetwork = useCallback(async () => {
     const { kit } = await getKit(activeNetwork.id);
@@ -121,13 +170,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setBalanceLoading(true);
     setBalanceError(null);
     try {
-      setBalance(await fetchAccountState(address));
+      // The network, explicitly. This used to call the one-argument version,
+      // which read the default network's Horizon — and once Mainnet went live
+      // that meant every Testnet balance was looked up on Mainnet, 404'd, and
+      // was rendered as "Not funded yet" under a funded account.
+      setBalance(await fetchAccountState(address, activeNetwork));
     } catch (e) {
       setBalanceError(errMessage(e) || "Couldn't load balance.");
     } finally {
       setBalanceLoading(false);
     }
-  }, [address]);
+  }, [address, activeNetwork]);
 
   // Load balance whenever a wallet becomes connected / the address changes.
   useEffect(() => {
@@ -138,6 +191,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setBalance(null);
     }
   }, [status, address, refreshBalance]);
+
+  // Restore a local key, if this browser made one for this network.
+  //
+  // Read in an effect rather than during render because `localStorage` does not
+  // exist on the server, and a value read during render would disagree with the
+  // prerendered HTML. The window before it lands is `restoring`, which is the
+  // state that exists for precisely this — so a returning visitor with a local
+  // key never sees "connect a wallet" flash first.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocal(loadLocalWallet(activeNetwork));
+  }, [activeNetwork]);
 
   // The kit persists the address and the chosen wallet itself, so a returning
   // visitor is already connected by the time it finishes loading. Its
@@ -165,7 +230,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           setError(errMessage(e) || "Couldn't load wallet support.");
           // The question has an answer now — nobody is connected, and nobody is
           // going to be. Leaving this at `restoring` would spin forever.
-          setStatus("idle");
+          setKitStatus("idle");
         }
         return;
       }
@@ -189,8 +254,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         kit.on(events.STATE_UPDATED, (event) => {
           answered = true;
           const next = event.payload.address ?? null;
-          setAddress(next);
-          setStatus(next ? "connected" : "idle");
+          setKitAddress(next);
+          setKitStatus(next ? "connected" : "idle");
           if (next) {
             void refreshNetwork();
             void readWalletName();
@@ -202,12 +267,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       );
 
       // Nothing to restore, and the kit stayed quiet about it.
-      if (!answered) setStatus("idle");
+      if (!answered) setKitStatus("idle");
 
       track(
         kit.on(events.DISCONNECT, () => {
-          setAddress(null);
-          setStatus("idle");
+          setKitAddress(null);
+          setKitStatus("idle");
           setWalletName(null);
           setNetwork({ passphrase: null, known: false });
           setBalance(null);
@@ -255,7 +320,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const select = useCallback(async (walletId: string) => {
     setError(null);
-    setStatus("connecting");
+    setKitStatus("connecting");
     try {
       const { kit } = await getKit(activeNetwork.id);
       kit.setWallet(walletId);
@@ -264,15 +329,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const { address: connected } = await kit.fetchAddress();
       if (!connected) throw new Error("The wallet didn't return an address.");
       // STATE_UPDATED will also land, but setting it here avoids a flash of idle.
-      setAddress(connected);
-      setStatus("connected");
+      setKitAddress(connected);
+      setKitStatus("connected");
       setPickerOpen(false);
       // Step two of the funnel, recorded here rather than wherever a wallet
       // happens to be needed: this is the one line in the app that knows a
       // connection just succeeded, as opposed to one already existing.
       track("wallet_connected", { address: connected });
     } catch (e) {
-      setStatus("idle");
+      setKitStatus("idle");
       const failure = readWalletError(e);
       // Backing out isn't a failure — leave the picker open and say nothing.
       setError(failure.message);
@@ -282,35 +347,100 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeNetwork.id]);
 
+  /**
+   * Drops the kit's wallet. **Never touches the local key.**
+   *
+   * The two are deliberately not the same action. Disconnecting a wallet app is
+   * reversible — reconnect and the account is still there. Deleting a local key
+   * destroys the only copy of it, and whatever it holds. Putting both behind one
+   * control labelled "Disconnect" would make a destructive action look routine,
+   * so the local one is `forgetLocal` and the UI confirms it separately.
+   */
   const disconnect = useCallback(async () => {
     setError(null);
     await forgetWallet(activeNetwork.id);
   }, [activeNetwork.id]);
 
+  const createLocal = useCallback(() => {
+    setError(null);
+    const wallet = createLocalWallet(activeNetwork);
+    if (!wallet) {
+      // Only reachable by calling this where it isn't offered. Said plainly
+      // rather than failing silently, because a button that does nothing is the
+      // worst of the three possible behaviours.
+      setError(`${activeNetwork.label} holds real money. Connect a wallet you control.`);
+      return null;
+    }
+    setLocal(wallet);
+    // The picker is deliberately left open: creating a wallet is the one moment
+    // the recovery key can be shown, and closing the panel here would take that
+    // screen away before it rendered. Whoever opened the picker closes it.
+    // The same funnel step a real wallet records. It is the same fact — this
+    // visitor now has a signer — and counting it differently would make the
+    // drop-off report understate the path it exists to measure.
+    track("wallet_connected", { address: wallet.publicKey });
+    return wallet;
+  }, [activeNetwork]);
+
+  const forgetLocal = useCallback(() => {
+    forgetLocalWallet(activeNetwork);
+    setLocal(null);
+    setBalance(null);
+    setBalanceError(null);
+  }, [activeNetwork]);
+
   // The kit throws on rejection rather than returning an error field, which is
   // exactly what the generated contract clients expect, so this passes straight
-  // through with the network filled in.
+  // through with the network filled in. A local key signs in process and returns
+  // the same shape, so no caller — `claimName`, `describeEvent`, every generated
+  // contract client — knows or needs to know which one it got.
   const sign = useCallback<SignFn>(async (xdr, opts) => {
+    if (usingLocal && local) return signWith(local, activeNetwork)(xdr, opts);
     const { kit } = await getKit(activeNetwork.id);
     return kit.signTransaction(xdr, {
       networkPassphrase: activeNetwork.passphrase,
       ...(address ? { address } : {}),
       ...opts,
     });
-  }, [address, activeNetwork.id, activeNetwork.passphrase]);
+  }, [address, usingLocal, local, activeNetwork]);
+
+  /**
+   * A local key is always on the right network, and that is knowable rather than
+   * assumed: it signs with whatever passphrase we hand it, and we hand it the
+   * active one. Reporting it as `known` matters because the kit's answer outlives
+   * the kit's connection — disconnect Freighter while it is on the wrong network
+   * and the stale "wrong network" banner would otherwise follow the local wallet
+   * around.
+   */
+  // Memoised because it is a fresh object literal on the local branch, and the
+  // context value below depends on it — without this, every render would hand
+  // every consumer a new context and re-render the whole app.
+  const reportedNetwork = useMemo<NetworkState>(
+    () =>
+      usingLocal ? { passphrase: activeNetwork.passphrase, known: true } : network,
+    [usingLocal, activeNetwork.passphrase, network],
+  );
 
   const wrongNetwork =
-    status === "connected" && network.known && network.passphrase !== activeNetwork.passphrase;
+    status === "connected" &&
+    reportedNetwork.known &&
+    reportedNetwork.passphrase !== activeNetwork.passphrase;
 
   const value = useMemo<WalletContextValue>(
     () => ({
       address,
       status,
-      walletName,
+      // Named, not blank. The top bar and the reserve card both show this, and
+      // "the wallet with no name" is the one thing a signer must never be.
+      walletName: usingLocal ? "In-app wallet" : walletName,
+      isLocal: usingLocal,
+      localAllowed,
+      createLocal,
+      forgetLocal,
       wallets,
       walletsLoading,
       refreshWallets,
-      network,
+      network: reportedNetwork,
       refreshNetwork,
       wrongNetwork,
       error,
@@ -329,10 +459,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       address,
       status,
       walletName,
+      usingLocal,
+      localAllowed,
+      createLocal,
+      forgetLocal,
       wallets,
       walletsLoading,
       refreshWallets,
-      network,
+      reportedNetwork,
       refreshNetwork,
       wrongNetwork,
       error,

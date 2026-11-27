@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Loader2, RotateCw, X } from "lucide-react";
+import { ArrowUpRight, Loader2, RotateCw, Sparkles, X } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { useNetwork } from "@/lib/network-context";
+import { shortAddr } from "@/lib/format";
 import { Button } from "./ui";
+import { FaucetButton } from "./Faucet";
+import { LocalWalletKey } from "./LocalWalletKey";
 import {
   DETECTS_INSTALL,
   WALLET_DISPLAY,
@@ -29,10 +32,23 @@ export function WalletPicker() {
 
 function Picker() {
   const network = useNetwork();
-  const { closePicker, wallets, walletsLoading, refreshWallets, select, error } = useWallet();
+  const {
+    closePicker,
+    wallets,
+    walletsLoading,
+    refreshWallets,
+    select,
+    error,
+    localAllowed,
+    createLocal,
+  } = useWallet();
   const [pending, setPending] = useState<string | null>(null);
   const [inFreighterApp, setInFreighterApp] = useState(false);
   const [touch, setTouch] = useState(false);
+  // The address of a wallet made in this sitting. Not read from the context:
+  // this is "you just made one, here is the key", which is a different screen
+  // from "you have one", and only the moment of creation should show it.
+  const [made, setMade] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const firstItem = useRef<HTMLButtonElement>(null);
 
@@ -109,7 +125,7 @@ function Picker() {
             id="wallet-picker-title"
             className="font-display text-base font-bold tracking-tight"
           >
-            Connect a wallet
+            {made ? "Your wallet is ready" : "Connect a wallet"}
           </h2>
           {/* 24px before this — the dismiss control on a modal that covers the
               whole screen, and the only way out of it on a phone besides
@@ -127,6 +143,10 @@ function Picker() {
             Testnet note stay put, because they are the three things you need to
             still be able to read while hunting for your wallet. */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {made ? (
+            <JustMade address={made} onDone={closePicker} />
+          ) : (
+          <>
           {/* Inside Freighter's own browser the kit reports Freighter unavailable,
               so without this the row below reads "Not installed" to someone who is,
               at that moment, inside the app it is talking about. The row that does
@@ -173,7 +193,18 @@ function Picker() {
             </ul>
           )}
 
-          <NoWalletHelp touch={touch} onRecheck={refreshWallets} busy={walletsLoading} />
+          <NoWalletHelp
+            touch={touch}
+            onRecheck={refreshWallets}
+            busy={walletsLoading}
+            canCreate={localAllowed}
+            onCreate={() => {
+              const wallet = createLocal();
+              if (wallet) setMade(wallet.publicKey);
+            }}
+          />
+          </>
+          )}
         </div>
 
         {error && (
@@ -198,32 +229,68 @@ function Picker() {
  * The way out for someone who has never held a Stellar wallet.
  *
  * Every row above assumes you already know which of these names means anything.
- * Ten people next week won't, and the fastest true answer — a wallet that needs
- * nothing installed — is invisible because it is spelled "Albedo" and sits in a
- * list next to four things that are not it.
+ * Ten people next week won't, and the fastest true answer used to be invisible
+ * because it was spelled "Albedo" and sat in a list next to four things that are
+ * not it.
  *
- * The advice splits on whether browser extensions exist here at all, because on
- * a phone "install Freighter" means an app plus WalletConnect, and on a desktop
- * it means an extension plus a re-check. Getting that backwards sends somebody
- * to an extension store on iOS, which is a dead end with a link on it.
+ * On Testnet the fastest answer is now making one here, and it is the primary
+ * suggestion: it is the only option on the panel that needs no install, no
+ * pop-up, no second app and no prior knowledge of what a Stellar wallet is. That
+ * is the whole reason it exists — D3 depends on strangers finishing a
+ * reservation unattended on their own phone, and four of the five options above
+ * assume they have already solved that problem.
+ *
+ * Albedo stays, directly underneath, because a wallet somebody else holds the
+ * keys for survives clearing a browser and this one does not. Nothing here hides
+ * that trade; it just stops leading with it.
+ *
+ * The install advice splits on whether browser extensions exist here at all,
+ * because on a phone "install Freighter" means an app plus WalletConnect, and on
+ * a desktop it means an extension plus a re-check. Getting that backwards sends
+ * somebody to an extension store on iOS, which is a dead end with a link on it.
  */
 function NoWalletHelp({
   touch,
   onRecheck,
   busy,
+  canCreate,
+  onCreate,
 }: {
   touch: boolean;
   onRecheck: () => Promise<void>;
   busy: boolean;
+  /** False on a real-money network, where an in-app key is not on offer. */
+  canCreate: boolean;
+  onCreate: () => void;
 }) {
   return (
     <div className="border-t border-border px-5 py-4">
       <h3 className="font-display text-sm font-bold text-foreground">
         Don’t have any of these?
       </h3>
-      <p className="mt-1.5 text-sm text-muted">
+
+      {canCreate && (
+        <div className="mt-2">
+          <p className="text-sm text-muted">
+            Make one here, in this browser. Nothing to install, and it works on a
+            phone. You keep the key — we never see it.
+          </p>
+          <Button variant="primary" className="mt-3" fullWidth onClick={onCreate}>
+            <Sparkles className="size-4" />
+            Create a wallet here
+          </Button>
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] uppercase tracking-wider text-muted-3">or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </div>
+      )}
+
+      <p className={canCreate ? "text-sm text-muted" : "mt-1.5 text-sm text-muted"}>
         <strong className="font-medium text-foreground">Albedo</strong> needs nothing
-        installed. Pick it above and approve in the {touch ? "tab" : "window"} it opens.
+        installed either, and keeps your key off this device. Pick it above and
+        approve in the {touch ? "tab" : "window"} it opens.
       </p>
       <p className="mt-2 text-sm text-muted">
         {touch ? (
@@ -246,6 +313,52 @@ function NoWalletHelp({
       >
         <RotateCw className="size-4" />
         Check again
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * The moment after a key is generated, and the only one where it can be shown.
+ *
+ * Three things in a fixed order, because each is useless without the one before
+ * it: the address, so there is something to recognise; the key, while this is
+ * still the screen somebody is paying attention to; the faucet, because a
+ * brand-new account holds nothing and the next thing they will try to do needs a
+ * deposit.
+ *
+ * The key is offered here rather than only in the wallet menu, where it would be
+ * two taps behind an avatar — the one person who needs it most is the one who has
+ * never used this app before and will not go looking.
+ */
+function JustMade({ address, onDone }: { address: string; onDone: () => void }) {
+  return (
+    <div className="px-5 py-4">
+      <p className="text-sm leading-relaxed text-foreground-2">
+        A Stellar keypair was generated in this browser. It is yours — Showup
+        holds no copy of it.
+      </p>
+
+      <code className="mt-3 block select-all break-all rounded-xl border border-border bg-surface-2 p-3 font-mono text-xs text-foreground">
+        {shortAddr(address, 10, 10)}
+      </code>
+
+      <div className="mt-5">
+        <LocalWalletKey />
+      </div>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <p className="text-xs text-muted">
+          The account holds nothing yet. Test XLM is free and worth nothing
+          anywhere — take some, and reserve your spot.
+        </p>
+        <div className="mt-2.5">
+          <FaucetButton label="Add test XLM" />
+        </div>
+      </div>
+
+      <Button variant="primary" fullWidth className="mt-4" onClick={onDone}>
+        Done
       </Button>
     </div>
   );

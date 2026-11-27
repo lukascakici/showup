@@ -24,10 +24,25 @@ const wallet = vi.hoisted(() => ({
     refreshWallets: vi.fn(),
     select: vi.fn(),
     error: null as string | null,
+    address: null as string | null,
+    refreshBalance: vi.fn(),
+    localAllowed: true,
+    createLocal: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/wallet", () => ({ useWallet: () => wallet.value }));
+
+// The created screen offers the key, which the real component reads out of
+// storage rather than off the context. Stubbed so this file tests the picker's
+// flow; `local-wallet.test.ts` tests what it reads.
+vi.mock("@/lib/local-wallet", () => ({
+  loadLocalWallet: () => ({ publicKey: MADE, secret: "S".repeat(56) }),
+  secretFileName: () => "showup-testnet-key-GAAAAAAA.txt",
+  secretFileBody: () => "body",
+}));
+
+const MADE = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 const aWallet = (id: string, name: string, isAvailable: boolean): ISupportedWallet =>
   ({ id, name, isAvailable, url: `https://example.com/${id}` }) as ISupportedWallet;
@@ -47,6 +62,10 @@ beforeEach(() => {
     // returns undefined tests a contract the app doesn't have.
     select: vi.fn().mockResolvedValue(undefined),
     error: null,
+    address: MADE,
+    refreshBalance: vi.fn().mockResolvedValue(undefined),
+    localAllowed: true,
+    createLocal: vi.fn().mockReturnValue({ publicKey: MADE, secret: "S".repeat(56) }),
   };
 });
 
@@ -123,6 +142,74 @@ describe("WalletPicker — the rows", () => {
  * with. A string that gives instructions has to come from the network being
  * served, and the only way to know it does is to render it on both.
  */
+/**
+ * The in-app wallet, which is the only option on this panel that asks nothing of
+ * the person beyond tapping it.
+ *
+ * D3 turns on strangers finishing a reservation unattended on their own phone,
+ * and every other row here assumes they have already chosen and installed a
+ * Stellar wallet. These assert the path exists, and — the half that matters more
+ * — that it does not exist where real money is.
+ */
+describe("creating a wallet in the browser", () => {
+  it("is offered, as the first answer for someone with nothing", async () => {
+    render(<WalletPicker />);
+    const create = screen.getByRole("button", { name: /create a wallet here/i });
+    expect(create).toBeInTheDocument();
+    await userEvent.click(create);
+    expect(wallet.value.createLocal).toHaveBeenCalledOnce();
+  });
+
+  it("says who holds the key before it is made, not after", () => {
+    render(<WalletPicker />);
+    expect(screen.getByText(/you keep the key/i)).toBeInTheDocument();
+  });
+
+  it("shows the key and the faucet the moment it is created", async () => {
+    render(<WalletPicker />);
+    await userEvent.click(screen.getByRole("button", { name: /create a wallet here/i }));
+
+    expect(screen.getByText(/your wallet is ready/i)).toBeInTheDocument();
+    // The one screen where the key can be offered to somebody who is paying
+    // attention, so it must be here and not two taps into a menu.
+    expect(screen.getByRole("button", { name: /show recovery key/i })).toBeInTheDocument();
+    // A brand-new account holds nothing, and the next thing they will try needs
+    // a deposit.
+    expect(screen.getByRole("button", { name: /add test xlm/i })).toBeInTheDocument();
+    expect(screen.getByText(/never had a copy/i)).toBeInTheDocument();
+  });
+
+  it("stops offering wallet rows once one has been made", async () => {
+    render(<WalletPicker />);
+    await userEvent.click(screen.getByRole("button", { name: /create a wallet here/i }));
+    expect(screen.queryByRole("button", { name: /albedo/i })).toBeNull();
+  });
+
+  it("leaves closing the panel to the person, not to the creation", async () => {
+    render(<WalletPicker />);
+    await userEvent.click(screen.getByRole("button", { name: /create a wallet here/i }));
+    // Closing on create would have unmounted the key screen before it rendered.
+    expect(wallet.value.closePicker).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(wallet.value.closePicker).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The half that matters most. A key in `localStorage` is readable by anything
+   * that gets onto the page — an acceptable trade for money that is free and
+   * worth nothing, and not for money that is not. An in-app key holding real
+   * funds is custody, which is a different product.
+   */
+  it("is not offered at all where the money is real", () => {
+    wallet.value.localAllowed = false;
+    render(<WalletPicker />, { network: "mainnet" });
+    expect(screen.queryByRole("button", { name: /create a wallet here/i })).toBeNull();
+    expect(screen.queryByText(/you keep the key/i)).toBeNull();
+    // And the person with no wallet still has a way through.
+    expect(screen.getByText(/needs nothing\s+installed/i)).toBeInTheDocument();
+  });
+});
+
 describe("the network the picker tells you to be on", () => {
   it("names Testnet on Testnet", () => {
     render(<WalletPicker />);
@@ -131,6 +218,10 @@ describe("the network the picker tells you to be on", () => {
   });
 
   it("names Mainnet on Mainnet, and never mentions the other one", () => {
+    // Set together with the network, because the provider derives one from the
+    // other — `localAllowed` is true on Mainnet in no real configuration, and a
+    // fixture that says otherwise is testing a screen that cannot exist.
+    wallet.value.localAllowed = false;
     render(<WalletPicker />, { network: "mainnet" });
     expect(screen.getByText(/runs on Stellar Mainnet/i)).toBeInTheDocument();
     expect(screen.queryByText(/Testnet/i)).toBeNull();
