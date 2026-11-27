@@ -20,6 +20,15 @@ export async function claimName(
   address: string,
   name: string,
   sign: SignFn,
+  /**
+   * The two optional profile links, saved on the same signature.
+   *
+   * Omitting a key leaves whatever is stored alone; passing an empty string
+   * removes that one field. One prompt for the whole form is the point —
+   * three separate wallet confirmations to fill in a profile is how people
+   * learn to approve things without reading them.
+   */
+  links: { x?: string; evm?: string } = {},
 ): Promise<string | null> {
   const issued = await fetch(`/api/names?address=${encodeURIComponent(address)}`);
   if (!issued.ok) throw new Error(await serverMessage(issued, "Couldn't start the name claim."));
@@ -30,7 +39,7 @@ export async function claimName(
   const claimed = await fetch("/api/names", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address, name, nonce, signedXdr: signedTxXdr }),
+    body: JSON.stringify({ address, name, nonce, signedXdr: signedTxXdr, ...links }),
   });
   if (!claimed.ok) throw new Error(await serverMessage(claimed, "Couldn't save that name."));
 

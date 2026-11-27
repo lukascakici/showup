@@ -9,6 +9,8 @@ import { Who } from "@/components/Who";
 import { canVouch, hasRecord, loadRecord, reservations, turnout, type Record } from "@/lib/record";
 import { toRecord } from "@/lib/record-index";
 import { readIndexedRecordAdmin } from "@/lib/record-index.server";
+import { readProfileAdmin } from "@/lib/profile.server";
+import { ProfileLinks } from "@/components/ProfileLinks";
 
 /**
  * Read on the server so the numbers are in the HTML.
@@ -62,6 +64,11 @@ export async function RecordBody({
     }
   }
 
+  // Alongside the record read, not after it: one more Firestore round trip on a
+  // page that is already making one, and a wallet with no profile simply has no
+  // document.
+  const profile = await readProfileAdmin(address).catch(() => null);
+
   const known = hasRecord(record);
   const rate = turnout(record);
 
@@ -99,6 +106,8 @@ export async function RecordBody({
           Account on Stellar Expert
         </a>
       </div>
+
+      <ProfileLinks x={profile?.x} evm={profile?.evm} />
 
       {!known ? (
         <Newcomer />
@@ -188,7 +197,7 @@ export async function RecordBody({
         </p>
       )}
 
-      <NameYourself address={address} />
+      <NameYourself address={address} x={profile?.x ?? null} evm={profile?.evm ?? null} />
 
       <RefreshRecord address={address} />
     </div>

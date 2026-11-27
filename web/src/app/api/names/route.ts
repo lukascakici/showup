@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminFirestore } from "@/lib/firebase-admin";
 import { isAccountAddress } from "@/lib/record";
 import { NAMES_COLLECTION, nameProblem, NAME_PROBLEMS } from "@/lib/names";
+import { PROFILE_PROBLEMS, evmProblem, normalizeHandle, xProblem } from "@/lib/profile";
 import { issueChallenge, spendChallenge } from "@/lib/wallet-proof";
 
 /**
@@ -41,14 +43,21 @@ export async function POST(request: Request) {
   const db = adminFirestore();
   if (!db) return NextResponse.json({ error: "names are not configured" }, { status: 503 });
 
-  let body: { address?: unknown; name?: unknown; nonce?: unknown; signedXdr?: unknown };
+  let body: {
+    address?: unknown;
+    name?: unknown;
+    nonce?: unknown;
+    signedXdr?: unknown;
+    x?: unknown;
+    evm?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "expected a JSON body" }, { status: 400 });
   }
 
-  const { address, name, nonce, signedXdr } = body;
+  const { address, name, nonce, signedXdr, x, evm } = body;
   if (typeof address !== "string" || !isAccountAddress(address)) {
     return NextResponse.json({ error: "not a wallet address" }, { status: 400 });
   }
@@ -71,17 +80,57 @@ export async function POST(request: Request) {
     }
   }
 
+  // The two optional links, validated on the same pass and before the same
+  // proof. Absent means "leave whatever is there"; an empty string means
+  // "remove it" — the same distinction the name itself draws, so that clearing
+  // one field is possible without touching the other.
+  const wantsX = typeof x === "string";
+  const wantsEvm = typeof evm === "string";
+  if (x !== undefined && !wantsX) {
+    return NextResponse.json({ error: "x must be text" }, { status: 400 });
+  }
+  if (evm !== undefined && !wantsEvm) {
+    return NextResponse.json({ error: "evm must be text" }, { status: 400 });
+  }
+  const linkProblem = (wantsX ? xProblem(x) : null) ?? (wantsEvm ? evmProblem(evm) : null);
+  if (linkProblem) {
+    return NextResponse.json(
+      { error: PROFILE_PROBLEMS[linkProblem], problem: linkProblem },
+      { status: 400 },
+    );
+  }
+
   const proved = await spendChallenge(db, { address, nonce, signedXdr, purpose: PURPOSE });
   if (!proved) {
     return NextResponse.json({ error: "that signature isn't from this wallet" }, { status: 401 });
   }
 
   const ref = db.collection(NAMES_COLLECTION).doc(address);
+
+  // Clearing the *name* removes the document, links and all. That is the one
+  // reading that matches what the button says — "go back to being an address" —
+  // and leaving orphaned links behind a wallet with no name would be a profile
+  // nobody asked to keep.
   if (clearing) {
     await ref.delete();
-    return NextResponse.json({ name: null });
+    return NextResponse.json({ name: null, x: null, evm: null });
   }
 
-  await ref.set({ address, name, claimedAt: Date.now() });
-  return NextResponse.json({ name });
+  const handle = wantsX ? normalizeHandle(x) : undefined;
+  const chain = wantsEvm ? evm.trim() : undefined;
+
+  // `merge: true` with `FieldValue.delete()` for the empty cases, so editing one
+  // field never silently drops the other.
+  await ref.set(
+    {
+      address,
+      name,
+      claimedAt: Date.now(),
+      ...(wantsX ? { x: handle ? handle : FieldValue.delete() } : {}),
+      ...(wantsEvm ? { evm: chain ? chain : FieldValue.delete() } : {}),
+    },
+    { merge: true },
+  );
+
+  return NextResponse.json({ name, x: handle ?? null, evm: chain ?? null });
 }

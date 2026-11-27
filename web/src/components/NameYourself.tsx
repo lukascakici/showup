@@ -6,6 +6,13 @@ import { Check, Tag } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { claimName } from "@/lib/name-claim";
 import { NAME_MAX_LENGTH, NAME_PROBLEMS, nameProblem } from "@/lib/names";
+import {
+  PROFILE_PROBLEMS,
+  X_MAX_LENGTH,
+  evmProblem,
+  normalizeHandle,
+  xProblem,
+} from "@/lib/profile";
 import { useName } from "./Who";
 import { Button, ErrorNote, Field, Input, Panel } from "./ui";
 
@@ -23,11 +30,21 @@ type State = { kind: "idle" | "busy" | "done" } | { kind: "error"; message: stri
  * reason given is how people learn to approve things without reading them, and
  * this one genuinely is unusual: it is a transaction that will never be submitted.
  */
-export function NameYourself({ address }: { address: string }) {
+export function NameYourself({
+  address,
+  x: savedX = null,
+  evm: savedEvm = null,
+}: {
+  address: string;
+  x?: string | null;
+  evm?: string | null;
+}) {
   const { address: connected, sign } = useWallet();
   const existing = useName(address);
   const router = useRouter();
   const [draft, setDraft] = useState<string | null>(null);
+  const [xDraft, setXDraft] = useState<string | null>(null);
+  const [evmDraft, setEvmDraft] = useState<string | null>(null);
   const [state, setState] = useState<State>({ kind: "idle" });
 
   if (connected !== address) return null;
@@ -35,14 +52,23 @@ export function NameYourself({ address }: { address: string }) {
   // `null` means untouched, so the field shows whatever name is already set
   // without needing an effect to seed it.
   const value = draft ?? existing ?? "";
+  const xValue = xDraft ?? savedX ?? "";
+  const evmValue = evmDraft ?? savedEvm ?? "";
   const clearing = value.trim().length === 0;
   const problem = clearing ? null : nameProblem(value);
-  const unchanged = value === (existing ?? "");
+  const linkProblem = xProblem(xValue) ?? evmProblem(evmValue);
+  const unchanged =
+    value === (existing ?? "") &&
+    normalizeHandle(xValue) === (savedX ?? "") &&
+    evmValue.trim() === (savedEvm ?? "");
 
   const save = async () => {
     setState({ kind: "busy" });
     try {
-      await claimName(address, clearing ? "" : value, sign);
+      await claimName(address, clearing ? "" : value, sign, {
+        x: normalizeHandle(xValue),
+        evm: evmValue.trim(),
+      });
       setState({ kind: "done" });
       // The heading and every other reader of this name live in a server
       // component, so re-rendering it is a refresh rather than local state.
@@ -84,6 +110,61 @@ export function NameYourself({ address }: { address: string }) {
         </Field>
       </div>
 
+      {/* Two links, on the same form and therefore the same signature. They are
+          below the name rather than beside it because they are strictly
+          optional-er: a name replaces the address everywhere, these only ever
+          appear on this one page. */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field
+          label="X"
+          hint={
+            xProblem(xValue)
+              ? PROFILE_PROBLEMS[xProblem(xValue)!]
+              : "Shown as a link. Leave blank for none."
+          }
+        >
+          <Input
+            value={xValue}
+            onChange={(e) => {
+              setXDraft(e.target.value);
+              setState({ kind: "idle" });
+            }}
+            placeholder="@handle"
+            maxLength={X_MAX_LENGTH * 2}
+            autoComplete="off"
+          />
+        </Field>
+
+        <Field
+          label="Ethereum address"
+          hint={
+            evmProblem(evmValue)
+              ? PROFILE_PROBLEMS[evmProblem(evmValue)!]
+              : "Shown shortened. Leave blank for none."
+          }
+        >
+          <Input
+            value={evmValue}
+            onChange={(e) => {
+              setEvmDraft(e.target.value);
+              setState({ kind: "idle" });
+            }}
+            placeholder="0x…"
+            maxLength={64}
+            autoComplete="off"
+          />
+        </Field>
+      </div>
+
+      {/* The sentence that keeps this honest. A Stellar signature proves you
+          hold this Stellar wallet and nothing else — anybody can type anybody's
+          handle — so the one thing this form must never imply is verification. */}
+      <p className="mt-3 text-xs leading-relaxed text-muted-2">
+        Both are shown as <strong className="text-foreground-2">claims, not
+        verified</strong>: signing proves you hold this Stellar wallet, and says
+        nothing about an X account or an Ethereum address.
+      </p>
+
       {state.kind === "done" ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-success">
           <Check className="size-4 shrink-0" />
@@ -93,12 +174,12 @@ export function NameYourself({ address }: { address: string }) {
         <Button
           fullWidth
           className="mt-4"
-          disabled={!!problem || unchanged}
+          disabled={!!problem || !!linkProblem || unchanged}
           loading={state.kind === "busy"}
           onClick={() => void save()}
         >
           <Tag className="size-4" />
-          {clearing && existing ? "Remove my name" : "Save name"}
+          {clearing && existing ? "Remove my name" : "Save"}
         </Button>
       )}
 
