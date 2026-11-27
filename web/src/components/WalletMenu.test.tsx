@@ -112,6 +112,29 @@ describe("an in-app wallet", () => {
   });
 });
 
+/**
+ * A structural guard for something jsdom cannot measure.
+ *
+ * The header is `sticky`, so a dropdown taller than the viewport is not merely
+ * below the fold — scrolling the page moves the header and the menu with it, and
+ * the overflowing part can never be reached. Measured in a real 375×667
+ * viewport once the in-app wallet section was added: 696px of menu in 667px of
+ * screen, with "Delete this wallet" in the 95px nothing could scroll to.
+ *
+ * jsdom has no layout, so the height cannot be asserted here. The class that
+ * fixes it can be, which is enough to stop it being deleted by someone tidying
+ * up — and the comment above says what to re-measure if it is.
+ */
+describe("the menu on a small screen", () => {
+  it("caps its own height and scrolls inside itself", async () => {
+    await open();
+    const panel = screen.getByText("BALANCE").closest("div.absolute");
+    expect(panel).not.toBeNull();
+    expect(panel!.className).toMatch(/overflow-y-auto/);
+    expect(panel!.className).toMatch(/max-h-\[calc\(100dvh/);
+  });
+});
+
 describe("deleting an in-app wallet", () => {
   beforeEach(() => {
     wallet.value.isLocal = true;

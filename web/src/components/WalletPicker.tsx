@@ -144,7 +144,7 @@ function Picker() {
             still be able to read while hunting for your wallet. */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {made ? (
-            <JustMade address={made} onDone={closePicker} />
+            <JustMade address={made} />
           ) : (
           <>
           {/* Inside Freighter's own browser the kit reports Freighter unavailable,
@@ -211,6 +211,20 @@ function Picker() {
           <p className="shrink-0 border-t border-border px-5 py-3 text-sm text-danger">
             {error}
           </p>
+        )}
+
+        {/* Pinned, outside the scroll area, for the same reason the header and
+            the network note are. Measured on a 375×667 viewport: the created
+            screen is 71px taller than the space it has, so with this button
+            inside the list it sat below the fold — and revealing the recovery
+            key pushes it another 160px down. The one control that means "I am
+            finished here" cannot be the one somebody has to go looking for. */}
+        {made && (
+          <div className="shrink-0 border-t border-border px-5 py-3">
+            <Button variant="primary" fullWidth onClick={closePicker}>
+              Done
+            </Button>
+          </div>
         )}
 
         {/* Named from the network being served, not written down. This line told
@@ -330,36 +344,38 @@ function NoWalletHelp({
  * The key is offered here rather than only in the wallet menu, where it would be
  * two taps behind an avatar — the one person who needs it most is the one who has
  * never used this app before and will not go looking.
+ *
+ * "Done" is deliberately not part of this: it is pinned below the scroll area by
+ * the panel, because this content is taller than a small phone's share of it.
  */
-function JustMade({ address, onDone }: { address: string; onDone: () => void }) {
+function JustMade({ address }: { address: string }) {
   return (
     <div className="px-5 py-4">
+      {/* One line, not two. This used to add "It is yours — Showup holds no
+          copy of it", which the warning box below says again and better, 100px
+          further down the same screen. Saying it twice did not make it twice as
+          true, and on a small phone it cost the faucet its place above the
+          fold. */}
       <p className="text-sm leading-relaxed text-foreground-2">
-        A Stellar keypair was generated in this browser. It is yours — Showup
-        holds no copy of it.
+        A Stellar keypair, generated in this browser.
       </p>
 
       <code className="mt-3 block select-all break-all rounded-xl border border-border bg-surface-2 p-3 font-mono text-xs text-foreground">
         {shortAddr(address, 10, 10)}
       </code>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <LocalWalletKey />
       </div>
 
-      <div className="mt-5 border-t border-border pt-4">
+      <div className="mt-4 border-t border-border pt-4">
         <p className="text-xs text-muted">
-          The account holds nothing yet. Test XLM is free and worth nothing
-          anywhere — take some, and reserve your spot.
+          The account holds nothing yet. Test XLM is free.
         </p>
         <div className="mt-2.5">
           <FaucetButton label="Add test XLM" />
         </div>
       </div>
-
-      <Button variant="primary" fullWidth className="mt-4" onClick={onDone}>
-        Done
-      </Button>
     </div>
   );
 }

@@ -108,7 +108,17 @@ export function WalletMenu() {
         // narrower than about 352px with no scrollbar to bring it back — the
         // balance and the faucet simply weren't there. It gives up width to the
         // viewport now instead of leaving the page.
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border-strong bg-surface p-5 shadow-2xl shadow-black/50">
+        //
+        // The height cap is the same problem on the other axis, and it bites
+        // harder: the header is `sticky`, so a menu taller than the viewport is
+        // not merely below the fold, it is **unreachable** — scrolling the page
+        // moves the header and the menu with it. Measured on a 375×667 viewport
+        // once the in-app wallet section was added: 696px of menu in 667px of
+        // screen, with "Delete this wallet" in the 95px that could never be
+        // scrolled to. It scrolls inside itself now. `dvh` rather than `vh`
+        // because iOS Safari's `vh` counts the URL bar's space whether or not
+        // the bar is there.
+        <div className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-5.5rem)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-2xl border border-border-strong bg-surface p-5 shadow-2xl shadow-black/50">
           {/* Balance */}
           <div className="flex items-start justify-between">
             <div>

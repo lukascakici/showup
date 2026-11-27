@@ -185,6 +185,23 @@ describe("creating a wallet in the browser", () => {
     expect(screen.queryByRole("button", { name: /albedo/i })).toBeNull();
   });
 
+  /**
+   * "Done" sits outside the scrolling list, with the header and the network
+   * note. Measured in a real 375×667 viewport: this screen was 71px taller than
+   * its share of the panel, so inside the list the button fell below the fold —
+   * and revealing the recovery key pushed it a further 160px down. jsdom cannot
+   * measure that, but it can hold the structure that fixes it.
+   */
+  it("keeps the way out of the panel off the scrolling list", async () => {
+    render(<WalletPicker />);
+    await userEvent.click(screen.getByRole("button", { name: /create a wallet here/i }));
+
+    const done = screen.getByRole("button", { name: /^done$/i });
+    const scroller = document.querySelector(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    expect(scroller!.contains(done)).toBe(false);
+  });
+
   it("leaves closing the panel to the person, not to the creation", async () => {
     render(<WalletPicker />);
     await userEvent.click(screen.getByRole("button", { name: /create a wallet here/i }));
