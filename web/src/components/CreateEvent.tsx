@@ -316,8 +316,15 @@ export function CreateEvent() {
       <form onSubmit={submit} className="mt-5">
         {/* Disabled as a group while the transaction is in flight. The fields
             used to stay editable through a 30-second wait, so anything typed
-            into them was silently not what was being created. */}
-        <fieldset disabled={busy} className="flex flex-col gap-4">
+            into them was silently not what was being created.
+
+            `min-w-0` because browsers give `<fieldset>` a UA default of
+            `min-inline-size: min-content`, so unlike a div it refuses to shrink
+            below its widest child. Measured on a 375px viewport: the form was
+            282px and this fieldset 329px, and an `overflow-hidden` ancestor
+            clipped the difference — so every input on this page had its right
+            edge cut off on a phone, with no scrollbar to reveal it. */}
+        <fieldset disabled={busy} className="flex min-w-0 flex-col gap-4">
           <Field
             label="Event name"
             error={shown("title", titleError)}
@@ -410,7 +417,7 @@ export function CreateEvent() {
             </div>
           </Field>
 
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex min-w-0 flex-col gap-2">
             <legend className="mb-2 text-xs text-muted-2">Who can reserve a spot</legend>
             {ADMISSIONS.map((a) => (
               <label
@@ -456,7 +463,7 @@ export function CreateEvent() {
             </p>
           </fieldset>
 
-          <fieldset className="flex flex-col gap-2">
+          <fieldset className="flex min-w-0 flex-col gap-2">
             <legend className="mb-2 text-xs text-muted-2">
               If someone doesn’t show
             </legend>
