@@ -57,7 +57,21 @@ const README = "README.md";
  */
 const NETWORKS = [
   { id: "testnet", heading: /^###\s+Deployed contracts \(Testnet\)\s*$/m },
-  { id: "mainnet", heading: /^###\s+Deployed contracts \(Mainnet\)\s*$/m },
+  {
+    id: "mainnet",
+    heading: /^###\s+Deployed contracts \(Mainnet\)\s*$/m,
+    // Testnet resolves from the CLI's built-in networks on any machine. Mainnet
+    // does not: it has no free public RPC, so `--network mainnet` only works
+    // where somebody has configured one. On a fresh CI runner it fails with
+    // "Invalid URL — Bring Your Own", which took the soft path and skipped —
+    // and a skip is indistinguishable from a pass unless you read the log.
+    //
+    // So Mainnet is checked through an explicit endpoint instead. Set
+    // MAINNET_RPC_URL (a repository secret in CI) and the check runs; leave it
+    // unset and it says plainly that it did not run.
+    passphrase: "Public Global Stellar Network ; September 2015",
+    rpcUrl: () => process.env.MAINNET_RPC_URL ?? "",
+  },
 ];
 
 // Rows of a deployed-contracts table, e.g.
@@ -114,23 +128,29 @@ function row(section, network, pattern, what, shape) {
  * Returns `null` on a soft outcome — unreachable network, or a failure already
  * recorded — so the caller stops without taking the whole run down with it.
  */
-function readInstanceStorage(contractId, network) {
+function readInstanceStorage(contractId, { id: network, passphrase, rpcUrl }) {
+  // An explicit endpoint when the network definition carries one, the CLI's
+  // named network otherwise. Named networks are what a developer has locally;
+  // an explicit URL is what a CI runner can be given without configuring it.
+  const url = rpcUrl?.();
+  if (rpcUrl && !url) {
+    skipped.push(
+      `MAINNET_RPC_URL is not set, so ${network} was NOT verified this run.\n` +
+        `       Mainnet has no free public RPC — set it as a repository secret\n` +
+        `       to turn this check on. The ${network} table is unchecked until then.`,
+    );
+    return null;
+  }
+
+  const where = url
+    ? ["--rpc-url", url, "--network-passphrase", passphrase]
+    : ["--network", network];
+
   let raw;
   try {
     raw = execFileSync(
       "stellar",
-      [
-        "contract",
-        "read",
-        "--id",
-        contractId,
-        "--network",
-        network,
-        "--durability",
-        "persistent",
-        "--output",
-        "json",
-      ],
+      ["contract", "read", "--id", contractId, ...where, "--durability", "persistent", "--output", "json"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 },
     );
   } catch (err) {
@@ -188,7 +208,8 @@ function readInstanceStorage(contractId, network) {
   }
 }
 
-function check({ id: network, heading }) {
+function check(definition) {
+  const { id: network, heading } = definition;
   const section = sectionFor(heading);
   if (!section) return; // not deployed there yet — nothing to be wrong about
 
@@ -196,7 +217,7 @@ function check({ id: network, heading }) {
   const published = row(section, network, HASH_ROW, "Event wasm hash", "| **Event wasm hash** | `<64 hex>` |");
   if (!factory || !published) return;
 
-  const storage = readInstanceStorage(factory, network);
+  const storage = readInstanceStorage(factory, definition);
   if (!storage) return;
 
   const entry = storage.find((e) => e.key?.vec?.[0]?.symbol === "EventWasmHash");

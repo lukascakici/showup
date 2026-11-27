@@ -66,7 +66,15 @@ jobs:
       # can't compare against the local build instead: the wasm is not
       # byte-reproducible across host platforms. An unreachable RPC skips with a
       # warning; a genuine mismatch always fails.
+      #
+      # Testnet resolves from the CLI's built-in networks. Mainnet has no free
+      # public RPC, so `--network mainnet` fails on a fresh runner — the first
+      # run after the Mainnet table was published skipped, which is honest but
+      # also means the row was unchecked. With this secret set, both rows are
+      # verified; without it, the step says plainly that Mainnet was not.
       - name: Check the published event wasm hash against the deployed factory
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
         run: node scripts/check-wasm-hash.mjs
 
       - name: Clippy
