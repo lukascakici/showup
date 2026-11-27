@@ -342,3 +342,87 @@ is its own commit, so a fix and a regression in the same push can't cancel out.
 It was `continue-on-error: true` until the triage was finished, and that was the
 right default for exactly as long as it lasted: a job that is permanently red on
 73 known findings is a job everybody learns to scroll past.
+
+---
+
+## The second tool, and why it is not in CI
+
+SOW §6.1 names two analysers: Scout, above, and **`soroban-scanner`**
+([OpenZeppelin/soroban-security-detectors-sdk](https://github.com/OpenZeppelin/soroban-security-detectors-sdk)).
+It was attempted on 27.11.2026 and is **not** part of CI. This section is the
+reasoning, written out rather than left as an absence, because a security
+deliverable that quietly drops one of its two tools is the kind of gap a reviewer
+should not have to find.
+
+**Version tested:** default branch at commit
+[`f3888e06`](https://github.com/OpenZeppelin/soroban-security-detectors-sdk/commit/f3888e0619c8cb6a718ee48c69cfe6daa527ed00),
+crate version `0.0.2`. That is the latest code, not an old tag — the only
+published release is `v0.0.2` from July 2025.
+
+### It panics before analysing anything
+
+```
+thread 'main' panicked at sdk/src/ast_types_builder.rs:254:60:
+Invalid UTF-8 sequence: FromUtf8Error { bytes: [97, 195, 40, 100], … }
+```
+
+`String::from_utf8(lit_bstr.value()).expect(…)` — every byte-string literal
+(`b"…"`) in the parsed source is decoded as UTF-8, and byte strings exist
+precisely to hold bytes that are not text.
+
+**This was first misdiagnosed here as our own fault.** Showup's contracts contain
+Turkish text and em dashes, so "the scanner cannot handle non-ASCII source" was
+the obvious reading. It is wrong: a two-line pure-ASCII file panics identically,
+with the *same* bytes, and so does the tool's own test fixture. The bytes are
+constant regardless of input. Checking that before writing it down is the only
+reason this page does not contain a false claim about our own code.
+
+### Patched past that, a detector panics on ordinary Soroban code
+
+With line 254 changed locally to `from_utf8_lossy`:
+
+```
+thread 'main' panicked at detectors/src/extend_ttl_with_max_ttl.rs:80:21:
+Expected 'extend_ttl' to have 3 parameters.
+```
+
+The detector assumes `extend_ttl` always takes three arguments. That is true for
+persistent and temporary storage and **false for instance storage**, whose
+`extend_ttl(threshold, extend_to)` takes two — which this project calls in every
+contract, as does most Soroban code.
+
+Patching a *detector* was not attempted: editing what a detector reports and then
+publishing its output would be worse than publishing nothing.
+
+### Skipping that detector, it runs and finds nothing — and the nothing is empty
+
+Using the tool's own `--detectors` flag to run the other four:
+
+```bash
+soroban-scanner scan contracts --detectors contract_can_panic \
+  contract_without_functions file_without_no_std \
+  temporary_storage_value_used_as_condition
+# { "errors": [], "scanned": [ …7 files… ], "detector_responses": {} }
+```
+
+All seven contract sources parsed, zero findings.
+
+**That zero means nothing, and saying otherwise would be the most misleading
+sentence on this page.** The same four detectors, run against the tool's *own*
+positive fixture — `tests/temporary_storage_value_used_as_condition/1/lib.rs`, a
+file written to read a temporary-storage value and use it as a condition — also
+report nothing. A tool that does not fire on the case it ships to demonstrate
+itself cannot be cited as evidence that our contracts are clean.
+
+This is the same rule the Scout gate enforces in CI: an empty report is a failure
+to analyse, not a pass.
+
+### The decision
+
+`soroban-scanner` is **not** wired into CI. Putting it there would mean building a
+patched fork of an unreleased-since-July-2025 tool, to run four detectors that do
+not fire on their own fixtures, and presenting the result as a second opinion. The
+honest version of that line is this section.
+
+Scout remains the analyser of record: 39 detectors, 73 findings, every one of them
+triaged above, and a gate that fails the build on anything new.

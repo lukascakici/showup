@@ -11,8 +11,8 @@ cannot be moved by any single key.
 > and the upgrade-policy and trust-assumptions page on the live site.
 
 **Two lines of that are not met as written, and are answered at the bottom of
-this page** rather than paraphrased away: `soroban-scanner` has not been run, and
-the key went to a 2-of-3 account rather than to a hardware device.
+this page** rather than paraphrased away: `soroban-scanner` is attempted but not
+in CI, and the key went to a 2-of-3 account rather than to a hardware device.
 
 ---
 
@@ -156,10 +156,13 @@ governing the network you are reading it on, and every link goes to the chain.
 
 ## Where this does not match §6.1 as written
 
-**`soroban-scanner` has not been run.** The SOW names two tools and this
-deliverable has one. Scout is the thorough one — 39 detectors, and the source of
-every finding in the report — but "two tools" is what was committed to, and one
-is one.
+**`soroban-scanner` is not in CI.** The SOW names two analysers and CI runs
+one. It was attempted — see [the write-up](security.md#the-second-tool-and-why-it-is-not-in-ci):
+at its latest commit it panics before analysing anything, a second panic follows
+in a detector that assumes ordinary Soroban code has a different shape, and with
+both worked around it reports nothing **on its own positive fixture**. A tool
+that does not fire on the case it ships to demonstrate itself cannot be cited as
+a second opinion. Scout remains the analyser of record.
 
 **The admin went to a 2-of-3 account, not to hardware.** §6.1 says "the
 transaction that rotated the admin key to hardware"; there is no hardware device
