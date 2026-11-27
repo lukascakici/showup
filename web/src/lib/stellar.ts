@@ -30,6 +30,30 @@ export const EXPLORER_CONTRACT = (id: string) => explorerContract(fallback, id);
 export const horizon = new Horizon.Server(HORIZON_URL);
 
 /**
+ * One Horizon client per network, built on first use.
+ *
+ * The `horizon` export above is the default network's, and for a long time that
+ * was the only one there was. Once Mainnet went live `defaultNetwork()` started
+ * answering "mainnet", so every balance read on the Testnet host went to Mainnet
+ * Horizon, came back 404, and was reported as `funded: false` — a funded Testnet
+ * account rendered as "Not funded yet", with a faucet prompt underneath it. The
+ * Mainnet host was right only by coincidence.
+ *
+ * So asking which chain an address is on is no longer optional, and the way to
+ * keep it from going wrong again is to take the network as an argument rather
+ * than reach for a default.
+ */
+const servers = new Map<string, Horizon.Server>();
+
+function horizonFor(on: { horizonUrl: string }): Horizon.Server {
+  const existing = servers.get(on.horizonUrl);
+  if (existing) return existing;
+  const server = new Horizon.Server(on.horizonUrl);
+  servers.set(on.horizonUrl, server);
+  return server;
+}
+
+/**
  * A network's name, for telling someone which one their wallet is on.
  *
  * The passphrase is what a wallet actually reports, and it is a sentence — the
@@ -51,10 +75,21 @@ export type AccountState = {
   xlm: string; // human string, e.g. "9999.9999900"
 };
 
-/** Fetch the native XLM balance. Unfunded accounts return { funded: false }. */
-export async function fetchAccountState(address: string): Promise<AccountState> {
+/**
+ * Fetch the native XLM balance. Unfunded accounts return { funded: false }.
+ *
+ * `on` is required rather than defaulted, deliberately. "Not funded" is the
+ * answer this returns both for an account that does not exist and for an account
+ * asked about on the wrong chain, and the second one is indistinguishable from
+ * the first at the call site — so the network has to come from the caller, which
+ * is the only place that knows which chain the address belongs to.
+ */
+export async function fetchAccountState(
+  address: string,
+  on: { horizonUrl: string },
+): Promise<AccountState> {
   try {
-    const account = await horizon.loadAccount(address);
+    const account = await horizonFor(on).loadAccount(address);
     const native = account.balances.find(
       (b) => b.asset_type === "native",
     );
