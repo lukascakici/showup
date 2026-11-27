@@ -1,7 +1,12 @@
 /**
  * Collect Deliverable 3's evidence off the chain, as markdown.
  *
- *   node scripts/collect-evidence.mjs <EVENT_ID>
+ *   node scripts/collect-evidence.mjs <EVENT_ID> [--network mainnet]
+ *
+ * **The network is named, and the factory follows it.** This was wired to
+ * Testnet as a pair of constants, which would have been discovered on the night
+ * of the Mainnet run — the one evening there is no time to fix tooling, and the
+ * one run whose events expire from RPC retention within days.
  *
  * SOW §6.1 asks for 10+ attendee wallet addresses, each with its `rsvp` and
  * `check_in` transaction hashes, plus the finalised event's address. This prints
@@ -19,11 +24,48 @@
 
 import { rpc, scValToNative } from "@stellar/stellar-sdk";
 
-const RPC_URL = "https://soroban-testnet.stellar.org";
-const FACTORY_ID = "CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE";
-const EXPLORER = "https://stellar.expert/explorer/testnet";
+const NETWORKS = {
+  testnet: {
+    rpcUrl: () => "https://soroban-testnet.stellar.org",
+    factoryId: "CD5AEMRB35FBZKO24562DRITAY337CMBXGF6HVSUDRKWHE4RKQLE7FCE",
+    explorer: "https://stellar.expert/explorer/testnet",
+  },
+  mainnet: {
+    // Server-only, and with no fallback: Mainnet has no free public Soroban RPC.
+    rpcUrl: () => {
+      const url = process.env.MAINNET_RPC_URL;
+      if (!url) {
+        console.error(
+          "\nMAINNET_RPC_URL is not set. Mainnet has no free public Soroban RPC,\n" +
+            "so there is nothing to fall back to. Export the same value the\n" +
+            "deployment uses — see web/.env.example.\n",
+        );
+        process.exit(1);
+      }
+      return url;
+    },
+    factoryId: "CCJLDI57GNYKSMP75QTPLUYGJV6VXN2LBT2SEYWVDRLJSBMWWS6E5ZVJ",
+    explorer: "https://stellar.expert/explorer/public",
+  },
+};
 
-const server = new rpc.Server(RPC_URL);
+const argv = process.argv.slice(2);
+const flag = argv.indexOf("--network");
+const chosen = flag === -1 ? "testnet" : argv[flag + 1];
+if (flag !== -1) argv.splice(flag, 2);
+if (!NETWORKS[chosen]) {
+  console.error(`\nUnknown network "${chosen}". Use testnet or mainnet.\n`);
+  process.exit(1);
+}
+
+const FACTORY_ID = NETWORKS[chosen].factoryId;
+const EXPLORER = NETWORKS[chosen].explorer;
+
+// To stderr, so redirecting the markdown to a file still shows it. Evidence
+// pasted under the wrong network's heading is worse than no evidence.
+console.error(`network: ${chosen}`);
+
+const server = new rpc.Server(NETWORKS[chosen].rpcUrl());
 
 const short = (s, head = 8, tail = 6) =>
   s.length <= head + tail + 1 ? s : `${s.slice(0, head)}…${s.slice(-tail)}`;
@@ -176,7 +218,9 @@ function report(eventId, decoded) {
   return { markdown: lines.join("\n"), guests: guests.size, showed, finalized: Boolean(finalized) };
 }
 
-const eventId = process.argv[2];
+// `argv`, with `--network` already removed — otherwise the flag would be read
+// as the event id and fail the shape check below with a confusing message.
+const eventId = argv[0];
 if (!eventId || !/^C[A-Z2-7]{55}$/.test(eventId)) {
   console.error("usage: node scripts/collect-evidence.mjs <EVENT_ID>");
   process.exit(2);

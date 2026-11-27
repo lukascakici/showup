@@ -8,16 +8,16 @@ people who actually show up are the ones who get rewarded.
 It's the anti-flake primitive for meetups, study groups, game nights, and calls —
 a "skin in the game" layer that a group chat can never enforce.
 
-> **Network:** every contract this README publishes an address for is on Stellar
-> **Testnet**, and no real funds have moved through any of them. Mainnet is in
-> scope for the engagement running now and is not deployed yet — see
-> [*Two networks, one build*](#two-networks-one-build).
+> **Network:** Showup runs on **both** Stellar networks as of 27.11.2026, and the
+> hostname decides which one you get. `showup.click` is **Mainnet, where the
+> deposits are real XLM**; `testnet.showup.click` is Testnet, where they are free
+> and worth nothing. See [*Two networks, one build*](#two-networks-one-build).
 
 [![CI](https://github.com/lukascakici/showup/actions/workflows/ci.yml/badge.svg)](https://github.com/lukascakici/showup/actions/workflows/ci.yml)
 
-- **Live demo:** **[testnet.showup.click](https://testnet.showup.click)** — and
-  **[showup.click](https://showup.click)**, which serves Testnet until the Mainnet
-  contracts exist
+- **Live demo:** **[showup.click](https://showup.click)** (Mainnet, real XLM) ·
+  **[testnet.showup.click](https://testnet.showup.click)** (Testnet, free XLM and
+  a faucet — start here)
 - **What it does, in 15 seconds:** **[the overview](https://youtu.be/0s9vVx6JVSg)**
 - **Demo video:** **[the full flow, start to finish](https://youtu.be/QaT61imDXkk)**
 
@@ -956,21 +956,28 @@ both halves of the wallet picker's device-dependent advice.
 
 ## Network
 
-Every contract this README publishes an address for is on Stellar **Testnet**
-(`Test SDF Network ; September 2015`), and no real funds have moved through any of
-them. Non-XLM assets and fee sponsorship remain out of scope.
-
 Mainnet was out of scope for the first two engagements and is **in** scope for the
-third, so the app no longer has one network compiled into it: it has a registry of
-two, and which one you get is decided by the hostname you arrived on. The Mainnet
-addresses are not filled in yet, so every hostname serves Testnet today — see
-[*Two networks, one build*](#two-networks-one-build) for why that is the safe
-direction to fail in.
+third. As of 27.11.2026 both networks are live, the app has a registry of two
+rather than one compiled in, and which one you get is decided by the hostname you
+arrived on — see [*Two networks, one build*](#two-networks-one-build).
+
+| | `showup.click` | `testnet.showup.click` |
+| :-- | :-- | :-- |
+| Network | **Mainnet** (`Public Global Stellar Network ; September 2015`) | Testnet (`Test SDF Network ; September 2015`) |
+| The deposit | **Real XLM** | Free, and worth nothing anywhere |
+| Faucet | None, and the UI never offers one | Friendbot, 10,000 XLM |
+| Before you reserve | A confirmation step naming the amount | One tap |
+
+Every hostname that is not in the Mainnet allowlist serves Testnet, so the
+failure of a misconfiguration is "this showed Testnet when it should have shown
+Mainnet" rather than the reverse.
+
+Non-XLM assets and fee sponsorship remain out of scope on both.
 
 ```
-Wallet ──connect──▶ Showup ──loadAccount──▶ Horizon (Testnet)
+Wallet ──connect──▶ Showup ──loadAccount──▶ Horizon (per network)
     │                  │
-    │                  └──friendbot?──▶ fund new account (10,000 XLM)
+    │                  └──friendbot?──▶ fund new account (Testnet only)
     │
     └──sign contract XDR──▶ Showup ──Soroban RPC──▶ event contract ──▶ tx hash
 ```
