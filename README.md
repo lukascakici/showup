@@ -378,7 +378,16 @@ screenshot alone cannot prove:
 Both from week 1 as well, and kept as that week's record rather than refreshed.
 The current equivalents are in
 [`docs/screenshots/sow3/`](docs/screenshots/sow3), captured from the live site on
-25.11.2026.
+27.11.2026 by [`scripts/capture-screens.mjs`](scripts/capture-screens.mjs) — every
+screen at a phone width and a desktop width, framed identically, with each shot
+naming text the page must actually be showing before the shutter opens.
+
+The connected screens in that set — a funded balance, the organizer's form, the
+deposit panel with a live button — are **photographs of the real flow**, not
+mock-ups. They became capturable when the in-app wallet shipped: the script makes
+a wallet the same way a visitor does, in the page, with nothing installed. On
+Mainnet it refuses to, and says which shots it skipped rather than filing a
+disconnected screen under a connected name.
 
 | Successful transaction — from the send tool, since removed |
 | :--: |
@@ -892,6 +901,15 @@ No extension, no app, no pop-up.
 - **Deleting a wallet and disconnecting one are two controls, not one.**
   Disconnecting a wallet app is reversible; deleting a browser key destroys the only
   copy of it. The delete step names the balance it is about to take with it.
+
+| The way in, for somebody with nothing installed | The key, the moment it exists |
+| :--: | :--: |
+| ![The wallet picker on a phone: five wallets above, and below them "Don't have any of these?" with a Create a wallet here button](docs/screenshots/sow3/wallet-create-offer-phone.png) | ![The created screen: the new address, a warning that the key lives in this browser and nowhere else, Show recovery key, and the faucet reporting 10,000 test XLM added](docs/screenshots/sow3/wallet-created-phone.png) |
+
+Both taken on a 390px phone, which is where this path matters. The second is the
+whole feature in one screen: the address, the warning that Showup never had a
+copy of the key, the export, and the faucet — with the way out pinned below them
+so it cannot scroll off a small screen.
 
 ### A wallet can say who it is, without the app vouching for it
 

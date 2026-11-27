@@ -132,6 +132,16 @@ The contract above carries the same event wasm hash as every other event,
 claim worth making, because it means this path produces the same evidence as any
 other.
 
+| Offered to anyone with nothing installed | The key, the moment it exists |
+| :--: | :--: |
+| ![The wallet picker on a phone, with a Create a wallet here button under "Don't have any of these?"](../screenshots/sow3/wallet-create-offer-phone.png) | ![The created screen: address, the warning that the key lives in this browser and nowhere else, Show recovery key, and 10,000 test XLM added](../screenshots/sow3/wallet-created-phone.png) |
+
+Both on a 390px phone, which is the device this exists for. The screenshots in
+these pages are taken by
+[`scripts/capture-screens.mjs`](../../scripts/capture-screens.mjs), and the
+connected ones are now taken the same way — the script makes a wallet in the page
+exactly as a visitor does, so a reviewer is looking at the real flow.
+
 ### It exists on Testnet, and the reason is the honest one
 
 The key is kept in `localStorage`, which is readable by any script that reaches
