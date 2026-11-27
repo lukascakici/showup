@@ -29,7 +29,18 @@
  * A canary in the output means a real secret would have been there too.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/**
+ * Resolved from this file rather than from the working directory.
+ *
+ * CI runs the web job with `working-directory: web`, so a repo-relative path
+ * pointed at `web/web/.next` and the check reported "run the build first" on a
+ * run that had just built. A guard that is easy to misread as "not applicable"
+ * is a guard that gets deleted.
+ */
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Every server-only variable the app reads, and the canary each is built with.
@@ -50,7 +61,10 @@ const SERVER_ONLY = [
 const canary = (name) => `canary-${name}-must-never-reach-the-browser`;
 
 /** What `npm run build` writes, and what a browser is served from. */
-const BUNDLE = "web/.next/static";
+const BUNDLE = join(ROOT, "web/.next/static");
+
+/** Repo-relative, for messages — an absolute CI path is noise in a log. */
+const shown = (path) => relative(ROOT, path);
 
 if (process.argv.includes("--print-env")) {
   // Consumed by CI as the build step's environment. Printed rather than
@@ -66,7 +80,7 @@ function files(dir) {
     entries = readdirSync(dir);
   } catch {
     console.error(
-      `\n${BUNDLE} isn't there. Run \`npm run build\` in web/ first — this checks\n` +
+      `\n${shown(BUNDLE)} isn't there. Run \`npm run build\` in web/ first — this checks\n` +
         `the built client bundle, not the source.\n`,
     );
     process.exit(1);
@@ -94,8 +108,8 @@ for (const path of bundle) {
 if (found.length > 0) {
   console.error(
     `\nA server-only value reached the client bundle.\n\n` +
-      found.map((f) => `  ${f.name}  →  ${f.path}`).join("\n") +
-      `\n\nAnything in ${BUNDLE} is downloadable by anybody who opens the site.\n` +
+      found.map((f) => `  ${f.name}  →  ${shown(f.path)}`).join("\n") +
+      `\n\nAnything in ${shown(BUNDLE)} is downloadable by anybody who opens the site.\n` +
       `Next.js only exposes a variable to the browser when it is named\n` +
       `NEXT_PUBLIC_*, so one of these is now being read through such a name, or\n` +
       `is being inlined into a client component.\n\n` +

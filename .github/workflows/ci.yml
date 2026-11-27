@@ -160,6 +160,18 @@ jobs:
       # action pruned the checkout, this cache never saved it.
       #
       # The step below no longer trusts that, cache or no cache.
+      # The runner image is part of the key, and that is the third time this
+      # cache has had to learn something. `~/.dylint_drivers` holds a *compiled
+      # driver*, built against the rustc and system libraries of the image it was
+      # built on. GitHub reissues that image roughly weekly, and a driver that
+      # outlives its image fails in a way that reads like the repository's fault:
+      # on 27.11 every crate came back "Compilation errors" against contracts
+      # that had not been touched since the 21st and that analysed cleanly
+      # locally. Nothing in the workspace had changed; the image had.
+      - name: Note the runner image
+        if: steps.scope.outputs.run == 'true'
+        run: echo "RUNNER_IMAGE=${ImageVersion:-unknown}" >> "$GITHUB_ENV"
+
       - name: Cache Scout
         if: steps.scope.outputs.run == 'true'
         uses: actions/cache@v4
@@ -168,7 +180,7 @@ jobs:
             ~/.cargo/bin/cargo-scout-audit
             ~/.dylint_drivers
             ~/.cargo/git
-          key: scout-v2-${{ runner.os }}-${{ env.SCOUT_VERSION }}
+          key: scout-v3-${{ runner.os }}-${{ env.RUNNER_IMAGE }}-${{ env.SCOUT_VERSION }}
 
       # Scout analyses the whole workspace, and contracts/factory/src/test.rs
       # pulls the event contract in with contractimport!, which needs the wasm

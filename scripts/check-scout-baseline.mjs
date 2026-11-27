@@ -92,7 +92,16 @@ if (findings.length === 0) {
     `\n${report} contains no findings at all.\n\n` +
       `That is not a clean run: this workspace has a published baseline of\n` +
       `${Object.values(BASELINE).reduce((a, b) => a + b, 0)} findings. An empty report means Scout did not actually\n` +
-      `analyse anything — check the "Compiling detectors" output above.\n`,
+      `analyse anything.\n\n` +
+      `Read the Scout step's own summary table first. "Compilation errors"\n` +
+      `against every crate, on contracts that build fine in the Contracts job\n` +
+      `and analyse fine locally, has had one cause so far: a **stale dylint\n` +
+      `driver**. ~/.dylint_drivers holds a compiled binary built against the\n` +
+      `runner image's rustc, GitHub reissues that image about weekly, and the\n` +
+      `cache used to outlive it. The key now includes the image version, so if\n` +
+      `this is happening again the key is wrong rather than the code.\n\n` +
+      `If instead the table says "Analyzed" and the count is genuinely zero,\n` +
+      `that is a real change and this baseline is what needs updating.\n`,
   );
   process.exit(1);
 }
