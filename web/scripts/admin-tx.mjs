@@ -99,7 +99,21 @@ const EXPLORER = NETWORKS[chosen].explorer;
 /** Nobody's account. Only ever a sequence number for a read-only simulation. */
 const NULL_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 
-const server = new rpc.Server(NETWORKS[chosen].rpcUrl());
+/**
+ * Built on first use, never at startup.
+ *
+ * **`sign` must not need an RPC, and must not need the credential that reaches
+ * one.** It parses an envelope, adds a signature and prints it — all local. The
+ * first version constructed the client at module load, so signing demanded
+ * `MAINNET_RPC_URL`, which defeats the entire reason these are three commands:
+ * a holder signs on *their* machine, and handing them our provider key so they
+ * can do it would be the opposite of splitting the signatures up.
+ */
+let cachedServer = null;
+function rpcServer() {
+  if (!cachedServer) cachedServer = new rpc.Server(NETWORKS[chosen].rpcUrl());
+  return cachedServer;
+}
 
 // Printed on every step, to stderr so it never lands in a redirected envelope
 // file. Three commands run minutes apart by different people is exactly where
@@ -239,8 +253,8 @@ async function build([contractId, fn, ...values]) {
       : `admin on chain : ${authoriser}`,
   );
 
-  const account = await server.getAccount(authoriser);
-  const prepared = await server.prepareTransaction(
+  const account = await rpcServer().getAccount(authoriser);
+  const prepared = await rpcServer().prepareTransaction(
     new TransactionBuilder(account, {
       fee: String(Number(BASE_FEE) * 100),
       networkPassphrase: NETWORK,
@@ -276,7 +290,7 @@ async function read(contractId, fn) {
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await rpcServer().simulateTransaction(tx);
   if (rpc.Api.isSimulationError(sim)) {
     die(`Couldn't call \`${fn}\` on ${contractId}:\n\n${sim.error}`);
   }
@@ -357,7 +371,7 @@ async function send([envelope]) {
   const tx = new Transaction(envelopeFrom(envelope), NETWORK);
   console.error(`signatures     : ${tx.signatures.length}`);
 
-  const sent = await server.sendTransaction(tx);
+  const sent = await rpcServer().sendTransaction(tx);
   if (sent.status !== "PENDING") {
     const code = txCode(sent.errorResult);
     const explanations = {
@@ -382,10 +396,10 @@ async function send([envelope]) {
     );
   }
 
-  let got = await server.getTransaction(sent.hash);
+  let got = await rpcServer().getTransaction(sent.hash);
   while (got.status === "NOT_FOUND") {
     await new Promise((r) => setTimeout(r, 1500));
-    got = await server.getTransaction(sent.hash);
+    got = await rpcServer().getTransaction(sent.hash);
   }
 
   console.error(`status         : ${got.status}`);
