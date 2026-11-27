@@ -329,3 +329,12 @@ jobs:
       # inside a URL, so a rename is all it would take to publish it.
       - name: No server-only value in the client bundle
         run: node ../scripts/check-bundle-secrets.mjs
+
+      # Testnet gets reset, and when it does every hash SOW 1 and SOW 2 are
+      # graded on stops resolving. The archive is what survives that, so it has
+      # to stay complete — a hash added to the docs and not archived is a link
+      # that will quietly die. Offline: it recomputes each hash from the
+      # archived envelope and needs no network at all. It runs in this job
+      # because that is where node_modules already exist.
+      - name: Every published Testnet hash is archived
+        run: node ../scripts/archive-testnet-evidence.mjs --verify

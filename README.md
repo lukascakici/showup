@@ -987,6 +987,37 @@ Balances and the faucet go through Horizon; everything that moves a deposit goes
 through a Soroban contract call, signed in the connected wallet and submitted over
 Soroban RPC. Either way the returned hash links straight to Stellar Explorer.
 
+### Testnet gets reset, and the evidence outlives it
+
+Stellar wipes Testnet periodically — every ledger, every contract, every
+transaction. The first two engagements were graded entirely on Testnet evidence,
+and this repository publishes **133 transaction hashes, 16 contract addresses and
+32 accounts** as links a reviewer is expected to open. The day after a reset all
+of them 404, and nothing about that is our mistake or theirs.
+
+So they are archived, in
+**[docs/archive/testnet-transactions.json](docs/archive/testnet-transactions.json)**
+— not as screenshots, which prove nothing, but as each transaction's **signed
+envelope XDR**. A Stellar transaction's hash is derived from the network
+passphrase and the transaction body, so **every published hash can be recomputed
+from that file alone**, with no network, no explorer, and no trust in us:
+
+```bash
+node scripts/archive-testnet-evidence.mjs --verify
+# archived    : 133 transactions
+# published   : 133 in the markdown
+# ok     every published hash is present in the archive
+```
+
+CI runs that on every push, so a hash added to the docs and not archived fails
+the build rather than becoming a link that quietly dies later.
+
+**What the archive cannot do is prove inclusion** — that a validator accepted
+these transactions is exactly the claim that dies with the network, and saying
+otherwise would be the kind of overreach this file exists to avoid. What it does
+prove is that each envelope was signed by the keys it names, carries the
+operations it claims, and hashes to the value published beside it.
+
 ---
 
 ## Roadmap
