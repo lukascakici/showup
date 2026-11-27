@@ -4,7 +4,6 @@ import { useState } from "react";
 import { CalendarPlus, Info } from "lucide-react";
 import {
   FEE_ALLOWANCE_STROOPS,
-  NATIVE_SAC,
   factory,
   friendlyContractError,
   fromStroops,
@@ -269,7 +268,11 @@ export function CreateEvent() {
         organizer: signer.publicKey,
         title: title.trim(),
         starts_at: BigInt(startsAtSeconds),
-        token: NATIVE_SAC,
+        // The deposit asset, read off the network being served rather than off
+        // the default one. It is a hash of the asset and the network passphrase,
+        // so the two chains have different values for it and the compiled-in
+        // constant was Mainnet's on both hosts.
+        token: signer.network.nativeSac,
         deposit: toStroops(deposit),
         fee_allowance: FEE_ALLOWANCE_STROOPS,
         capacity: capacityNum,

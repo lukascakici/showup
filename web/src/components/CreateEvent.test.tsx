@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { CreateEvent } from "./CreateEvent";
+import { network } from "@/lib/networks";
 
 /**
  * The form sits behind a wallet gate, so a headless browser cannot reach it —
@@ -20,9 +21,20 @@ const chain = vi.hoisted(() => ({
   signAndSend: vi.fn(),
 }));
 
-vi.mock("@/lib/signer", () => ({
-  useSigner: () => ({ publicKey: ORGANIZER, signTransaction: vi.fn() }),
-}));
+// The network comes from the real `useNetwork()` rather than being written in,
+// so the signer this form builds its transaction from cannot disagree with the
+// network the test is rendering. A hardcoded one here would let a Testnet render
+// send a Mainnet deposit asset and still pass.
+vi.mock("@/lib/signer", async () => {
+  const { useNetwork } = await import("@/lib/network-context");
+  return {
+    useSigner: () => ({
+      publicKey: ORGANIZER,
+      signTransaction: vi.fn(),
+      network: useNetwork(),
+    }),
+  };
+});
 
 vi.mock("@/lib/contracts", async (importOriginal) => ({
   // `toStroops`, `fromStroops` and the byte limit stay real — they are half of
@@ -187,6 +199,34 @@ describe("CreateEvent — the wait", () => {
     expect(args.organizer).toBe(ORGANIZER);
     expect(typeof args.starts_at).toBe("bigint");
     expect(args.starts_at).toBeGreaterThan(0n);
+  });
+
+  /**
+   * The deposit asset belongs to the network being served.
+   *
+   * It used to be a module constant built from `defaultNetwork()`, which answers
+   * "mainnet" wherever Mainnet is configured — so on the Testnet host every
+   * event was created naming Mainnet's native asset contract, an address that is
+   * not deployed on Testnet. It is a hash of the asset and the passphrase, so the
+   * two chains genuinely differ and there is a right answer to assert.
+   *
+   * Asserted on both networks, because a single-network test cannot tell a value
+   * that was derived from the host apart from one that happens to match it.
+   */
+  it.each([
+    ["testnet" as const],
+    ["mainnet" as const],
+  ])("names %s's own native asset as the deposit token", async (on) => {
+    chainSucceeds();
+    render(<CreateEvent />, { network: on });
+    await fill(/event name/i, "Perşembe halı saha");
+    await userEvent.click(screen.getByRole("button", { name: /create event/i }));
+
+    await screen.findByText(/your event is live/i);
+    expect(chain.createEvent.mock.calls[0][0].token).toBe(network(on).nativeSac);
+    expect(chain.createEvent.mock.calls[0][0].token).not.toBe(
+      network(on === "testnet" ? "mainnet" : "testnet").nativeSac,
+    );
   });
 
   it("reports a failure in words and leaves the form usable", async () => {
