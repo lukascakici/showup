@@ -14,13 +14,21 @@
  * Drives the Chrome already installed rather than downloading a browser, so this
  * needs `npm i playwright-core` and nothing else.
  *
- * ## What it deliberately cannot do
+ * ## Connected screens, on Testnet
  *
- * Every screen here renders **without a wallet**. The connected states — a balance,
- * the faucet, a gate telling you whether you qualify, an organizer's own panel —
- * need a wallet to sign, and a headless browser has none. Those are captured
- * separately with a real wallet in the loop. Nothing in this file pretends
- * otherwise: if a screen needs a wallet it is not in the list below.
+ * This file used to say a headless browser has no wallet, so the connected states
+ * — a balance, the faucet, an organizer's own form — could not be captured here
+ * and were taken by hand with a real wallet in the loop.
+ *
+ * That stopped being true when the in-app wallet shipped: on Testnet the app can
+ * generate a keypair in the page and fund it from Friendbot, with nothing
+ * installed and nothing to approve. `connect()` below does exactly what a visitor
+ * does, so these are photographs of the real flow rather than a mock of it.
+ *
+ * A shot marked `wallet: true` therefore **only works against a Testnet host**.
+ * On Mainnet the app refuses to make an in-app wallet — deliberately, see
+ * `local-wallet.ts` — so those shots are skipped rather than silently captured
+ * disconnected and filed as if they showed a connected screen.
  *
  * ## Waiting
  *
@@ -66,8 +74,35 @@ const WITH_RECORD = "GB7TWPUDTFK7TZCX2JEJW675KE4B2T5UPOLKNJGRDGRY5H7MYXLVNKCL";
 const WITHOUT_RECORD = "GBYT3TBN4FFMNP7RSG7KRTRK4HDHHKCXEVTLVLHMIC7DBQ3BN7WOV52K";
 
 /**
+ * Make a wallet the way a visitor with nothing installed makes one.
+ *
+ * Open the picker, generate a key in the page, take Friendbot's 10,000 test XLM,
+ * dismiss. No extension, no popup, no approval — which is the entire point of
+ * the feature, and the reason these screens can be photographed at all.
+ *
+ * Each shot runs in its own browser context, so each one mints its own throwaway
+ * key. That is wasteful of nothing: the account is free and the XLM is worth
+ * nothing anywhere.
+ */
+async function connect(page, { fund = true } = {}) {
+  await page.getByRole("button", { name: /^connect( wallet)?$/i }).first().click();
+  await page.getByRole("dialog").waitFor({ timeout: 15_000 });
+  await page.getByRole("button", { name: /create a wallet here/i }).click();
+  await page.getByText(/your wallet is ready/i).waitFor({ timeout: 15_000 });
+  if (fund) {
+    await page.getByRole("button", { name: /add test xlm/i }).click();
+    // Friendbot has to create the account and a ledger has to close.
+    await page.getByText(/funded/i).waitFor({ timeout: 45_000 });
+  }
+  await page.getByRole("button", { name: /^done$/i }).click();
+  await page.waitForTimeout(1500);
+}
+
+/**
  * `expect` is text the page must actually show before the shutter opens. It is
  * what stops a screenshot of a skeleton being filed as a screenshot of a screen.
+ *
+ * `wallet: true` runs `connect()` first and marks the shot Testnet-only.
  */
 const SHOTS = [
   { id: "home", path: "/", expect: /put a price on/i, full: true },
@@ -120,6 +155,85 @@ const SHOTS = [
     // so it is on screen by default — it has to be dismissed for the other event
     // shots, which is why those run in their own contexts.
   },
+
+  /* ---- Testnet only: the screens the in-app wallet makes photographable ---- */
+
+  // The way in for somebody who has never held a Stellar wallet, which is the
+  // option the picker now leads with. Captured disconnected, so it is the panel
+  // as a first-time visitor meets it.
+  {
+    id: "wallet-create-offer",
+    path: "/",
+    expect: /put a price on/i,
+    wallet: "testnet-only",
+    act: async (page) => {
+      await page.getByRole("button", { name: /^connect( wallet)?$/i }).first().click();
+      await page.getByRole("dialog").waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: /create a wallet here/i }).waitFor();
+      await page.waitForTimeout(800);
+    },
+  },
+  // The moment the key exists, with the warning and the export on screen. This is
+  // the screen the README's claim about custody is actually about.
+  {
+    id: "wallet-created",
+    path: "/",
+    expect: /put a price on/i,
+    wallet: "testnet-only",
+    // Not `connect()`, which finishes by dismissing the panel — this shot is the
+    // panel. Funded first, so the faucet shows its confirmation rather than an
+    // untouched button: the screen somebody actually leaves this step on.
+    act: async (page) => {
+      await page.getByRole("button", { name: /^connect( wallet)?$/i }).first().click();
+      await page.getByRole("dialog").waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: /create a wallet here/i }).click();
+      await page.getByText(/your wallet is ready/i).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: /add test xlm/i }).click();
+      await page.getByText(/funded/i).waitFor({ timeout: 45_000 });
+      await page.waitForTimeout(800);
+    },
+  },
+  // The wallet menu as an in-app wallet sees it: the balance Friendbot just sent,
+  // the recovery key, and the two separate ways to stop using it.
+  {
+    id: "wallet-menu",
+    path: "/",
+    expect: /put a price on/i,
+    wallet: "testnet-only",
+    act: async (page) => {
+      await connect(page);
+      await page.getByRole("button", { name: /^wallet$/i }).click();
+      await page.getByText(/in-app wallet/i).first().waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(800);
+    },
+  },
+  // The organizer's form, which until now could not be photographed at all —
+  // disconnected, `/create` is only a prompt to connect.
+  {
+    id: "create-form",
+    path: "/create",
+    expect: /connect first/i,
+    wallet: "testnet-only",
+    full: true,
+    act: async (page) => {
+      await connect(page);
+      await page.getByLabel(/event name/i).waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+  },
+  // The deposit panel with a funded wallet behind it: the amount, what comes back,
+  // and the button that actually moves money.
+  {
+    id: "event-reserve",
+    path: `/e/${EVENTS.open}`,
+    expect: /soroban çalışma/i,
+    wallet: "testnet-only",
+    full: true,
+    act: async (page) => {
+      await connect(page);
+      await page.waitForTimeout(2500);
+    },
+  },
 ];
 
 mkdirSync(OUT, { recursive: true });
@@ -141,9 +255,27 @@ const browser = await chromium
   });
 let taken = 0;
 const failed = [];
+const skipped = [];
+
+/**
+ * Whether this run is pointed at a Testnet host.
+ *
+ * Decided from the base URL rather than by asking the page, because the question
+ * is "may this run make an in-app wallet", and the answer has to be no by
+ * default. An unrecognised host is treated as real money.
+ */
+const isTestnetHost = /(^|\/\/)(testnet\.|localhost|127\.0\.0\.1)/.test(BASE);
 
 for (const shot of SHOTS) {
   if (ONLY && !ONLY.includes(shot.id)) continue;
+
+  // Skipped out loud. A connected screen captured disconnected would still be a
+  // PNG of a real page, and would be filed next to the others as though it
+  // showed what its name says it shows.
+  if (shot.wallet === "testnet-only" && !isTestnetHost) {
+    skipped.push(shot.id);
+    continue;
+  }
 
   for (const size of WIDTHS) {
     // A context per shot, so `localStorage` never carries a dismissed panel from
@@ -191,6 +323,11 @@ for (const shot of SHOTS) {
 
 await browser.close();
 console.log(`\n${taken} captured into ${OUT}`);
+if (skipped.length) {
+  console.log(
+    `${skipped.length} skipped (need an in-app wallet, which only exists on Testnet): ${skipped.join(", ")}`,
+  );
+}
 if (failed.length) {
   console.log(`${failed.length} failed: ${failed.join(", ")}`);
   process.exit(1);
