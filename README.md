@@ -61,11 +61,12 @@ it builds toward has not happened yet. Everything described below exists and is
 verifiable today; where something is still ahead, this README says so rather than
 writing it in the past tense.
 
-Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)** and
-**[docs/SOW2](docs/SOW2/)** have one short page per deliverable, written against
-each SOW's §6.1 and readable without a technical background; **[docs/SOW3](docs/SOW3/)**
-holds the third engagement's security report. The sections below are the same record
-with the engineering in it.
+Reviewing rather than reading? **[docs/SOW1](docs/SOW1/)**,
+**[docs/SOW2](docs/SOW2/)** and **[docs/SOW3](docs/SOW3/)** have one short page per
+deliverable, written against each SOW's §6.1 and readable without a technical
+background. SOW 3 also carries the [security report](docs/SOW3/security.md) and the
+[organiser interview script](docs/SOW3/interview-script.md). The sections below are
+the same record with the engineering in it.
 
 The second engagement's contracts were upgraded **in place**, so nothing in the
 first engagement's evidence has been invalidated: every address on those pages is
