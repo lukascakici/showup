@@ -5,10 +5,14 @@ anywhere near real money they were frozen at one commit, put through the static
 analysis an audit expects to have been run first, and handed to an account that
 cannot be moved by any single key.
 
-> **SOW §6.1:** the CI run showing the analyser over all three contracts; the
-> report, with every finding, its fix, and the reasoning for anything left
-> unfixed; the transactions that moved the admin key; and the upgrade-policy and
-> trust-assumptions page on the live site.
+> **SOW §6.1:** the CI run showing `soroban-scanner` and Scout over all three
+> contracts; the report, with every finding, its fix, and the reasoning for
+> anything left unfixed; the transaction that rotated the admin key to hardware;
+> and the upgrade-policy and trust-assumptions page on the live site.
+
+**Two lines of that are not met as written, and are answered at the bottom of
+this page** rather than paraphrased away: `soroban-scanner` has not been run, and
+the key went to a 2-of-3 account rather than to a hardware device.
 
 ---
 
@@ -147,3 +151,24 @@ afterwards by anybody, ourselves included. Every address on that page is the one
 governing the network you are reading it on, and every link goes to the chain.
 
 ![The trust page: what can be upgraded, what cannot, and who holds the keys](../screenshots/sow3/trust-desktop.png)
+
+---
+
+## Where this does not match §6.1 as written
+
+**`soroban-scanner` has not been run.** The SOW names two tools and this
+deliverable has one. Scout is the thorough one — 39 detectors, and the source of
+every finding in the report — but "two tools" is what was committed to, and one
+is one.
+
+**The admin went to a 2-of-3 account, not to hardware.** §6.1 says "the
+transaction that rotated the admin key to hardware"; there is no hardware device
+and the role went to an account requiring two signatures out of three, held in
+three places.
+
+On the substance this is the stronger of the two: a hardware wallet is one key in
+one place, and losing or compromising it is a single event. Three keys with a
+threshold of two survive losing any one of them and resist stealing any one of
+them. But it is **not what the sentence says**, and a reviewer comparing the
+document to the work should find that difference stated here rather than discover
+it themselves. It is an open item with the Chapter Lead.

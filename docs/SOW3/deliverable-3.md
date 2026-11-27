@@ -113,12 +113,34 @@ retry rather than another trip to the wallet.
 
 ## Not finished
 
-Two items on this page depend on an event that has not happened yet, and are
-marked rather than described in advance:
+§6.1 asks this deliverable for more than is on the page above. Listed in full
+rather than quietly omitted, because a page that reports only its completed items
+is not evidence of anything.
 
-- [ ] **A real Mainnet event with real attendees**, run to settlement, with every
-      transaction hash recorded. Scheduled for 02–04.12.2026.
-- [ ] **The demo video** of that run.
+**Waiting on an event that has not happened** — scheduled 02–04.12.2026:
+
+- [ ] A real Mainnet event with real attendees, run to settlement, every
+      transaction hash recorded.
+- [ ] A real deposit arriving back in a real wallet.
+- [ ] The demo video.
+- [ ] The real-money confirmation screenshot, which only renders with a wallet
+      connected to a live Mainnet event.
+
+**Not built:**
+
+- [ ] **A reservation from a wallet the app generated in the browser**, with
+      nothing installed. Not started.
+- [ ] **A profile carrying an X link and an EVM address**, each claimed by a
+      wallet signature. Not started. It was last on the written list of what
+      falls if the month runs short — the intent was to build it.
+- [ ] **An organiser's announcement arriving as an email.** Not started, and
+      first on that same list: nothing depends on it, and the per-event
+      conversation already reaches anybody holding a spot.
+
+The written fall order, decided at the start of the engagement rather than at the
+end of it, was: organiser emails, then email entirely, then staked vouches, then
+descriptions and profiles. Three of those four did fall. **Descriptions were
+built** — see above — and profiles were not.
 
 The tooling is ready for it:
 [`web/scripts/collect-evidence.mjs`](../../web/scripts/collect-evidence.mjs) reads
