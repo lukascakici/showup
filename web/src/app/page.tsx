@@ -462,10 +462,14 @@ function Segment({
   children: React.ReactNode;
 }) {
   return (
+    // `h-11` rather than the `py-1.5` that made these 32px tall. 44px is what
+    // every other control in the app already is — it is the height `Button`
+    // uses at its default size — so these were the one exception rather than
+    // the one that got it right, and they are a control people tap on a phone.
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-[7px] px-4 py-1.5 text-[13.5px] transition-colors ${
+      className={`inline-flex h-11 items-center justify-center rounded-[7px] px-4 text-[13.5px] transition-colors ${
         active ? "bg-surface-4 text-foreground" : "text-[#7e7f86] hover:text-foreground"
       }`}
     >
