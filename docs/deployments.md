@@ -1455,3 +1455,120 @@ to `check_in` as hex:
 printf 'your-secret' | shasum -a 256   # code_hash, given at create_event
 printf 'your-secret' | xxd -p          # secret, given at check_in
 ```
+
+## Mainnet — the deployment, and what it actually cost (27.11.2026)
+
+**Showup is on Stellar Mainnet.** The same three binaries that have run on Testnet
+through three engagements, byte for byte: the hashes below are the Testnet hashes.
+Nothing was rebuilt for Mainnet, and nothing needed to be.
+
+| What | Address |
+| :-- | :-- |
+| **Event factory** | [`CCJLDI57GNYKSMP75QTPLUYGJV6VXN2LBT2SEYWVDRLJSBMWWS6E5ZVJ`](https://stellar.expert/explorer/public/contract/CCJLDI57GNYKSMP75QTPLUYGJV6VXN2LBT2SEYWVDRLJSBMWWS6E5ZVJ) |
+| **Reputation ledger** | [`CBFOLND667UO3XLHCSBYHGZ4KE45F5BBFTX425I3PPTBVUJJ2SISWS6M`](https://stellar.expert/explorer/public/contract/CBFOLND667UO3XLHCSBYHGZ4KE45F5BBFTX425I3PPTBVUJJ2SISWS6M) |
+| **Event wasm hash** | `5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03` |
+| **Admin (both contracts)** | [`GCHKQ5BIFT55QZMZFW5OMXN2MNWQP3GUFJWNHYV2PUEPOYI6RPYV2NOG`](https://stellar.expert/explorer/public/account/GCHKQ5BIFT55QZMZFW5OMXN2MNWQP3GUFJWNHYV2PUEPOYI6RPYV2NOG) — **2-of-3** |
+
+Mainnet was on **protocol 30** at deploy time and the wasms declare v27. Older
+contracts keep running under newer protocols, so this was a tooling check rather
+than a contract risk — confirmed before the first upload rather than after.
+
+### The sequence, with every transaction
+
+| Step | Transaction |
+| :-- | :-- |
+| Upload `reputation` | [`e49085c4…`](https://stellar.expert/explorer/public/tx/e49085c497cc6f5925d2827ad4e542b7df9113c4dc2e70c06bd1f78c9aa1d77c) |
+| Upload `factory` | [`d573054e…`](https://stellar.expert/explorer/public/tx/d573054e5936f7b06610ffa2f0c0e2bcb4886273382a053ba21eb6c7d1764f4e) |
+| Upload `event` | [`798cbc9b…`](https://stellar.expert/explorer/public/tx/798cbc9bd8cf83081b56e27105974465743b43e5c476de7872f5ba148c002a2e) |
+| Deploy `reputation` | [`71eee375…`](https://stellar.expert/explorer/public/tx/71eee375ae97b869b20fd4df8321a503614ab1308ece5f2e61d933819d4eec40) |
+| Deploy `factory` | [`7802307f…`](https://stellar.expert/explorer/public/tx/7802307fa76f4474e13eb1016f91815623068189c76f0725e8c8a3ba2bc23b86) |
+| `factory.initialize` | [`90c5e61e…`](https://stellar.expert/explorer/public/tx/90c5e61e56e106e713d9f71a43f5a3087a60581106691e0d8450ce4329d89881) |
+| `reputation.initialize` | [`63ad39a5…`](https://stellar.expert/explorer/public/tx/63ad39a5bb900d09e5906193bc72935a00cf24141b98ff9aa0cf2d497ff83e1f) |
+| `factory.set_reputation` | [`c533f5ec…`](https://stellar.expert/explorer/public/tx/c533f5ec57be0fa503f83e29758ee3b63a5f9ce098f5996e30967e39e7082d65) |
+| **Warm-up event created** | [`8eede647…`](https://stellar.expert/explorer/public/tx/8eede6472aaa0d43ae35f89e9eac895fe87c4b4e58e09ef7447432ee713368e7) |
+| **Warm-up event finalized** | [`fca49e8a…`](https://stellar.expert/explorer/public/tx/fca49e8a32975ab9e9ca78af38e9b8a484477bc56e1414f375ed73399d74ea90) |
+
+Every address and pointer was then read back **from the chain** rather than from
+the terminal scrollback: `factory.get_admin`, `get_reputation`,
+`get_event_wasm_hash`, `reputation.get_admin`, `get_factory`. The warm-up event
+settled to `Finalized` and the ledger recorded `events_organised: 1` for the
+organizer — so the factory gate, the settlement and the atomic reputation write
+are all proven on Mainnet, not only on Testnet.
+
+### The budget was wrong in both directions, and they cancelled
+
+| | Budgeted | Actual |
+| :-- | --: | --: |
+| Three wasm uploads | 5.5 | **80.82** |
+| Deploys, initialize, wiring | 0.01 | **0.11** |
+| First event from a fresh wasm | 110 | **0.22** |
+| Warm-up finalize and the rotation | — | ~0.04 |
+| **Total** | **~116** | **81.19** |
+
+The uploads cost 15× the estimate and the first-event line came in 500× under it.
+Both have the same cause: **Mainnet charges the code entry's rent at upload time,
+where Testnet defers it to the first instantiation.** The cost did not multiply,
+it moved. The 36–106 XLM first-event bills measured on Testnet simply do not
+happen here.
+
+The warm-up event was run anyway, and would be again. There was no way to know
+this in advance, and the alternative was letting the first real organiser
+discover it.
+
+### Two things Testnet could not have taught us
+
+**1. Mainnet has fee competition and Testnet does not.** `create_event` failed
+twice with "transaction submission timeout" and landed on neither attempt.
+`getFeeStats` explained it: the Soroban inclusion fee's p50 *and* p99 were both
+200 stroops, against the CLI's default of 100. We were bidding under the market,
+and the heaviest transaction in the sequence was the one that never got included.
+`--inclusion-fee 2000` — 0.0002 XLM — went through first time.
+
+**Every Mainnet step in this runbook should pass an explicit inclusion fee.** On
+Testnet nothing competes for ledger space, so this cannot surface there at all.
+
+**2. A timeout is not a failure.** Three steps reported "submission timeout" and
+two of them had genuinely not landed; one had. The rule used throughout: **read
+the state before retrying**, never the scrollback. `get_admin` returning
+`NotInitialized` is what established that an initialize had not happened, and a
+404 from Horizon on the transaction hash is what established an upload had not.
+
+### The admin: an account no single key can move
+
+Both contracts are governed by `GCHKQ5BI…RPYV2NOG`, whose low, medium and high
+thresholds are all **2** across three signers held in three places.
+
+Unlike Testnet, the admin address never changed — the deployer account *became*
+the 2-of-3, so there was no `propose_admin` / `accept_admin` to perform. What
+changed is the account's signing rules, which is the thing that actually matters.
+
+| Step | Transaction |
+| :-- | :-- |
+| B and C added as signers, threshold still 1 | [`ed7b4a50…`](https://stellar.expert/explorer/public/tx/ed7b4a502099c0906ffc695acef10610331914fcd1bc74873d1f51f45c2d41c7) |
+| **B governs alone** — a real admin call, B's signature only | [`8e9eb60f…`](https://stellar.expert/explorer/public/tx/8e9eb60fd6eaba88d249904e14fd113681ea1ecad91f5a47869b7e9cf6158816) |
+| **C governs alone** — same | [`76fbe93e…`](https://stellar.expert/explorer/public/tx/76fbe93e8e7cac7136abbf732625589a21a750a15afa56848685c9ed9e7ead0e) |
+| Threshold raised to 2 | [`0b5b30cf…`](https://stellar.expert/explorer/public/tx/0b5b30cf711dbf3e5c994156fccf95cb7b259cfd0c43b2d60fd6300b6cc0d24a) |
+| **Two signatures accepted** | [`ac5cd05a…`](https://stellar.expert/explorer/public/tx/ac5cd05abf0a689649eac15bb281db998bef0971dafb0be28bc048bccf998f39) |
+
+**The proof of possession here is stronger than the one taken on Testnet.** There,
+the account was already 2-of-3-to-be at threshold 1, and Stellar refuses a
+transaction carrying more signatures than the account needs (`txBadAuthExtra`), so
+both holders signed one envelope and the signatures were verified against its hash
+offline. Here, with the threshold still at 1, each holder **signed and submitted a
+real admin call alone**. That is not "the key verifies" but "the key governs", and
+it was only possible because the irreversible step came last.
+
+The call each of them made was `set_event_wasm_hash` with the hash the factory
+already had — a genuine admin call that changes nothing.
+
+And the refusal, which is the security property rather than the feature: the
+**same envelope** that succeeded above was first submitted carrying only the
+build machine's signature, and the network refused it `txBadAuth`. One signature
+is not enough, including ours, and with `high` at 2 no single key can change that
+either.
+
+### Cleanup
+
+The signed envelopes were written to `private/` during the ceremony and deleted
+after submission. They contain no secret — a signature is not a key — but a
+half-signed envelope lying around is a transaction somebody could complete later.
