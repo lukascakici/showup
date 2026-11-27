@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import type { Firestore } from "firebase-admin/firestore";
 import { adminFirestore } from "@/lib/firebase-admin";
 import { cronVerdict } from "@/lib/cron";
-import { FACTORY_ID } from "@/lib/contracts";
 import { activityId, listEventIds, loadEvent, serverFor, sweepEventActivity } from "@/lib/chain";
 import { requestNetwork } from "@/lib/network.server";
 import { liveNetworks, type Network } from "@/lib/networks";
@@ -284,7 +283,14 @@ async function indexState(db: Firestore, network: Network, id?: string) {
       id: e.id,
       title: e.title,
       startsAt: e.startsAt,
-      factory: FACTORY_ID,
+      // **The network being swept, not the default one.** This was the
+      // compiled-in `FACTORY_ID`, which was harmless while there was one
+      // network and wrong the moment the scheduled sweep started visiting two:
+      // every record, Testnet or Mainnet, would have been stamped with
+      // whichever factory `defaultNetwork()` happened to return, and `factory`
+      // is the only field separating the two networks' events in one
+      // collection.
+      factory: network.contracts!.factoryId,
       organizer: e.organizer,
       hosts: e.hosts,
       deposit: e.deposit.toString(),

@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { firestore } from "./firebase";
-import { FACTORY_ID } from "./contracts";
+import type { Network } from "./networks";
 import type { EventState } from "./chain";
 
 /**
@@ -119,12 +119,19 @@ export function toEventState(doc: IndexedEvent): EventState {
  * showing them next to the current ones would offer people a list of events the
  * app can no longer create siblings for. Empty array when the index is off.
  */
-export async function readIndexedEvents(): Promise<IndexedEvent[]> {
+export async function readIndexedEvents(network: Network): Promise<IndexedEvent[]> {
   const db = firestore();
   if (!db) return [];
 
+  // The network asked for, never the compiled-in default. Both networks' events
+  // live in one collection and `factory` is the only thing telling them apart,
+  // so a constant here would have shown Mainnet's events on the Testnet host
+  // the moment Mainnet became the first live network.
   const snapshot = await getDocs(
-    query(collection(db, EVENTS_COLLECTION), where("factory", "==", FACTORY_ID)),
+    query(
+      collection(db, EVENTS_COLLECTION),
+      where("factory", "==", network.contracts?.factoryId ?? ""),
+    ),
   );
   return snapshot.docs.map((d) => d.data() as IndexedEvent);
 }
@@ -132,11 +139,12 @@ export async function readIndexedEvents(): Promise<IndexedEvent[]> {
 /** How long a fetched index is reused before Firestore is asked again. */
 export const INDEX_TTL_MS = 60_000;
 
-let cached: { at: number; docs: IndexedEvent[] } | null = null;
+/** One slot per network — see `readIndexedEventsCached`. */
+const cached = new Map<string, { at: number; docs: IndexedEvent[] }>();
 
 /** Drop the cache. For tests, and anywhere a fresh read is worth the trip. */
 export function forgetIndexCache() {
-  cached = null;
+  cached.clear();
 }
 
 /**
@@ -151,11 +159,19 @@ export function forgetIndexCache() {
  * A failure is not cached: an outage should be retried on the next tick, not
  * remembered as "the index is empty" for the following minute.
  */
-export async function readIndexedEventsCached(now = Date.now()): Promise<IndexedEvent[]> {
-  if (cached && now - cached.at < INDEX_TTL_MS) return cached.docs;
-  const docs = await readIndexedEvents().catch(() => null);
-  if (docs === null) return cached?.docs ?? [];
-  cached = { at: now, docs };
+export async function readIndexedEventsCached(
+  network: Network,
+  now = Date.now(),
+): Promise<IndexedEvent[]> {
+  // **Keyed by network.** A single slot would have served one network's event
+  // list to the other for up to a minute after any switch — and since this is
+  // read on the home page's happy path, that is the list a visitor sees.
+  const hit = cached.get(network.id);
+  if (hit && now - hit.at < INDEX_TTL_MS) return hit.docs;
+
+  const docs = await readIndexedEvents(network).catch(() => null);
+  if (docs === null) return hit?.docs ?? [];
+  cached.set(network.id, { at: now, docs });
   return docs;
 }
 

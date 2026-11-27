@@ -129,7 +129,7 @@ export async function loadEventList(network: Network): Promise<EventList> {
       // its keep — but it is a genuine outage, so say nothing false about it.
       return null;
     }),
-    readIndexedEventsCached(),
+    readIndexedEventsCached(network),
   ]);
   const hidden = hiddenIds(indexed);
 

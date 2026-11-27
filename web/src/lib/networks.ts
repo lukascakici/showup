@@ -53,6 +53,18 @@ export type Network = {
    */
   contracts: NetworkContracts | null;
   /**
+   * The account that governs both contracts on this network, for `/trust` to
+   * point at. A different account on each, and neither is a key: both are
+   * 2-of-3.
+   *
+   * Written down rather than read from the chain because `/trust` is a server
+   * page and an RPC call per view would make the page fail when the network
+   * does — on exactly the page somebody opens when they are already unsure.
+   * The link goes to the chain, which is the authority: if this ever drifts,
+   * the account it points at will visibly not be the one `get_admin` returns.
+   */
+  adminAccount: string | null;
+  /**
    * Whether a mistake here costs somebody real money. Drives the confirmation
    * step, the labelling, and the refusal to put an app-generated wallet on it.
    */
@@ -99,6 +111,7 @@ const TESTNET: Network = {
     factoryId: factoryNetworks.testnet.contractId,
     reputationId: reputationNetworks.testnet.contractId,
   },
+  adminAccount: "GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF",
   isRealMoney: false,
 };
 
@@ -119,6 +132,7 @@ const MAINNET: Network = {
     factoryId: factoryNetworks.mainnet.contractId,
     reputationId: reputationNetworks.mainnet.contractId,
   },
+  adminAccount: "GCHKQ5BIFT55QZMZFW5OMXN2MNWQP3GUFJWNHYV2PUEPOYI6RPYV2NOG",
   isRealMoney: true,
 };
 

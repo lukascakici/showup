@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { EXPLORER_CONTRACT } from "@/lib/stellar";
-import { FACTORY_ID, REPUTATION_ID } from "@/lib/contracts";
+import { EXPLORER_ACCOUNT, EXPLORER_CONTRACT } from "@/lib/networks";
+import { requestNetwork } from "@/lib/network.server";
 import { SITE_NAME } from "@/lib/og";
 import { SectionLabel } from "@/components/ui";
 
@@ -38,7 +38,13 @@ function Link_({ href, children }: { href: string; children: React.ReactNode }) 
   );
 }
 
-export default function TrustPage() {
+export default async function TrustPage() {
+  // Every address on this page is the one governing *this* network. It read a
+  // compiled-in constant before, so the Mainnet host sent people to verify our
+  // claims against Testnet contracts and a Testnet admin account — on the one
+  // page whose entire job is being checkable.
+  const network = await requestNetwork();
+
   return (
     <main className="mx-auto w-full max-w-2xl">
       <Link
@@ -85,9 +91,9 @@ export default function TrustPage() {
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-foreground-2">
           There is an admin. It governs the{" "}
-          <Link_ href={EXPLORER_CONTRACT(FACTORY_ID)}>event factory</Link_> and
+          <Link_ href={EXPLORER_CONTRACT(network, network.contracts?.factoryId ?? "")}>event factory</Link_> and
           the{" "}
-          <Link_ href={EXPLORER_CONTRACT(REPUTATION_ID)}>reputation ledger</Link_>
+          <Link_ href={EXPLORER_CONTRACT(network, network.contracts?.reputationId ?? "")}>reputation ledger</Link_>
           . Its powers are about <em>future</em> events — events nobody has
           committed money to yet. It is not one key: every one of the powers
           below needs two signatures out of three.
@@ -168,7 +174,7 @@ export default function TrustPage() {
           signers and thresholds are public, so{" "}
           <a
             className="underline decoration-foreground-3 underline-offset-4 hover:decoration-foreground"
-            href="https://stellar.expert/explorer/testnet/account/GBWMYPV6274EVO3MVQMEQWGRSEFGE7ZSEJSNWYGMBV4WF7OQLEAF5QQF"
+            href={EXPLORER_ACCOUNT(network, network.adminAccount ?? "")}
             target="_blank"
             rel="noreferrer"
           >
