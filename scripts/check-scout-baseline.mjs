@@ -95,11 +95,10 @@ if (findings.length === 0) {
       `analyse anything.\n\n` +
       `Read the Scout step's own summary table first. "Compilation errors"\n` +
       `against every crate, on contracts that build fine in the Contracts job\n` +
-      `and analyse fine locally, has had one cause so far: a **stale dylint\n` +
-      `driver**. ~/.dylint_drivers holds a compiled binary built against the\n` +
-      `runner image's rustc, GitHub reissues that image about weekly, and the\n` +
-      `cache used to outlive it. The key now includes the image version, so if\n` +
-      `this is happening again the key is wrong rather than the code.\n\n` +
+      `and analyse fine on a laptop, has meant one thing twice: a **restored\n` +
+      `dylint driver**. The pattern was cold run passes, next warm run fails.\n` +
+      `~/.dylint_drivers is no longer cached for that reason — if this is\n` +
+      `happening again, check whether something put it back.\n\n` +
       `If instead the table says "Analyzed" and the count is genuinely zero,\n` +
       `that is a real change and this baseline is what needs updating.\n`,
   );

@@ -168,27 +168,34 @@ jobs:
       # action pruned the checkout, this cache never saved it.
       #
       # The step below no longer trusts that, cache or no cache.
-      # The runner image is part of the key, and that is the third time this
-      # cache has had to learn something. `~/.dylint_drivers` holds a *compiled
-      # driver*, built against the rustc and system libraries of the image it was
-      # built on. GitHub reissues that image roughly weekly, and a driver that
-      # outlives its image fails in a way that reads like the repository's fault:
-      # on 27.11 every crate came back "Compilation errors" against contracts
-      # that had not been touched since the 21st and that analysed cleanly
-      # locally. Nothing in the workspace had changed; the image had.
-      - name: Note the runner image
-        if: steps.scope.outputs.run == 'true'
-        run: echo "RUNNER_IMAGE=${ImageVersion:-unknown}" >> "$GITHUB_ENV"
-
+      #
+      # **`~/.dylint_drivers` is no longer cached, and that is the fix.** The
+      # observed pattern, twice: a cold run passes and the next warm one fails
+      # with "Compilation errors" against every crate — on contracts that build
+      # in the Contracts job and analyse cleanly on a laptop.
+      #
+      # On 27.11 this was first blamed on the runner image, and the image
+      # version was added to the key. That was wrong: the next failure restored
+      # from `scout-v3-Linux-20261122.9.1-0.3.17`, the *same* image as the run
+      # that had just succeeded. The only thing distinguishing them was cold
+      # versus warm.
+      #
+      # So the rule here is about what kind of thing each path is, rather than
+      # another theory about why. `cargo-scout-audit` and `~/.cargo/git` are
+      # **inputs** — a binary and a source checkout — and caching them is what
+      # makes `cargo install` a no-op, which is the expensive part. The drivers
+      # are a **compiled artefact of this machine**, and restoring one built
+      # elsewhere is the one thing these runs have in common. Dylint rebuilds a
+      # missing driver on demand, so dropping it costs minutes and buys a job
+      # whose result means something.
       - name: Cache Scout
         if: steps.scope.outputs.run == 'true'
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/cargo-scout-audit
-            ~/.dylint_drivers
             ~/.cargo/git
-          key: scout-v3-${{ runner.os }}-${{ env.RUNNER_IMAGE }}-${{ env.SCOUT_VERSION }}
+          key: scout-v4-${{ runner.os }}-${{ env.SCOUT_VERSION }}
 
       # Scout analyses the whole workspace, and contracts/factory/src/test.rs
       # pulls the event contract in with contractimport!, which needs the wasm
