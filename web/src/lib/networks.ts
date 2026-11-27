@@ -64,8 +64,27 @@ export type Network = {
  * the environment. Absent, Mainnet simply has no RPC and `liveNetworks()` leaves
  * it out — the same failure mode as not having deployed yet, and the same honest
  * result: it is not offered.
+ *
+ * **The server and the browser are given different URLs on purpose.** Every
+ * Mainnet provider authenticates, and ours carries its API key inside the URL, so
+ * that URL can never be a `NEXT_PUBLIC_` value — those are compiled into the
+ * client bundle and served to anybody who asks. Server code therefore gets the
+ * real upstream from a server-only secret, and the browser gets a path on our own
+ * origin that `app/api/rpc/mainnet` forwards. See that route for what it refuses.
+ *
+ * `MAINNET_RPC_PATH` is public and carries nothing: it is a path, and its
+ * presence is also how the browser learns that this deployment has a Mainnet RPC
+ * at all. Set it only on a deployment where `MAINNET_RPC_URL` is set too —
+ * otherwise the browser offers Mainnet and every read 503s at the proxy.
  */
-const MAINNET_RPC_URL = process.env.NEXT_PUBLIC_MAINNET_RPC_URL ?? "";
+const MAINNET_RPC_URL = (() => {
+  if (typeof window === "undefined") return process.env.MAINNET_RPC_URL ?? "";
+  const path = process.env.NEXT_PUBLIC_MAINNET_RPC_PATH ?? "";
+  // Absolute, because `new rpc.Server(url)` runs `new URL(url)` and a bare path
+  // throws. Built from the live origin rather than from a configured host so a
+  // preview deployment proxies through itself.
+  return path ? new URL(path, window.location.origin).toString() : "";
+})();
 
 const TESTNET: Network = {
   id: "testnet",

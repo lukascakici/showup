@@ -294,5 +294,18 @@ jobs:
       - name: Mobile audit
         run: node ../scripts/mobile-audit.mjs
 
+      # Built with canary values for every server-only variable, so the step
+      # after this can prove none of them reached the browser. Canaries rather
+      # than real secrets: CI has none, and a grep for a value that isn't set
+      # passes everywhere while proving nothing.
       - name: Build
-        run: npm run build
+        run: |
+          set -euo pipefail
+          node ../scripts/check-bundle-secrets.mjs --print-env >> "$GITHUB_ENV"
+          npm run build
+
+      # `NEXT_PUBLIC_` is the only thing separating a secret from a public file,
+      # and nothing in the type system enforces it. The Mainnet RPC key lives
+      # inside a URL, so a rename is all it would take to publish it.
+      - name: No server-only value in the client bundle
+        run: node ../scripts/check-bundle-secrets.mjs
