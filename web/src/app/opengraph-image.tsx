@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
-import { SITE_DESCRIPTION } from "@/lib/og";
+import { CARD_TAGLINE } from "@/lib/og";
 import { SITE_URL } from "@/lib/links";
 import { markDataUri } from "@/lib/mark";
 
@@ -85,13 +85,14 @@ export default function OpengraphImage() {
               marginTop: 24,
             }}
           >
-            {SITE_DESCRIPTION}
+            {CARD_TAGLINE}
           </div>
         </div>
 
-        {/* The tagline above already says Stellar Testnet, so this line carries
-            the domain instead — on a card pasted into a group chat it is the
-            only thing telling you where the link goes. */}
+        {/* The tagline deliberately names no network: this image is generated
+            once at build time and both hostnames are served the same build, so
+            it cannot know. The domain below is what tells a reader where the
+            link goes, and on two hostnames that is the honest signal. */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ display: "flex", fontSize: 28, color: ACCENT, fontWeight: 700 }}>
             {SITE_URL.replace(/^https?:\/\//, "")}

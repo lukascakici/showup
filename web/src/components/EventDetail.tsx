@@ -448,7 +448,7 @@ export function EventDetail({
         </div>
 
         <div className="flex flex-wrap gap-2.5 pt-[18px]">
-          <Chip pill>Stellar Testnet</Chip>
+          <Chip pill>Stellar {network.label}</Chip>
           <Chip pill>{splits ? "Split among attendees" : "Forfeits to organizer"}</Chip>
         </div>
       </aside>
@@ -688,8 +688,8 @@ export function EventDetail({
           </SectionLabel>
           <p className="mt-5 text-[15.5px] leading-[1.65] text-foreground-2 text-pretty">
             Every spot here is backed by {fromStroops(event.deposit)} XLM held in this
-            event’s own contract on Stellar Testnet — not by the organizer, and not
-            by us. Check in at the door and it comes straight back.
+            event’s own contract on Stellar {network.label} — not by the organizer, and
+            not by us. Check in at the door and it comes straight back.
           </p>
           <div className="mt-4 grid gap-2.5 text-[15px] text-foreground-2">
             <Line>
@@ -714,7 +714,7 @@ export function EventDetail({
           <div className="mt-7 flex items-start gap-4 rounded-[14px] border border-border-strong bg-surface-2 px-5 py-4.5">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-lift" />
             <p className="text-sm leading-[1.6] text-[#9a9ba1]">
-              Reserving locks real Testnet XLM. If you don’t check in,{" "}
+              Reserving locks real {network.label} XLM. If you don’t check in,{" "}
               {splits
                 ? "your deposit stays in the pool and is shared out among the people who did"
                 : "your deposit goes to the organizer"}{" "}
@@ -1408,6 +1408,7 @@ function ColdStart({
   onConnect: () => void;
   connecting: boolean;
 }) {
+  const network = useNetwork();
   const gate = admissionStep(admission);
   const steps = [
     ...(gate ? [gate] : []),
@@ -1430,15 +1431,28 @@ function ColdStart({
         ))}
       </ol>
 
-      {/* The single most reassuring fact available, and it was nowhere on this
-          page: none of this is real money. */}
+      {/* On Testnet, the single most reassuring fact available and it was
+          nowhere on this page. On Mainnet the same slot has to carry the
+          opposite, so the two are written out separately rather than as one
+          sentence with the network interpolated — the reassuring version
+          reaching Mainnet is the worst outcome this component has. */}
       <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-border bg-surface p-3.5">
         <Info className="mt-0.5 size-4 shrink-0 text-accent-lift" />
-        <p className="text-xs leading-[1.55] text-muted">
-          Showup runs on <strong className="text-foreground">Stellar Testnet</strong>. The
-          XLM here is test money — it can’t be bought, sold or spent anywhere, and
-          the faucet hands out as much as you need for free. Don’t flake anyway.
-        </p>
+        {network.isRealMoney ? (
+          <p className="text-xs leading-[1.55] text-muted">
+            Showup runs on <strong className="text-foreground">Stellar Mainnet</strong>.
+            The deposit is real XLM from a wallet you own, it is held by this
+            event’s own contract, and a no-show forfeits it. Nothing here is a
+            simulation.
+          </p>
+        ) : (
+          <p className="text-xs leading-[1.55] text-muted">
+            Showup runs on <strong className="text-foreground">Stellar Testnet</strong>.
+            The XLM here is test money — it can’t be bought, sold or spent anywhere,
+            and the faucet hands out as much as you need for free. Don’t flake
+            anyway.
+          </p>
+        )}
       </div>
 
       <Button onClick={onConnect} size="lg" fullWidth className="mt-5" loading={connecting}>

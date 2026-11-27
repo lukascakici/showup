@@ -16,10 +16,12 @@ import { Button, ButtonLink, Card, Chip, SectionLabel, Skeleton } from "@/compon
 import { DepositFlowArt } from "@/components/DepositFlow";
 import { EventPoster } from "@/components/EventPoster";
 import { LiveRollCall } from "@/components/LiveRollCall";
+import { useNetwork } from "@/lib/network-context";
 
 type Tab = "upcoming" | "past";
 
 export default function Home() {
+  const network = useNetwork();
   const { address } = useWallet();
   const { data: list, loading, error, refreshing, refresh } = useEventList();
   const events = list?.events;
@@ -60,7 +62,7 @@ export default function Home() {
         <Card className="flex flex-col items-start gap-4">
           <p className="text-sm text-muted">
             {events.length === 0
-              ? "No events yet. Create the first one — it'll live at its own address on Testnet."
+              ? `No events yet. Create the first one — it'll live at its own address on ${network.label}.`
               : tab === "upcoming"
                 ? "Nothing coming up. Every event here has already been settled."
                 : "Nothing has been settled yet."}

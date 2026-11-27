@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { CircleDollarSign, FlaskConical, Wallet } from "lucide-react";
+import { CircleDollarSign, FlaskConical, ShieldAlert, Wallet } from "lucide-react";
 import { fromStroops } from "@/lib/contracts";
+import { useNetwork } from "@/lib/network-context";
 import { Button } from "./ui";
 
 /** No subscription: nothing outside this component changes the answer. */
@@ -64,6 +65,7 @@ function remember() {
  * obstacle, and somebody who already knows all three is being detained.
  */
 export function FirstRun({ deposit, refund }: { deposit: bigint; refund: bigint }) {
+  const network = useNetwork();
   const already = useSyncExternalStore(noChanges, seen, serverSnapshot);
   const [dismissed, setDismissed] = useState(false);
   const open = !already && !dismissed;
@@ -116,14 +118,31 @@ export function FirstRun({ deposit, refund }: { deposit: bigint; refund: bigint 
             Check in when you turn up and {fromStroops(refund)} XLM comes straight back
             to you, in the same transaction. Only a no-show forfeits theirs.
           </Step>
-          <Step
-            icon={<FlaskConical className="size-4 text-muted" />}
-            title="It isn't real money"
-          >
-            This runs on Stellar’s test network. The XLM is free, there is a faucet
-            in the app, and it is worth nothing anywhere. Nothing here can touch
-            money you actually own.
-          </Step>
+          {/* The one step whose two versions are opposites, so it is written as
+              two steps rather than one sentence with a word swapped. Saying "it
+              isn't real money" on Mainnet would be the worst thing this app can
+              say, and a template that can produce it by getting a flag wrong is
+              a template that eventually will. */}
+          {network.isRealMoney ? (
+            <Step
+              icon={<ShieldAlert className="size-4 text-accent" />}
+              title="This is real XLM"
+            >
+              You are on Stellar Mainnet. The deposit is real money, leaving a
+              wallet you own, and a no-show really does forfeit it. Nobody can
+              return it to you except the contract, under the rules it was created
+              with.
+            </Step>
+          ) : (
+            <Step
+              icon={<FlaskConical className="size-4 text-muted" />}
+              title="It isn't real money"
+            >
+              This runs on Stellar’s test network. The XLM is free, there is a
+              faucet in the app, and it is worth nothing anywhere. Nothing here can
+              touch money you actually own.
+            </Step>
+          )}
           <Step icon={<Wallet className="size-4 text-muted" />} title="A wallet holds it">
             Not us. The contract takes the deposit from your wallet and returns it to
             your wallet, and every step is a transaction you approve yourself.

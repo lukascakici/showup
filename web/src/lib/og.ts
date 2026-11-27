@@ -19,8 +19,26 @@ import { formatXlm } from "./format";
 
 export const SITE_NAME = "Showup";
 export const SITE_TITLE = "Showup — on-chain anti-flake deposits";
-export const SITE_DESCRIPTION =
-  "Put a refundable deposit on showing up. Reserve, check in, reclaim — on Stellar Testnet.";
+
+/**
+ * A function of the network, because this string is what a link preview shows
+ * in somebody else's chat — the one place the app's copy travels to a reader who
+ * never visits the site. It said "on Stellar Testnet" unconditionally, which the
+ * Mainnet host served from its first minute.
+ */
+export const siteDescription = (networkLabel: string) =>
+  `Put a refundable deposit on showing up. Reserve, check in, reclaim — on Stellar ${networkLabel}.`;
+
+/**
+ * The same sentence with no network in it, for the OG *image*.
+ *
+ * That image is rendered once at build time and both hostnames are served the
+ * same build, so it genuinely cannot know which network a reader is looking at.
+ * Naming one would be a guess, and the only wrong guess here is the expensive
+ * one. The card carries the domain instead, which is accurate either way.
+ */
+export const CARD_TAGLINE =
+  "Put a refundable deposit on showing up. Reserve, check in, reclaim — on Stellar.";
 
 /** The title shown when the chain read fails, or for an event with no name. */
 export const UNTITLED = "Untitled event";
@@ -108,5 +126,8 @@ export function eventPreview(event: EventState, described?: string | null): Prev
  */
 export const FALLBACK_PREVIEW: Preview = {
   title: `Event · ${SITE_NAME}`,
-  description: SITE_DESCRIPTION,
+  // The network-free wording, for the same reason the card uses it: this is
+  // reached when the chain could not be read, so claiming a network would be
+  // asserting the one thing that moment failed to establish.
+  description: CARD_TAGLINE,
 };

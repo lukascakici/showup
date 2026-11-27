@@ -258,7 +258,7 @@ function Unreadable({ address }: { address: string }) {
           Couldn’t read the ledger just now
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-foreground-2">
-          Soroban Testnet didn’t answer. This wallet’s record is untouched:
+          Soroban didn’t answer. This wallet’s record is untouched:
           nothing on this page failed except the question, and reloading usually
           gets it.
         </p>

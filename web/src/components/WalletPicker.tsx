@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Loader2, RotateCw, X } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
+import { useNetwork } from "@/lib/network-context";
 import { Button } from "./ui";
 import {
   DETECTS_INSTALL,
@@ -27,6 +28,7 @@ export function WalletPicker() {
 }
 
 function Picker() {
+  const network = useNetwork();
   const { closePicker, wallets, walletsLoading, refreshWallets, select, error } = useWallet();
   const [pending, setPending] = useState<string | null>(null);
   const [inFreighterApp, setInFreighterApp] = useState(false);
@@ -180,8 +182,12 @@ function Picker() {
           </p>
         )}
 
+        {/* Named from the network being served, not written down. This line told
+            every visitor to put their wallet on Testnet, which on the Mainnet
+            host is advice that breaks the thing it is trying to help with. */}
         <p className="shrink-0 border-t border-border px-5 py-3 text-xs text-muted-3">
-          Showup runs on Stellar Testnet. Your wallet must be on Testnet too.
+          Showup runs on Stellar {network.label}. Your wallet must be on{" "}
+          {network.label} too.
         </p>
       </div>
     </div>

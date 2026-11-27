@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { FirstRun } from "./FirstRun";
 
@@ -32,6 +32,29 @@ describe("explaining the deposit before asking for it", () => {
     render(<FirstRun deposit={10n * XLM} refund={10n * XLM} />);
     expect(screen.getByText(/isn['’]t real money/i)).toBeInTheDocument();
     expect(screen.getByText(/worth nothing anywhere/i)).toBeInTheDocument();
+  });
+
+  /**
+   * The inverse, and the reason it is a separate test rather than an extra
+   * assertion above.
+   *
+   * This panel told every Mainnet visitor "it isn't real money. The XLM is free,
+   * there is a faucet" for the first hour Showup was on Mainnet — the string was
+   * a constant, and no test rendered this component on the other network, so
+   * nothing failed. These assertions are deliberately written as *absences* as
+   * well as presences: the dangerous outcome is not a missing warning, it is a
+   * reassurance that survived.
+   */
+  it("says the opposite on Mainnet, where the money is real", () => {
+    render(<FirstRun deposit={10n * XLM} refund={10n * XLM} />, { network: "mainnet" });
+
+    expect(screen.getByText(/this is real XLM/i)).toBeInTheDocument();
+    expect(screen.getByText(/real money, leaving a wallet you own/i)).toBeInTheDocument();
+
+    expect(screen.queryByText(/isn['’]t real money/i)).toBeNull();
+    expect(screen.queryByText(/worth nothing anywhere/i)).toBeNull();
+    expect(screen.queryByText(/faucet/i)).toBeNull();
+    expect(screen.queryByText(/test network/i)).toBeNull();
   });
 
   it("shows once per browser and not again", async () => {

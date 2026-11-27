@@ -30,7 +30,7 @@ export async function generateMetadata({
 
   return {
     title: `${who} · show-up record`,
-    description: `What the Showup reputation ledger has recorded for ${who} on Stellar Testnet.`,
+    description: `What the Showup reputation ledger has recorded for ${who}.`,
     // No `og:image` and no Twitter card on purpose. A shareable preview of
     // somebody's attendance history is a thing you post *at* a person, and the
     // page is meant to be read by an organizer deciding on a reservation, not
@@ -74,7 +74,7 @@ export default async function RecordPage({
         >
           reputation contract
         </a>{" "}
-        on Stellar Testnet. Nothing here was typed by anyone, and this site cannot
+        on Stellar {network.label}. Nothing here was typed by anyone, and this site cannot
         write a single one of them: the contract only accepts changes from event
         contracts the factory itself deployed.
       </p>

@@ -7,7 +7,7 @@ import { NetworkProvider } from "@/lib/network-context";
 import { requestNetwork } from "@/lib/network.server";
 import { siteUrlFor } from "@/lib/networks";
 import { X_HANDLE, X_URL } from "@/lib/links";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/og";
+import { SITE_NAME, SITE_TITLE, siteDescription } from "@/lib/og";
 import { TopBar } from "@/components/TopBar";
 import { NetworkBanner } from "@/components/NetworkBanner";
 import { Backdrop } from "@/components/Backdrop";
@@ -59,23 +59,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const network = await requestNetwork();
   const siteUrl = siteUrlFor(network);
   const title = network.isRealMoney ? SITE_TITLE : `${SITE_TITLE} — ${network.label}`;
+  const description = siteDescription(network.label);
 
   return {
     metadataBase: new URL(siteUrl),
     title,
-    description: SITE_DESCRIPTION,
+    description,
     openGraph: {
       type: "website",
       siteName: SITE_NAME,
       url: siteUrl,
       title,
-      description: SITE_DESCRIPTION,
+      description,
     },
     twitter: {
       card: "summary_large_image",
       site: `@${X_HANDLE}`,
       title,
-      description: SITE_DESCRIPTION,
+      description,
     },
   };
 }

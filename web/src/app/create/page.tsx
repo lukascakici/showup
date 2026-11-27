@@ -5,8 +5,10 @@ import { ArrowLeft, Wallet } from "lucide-react";
 import { useWallet } from "@/lib/wallet";
 import { CreateEvent } from "@/components/CreateEvent";
 import { Button, Card, Skeleton } from "@/components/ui";
+import { useNetwork } from "@/lib/network-context";
 
 export default function CreatePage() {
+  const network = useNetwork();
   const { status, openPicker, error } = useWallet();
 
   return (
@@ -25,8 +27,8 @@ export default function CreatePage() {
         Create an event
       </h1>
       <p className="mt-3.5 max-w-[520px] text-[15.5px] leading-[1.6] text-[#9a9ba1] text-pretty">
-        Your event gets its own contract on Stellar Testnet. People reserve a spot with
-        a deposit and take it back by showing up.
+        Your event gets its own contract on Stellar {network.label}. People reserve a spot
+        with a deposit and take it back by showing up.
       </p>
 
       <div className="mt-8">

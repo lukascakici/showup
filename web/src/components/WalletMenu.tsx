@@ -119,9 +119,12 @@ export function WalletMenu() {
                   <span className="font-display text-xl font-bold tracking-tight">
                     Not funded yet
                   </span>
+                  {/* "Use the faucet below" is only true where there is one, and
+                      Mainnet has none — the section is already hidden there, so
+                      pointing at it would be pointing at nothing. */}
                   <p className="mt-1 text-xs text-muted">
-                    This account doesn’t exist on Testnet until it holds some XLM.
-                    Use the faucet below.
+                    This account doesn’t exist on {network.label} until it holds some
+                    XLM.{network.friendbotUrl ? " Use the faucet below." : ""}
                   </p>
                 </div>
               )}

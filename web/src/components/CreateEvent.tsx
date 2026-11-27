@@ -505,7 +505,7 @@ export function CreateEvent() {
         {state.kind === "creating" && (
           <p className="mt-2 text-center text-xs text-muted" role="status">
             {state.step === "preparing"
-              ? "Working out what this will cost on Testnet…"
+              ? "Working out what this will cost…"
               : "Approve it in your wallet. Deploying the contract then takes 10–30 seconds — leave this open."}
           </p>
         )}

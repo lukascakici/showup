@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test/render";
 import userEvent from "@testing-library/user-event";
 import { WalletPicker } from "./WalletPicker";
 import { setMediaMatches } from "@/test/media";
@@ -111,5 +111,28 @@ describe("WalletPicker — the rows", () => {
   it("says which network this is, wherever the list ends up scrolled", () => {
     render(<WalletPicker />);
     expect(screen.getByText(/must be on testnet/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The footer line, which is advice rather than description.
+ *
+ * It read "Showup runs on Stellar Testnet. Your wallet must be on Testnet too"
+ * on both hostnames, so on Mainnet it told people to move their wallet to the
+ * network their money is not on — breaking the exact thing it exists to help
+ * with. A string that gives instructions has to come from the network being
+ * served, and the only way to know it does is to render it on both.
+ */
+describe("the network the picker tells you to be on", () => {
+  it("names Testnet on Testnet", () => {
+    render(<WalletPicker />);
+    expect(screen.getByText(/runs on Stellar Testnet/i)).toBeInTheDocument();
+    expect(screen.getByText(/wallet must be on Testnet/i)).toBeInTheDocument();
+  });
+
+  it("names Mainnet on Mainnet, and never mentions the other one", () => {
+    render(<WalletPicker />, { network: "mainnet" });
+    expect(screen.getByText(/runs on Stellar Mainnet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Testnet/i)).toBeNull();
   });
 });
