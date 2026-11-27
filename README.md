@@ -564,8 +564,24 @@ deposit was placed under cannot be rewritten afterwards by anybody, us included.
 | **Event wasm hash** | `5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03` |
 | **Native XLM SAC** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
-That wasm hash is checked against the live factory by CI on every push, so it
-cannot quietly drift out of date.
+### Deployed contracts (Mainnet)
+
+**Deployed 27.11.2026.** The same three binaries, byte for byte — the hashes below
+are the hashes above, which is the whole claim: what has been audited, analysed and
+run on Testnet for three engagements is what now holds real XLM.
+
+| What | Address |
+| :-- | :-- |
+| **Event factory** | [`CCJLDI57GNYKSMP75QTPLUYGJV6VXN2LBT2SEYWVDRLJSBMWWS6E5ZVJ`](https://stellar.expert/explorer/public/contract/CCJLDI57GNYKSMP75QTPLUYGJV6VXN2LBT2SEYWVDRLJSBMWWS6E5ZVJ) |
+| **Reputation ledger** | [`CBFOLND667UO3XLHCSBYHGZ4KE45F5BBFTX425I3PPTBVUJJ2SISWS6M`](https://stellar.expert/explorer/public/contract/CBFOLND667UO3XLHCSBYHGZ4KE45F5BBFTX425I3PPTBVUJJ2SISWS6M) |
+| **Event wasm hash** | `5f5e0ec548c2142f6c64427c666ecef71bfa31589f43cd3e02d82659db7d5d03` |
+| **Native XLM SAC** | `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
+
+Both wasm hashes are checked against their own network's live factory by CI on
+every push — [`scripts/check-wasm-hash.mjs`](scripts/check-wasm-hash.mjs) reads a
+table per network and fails on either, so neither can quietly drift out of date.
+A network the README has no table for is simply not checked, which is how that
+check stayed quiet for the weeks before this table existed.
 
 The factory holds the event wasm hash and deploys a fresh event contract per
 organizer, so the frontend only ever has to know one address. It is also the root

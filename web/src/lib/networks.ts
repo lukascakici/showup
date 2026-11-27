@@ -111,10 +111,14 @@ const MAINNET: Network = {
   explorerSegment: "public",
   friendbotUrl: null,
   nativeSac: Asset.native().contractId(Networks.PUBLIC),
-  // Deliberately null. Filled in when the contracts are deployed and the
-  // generated bindings carry a `mainnet` entry, the same way testnet's are read
-  // out of the bindings above rather than typed here.
-  contracts: null,
+  // Deployed 27.11.2026, and read out of the bindings rather than typed here —
+  // the same rule testnet's addresses follow. Mainnet is still not *live* until
+  // a deployment also has an RPC for it: see `liveNetworks()`, and the two
+  // environment variables above.
+  contracts: {
+    factoryId: factoryNetworks.mainnet.contractId,
+    reputationId: reputationNetworks.mainnet.contractId,
+  },
   isRealMoney: true,
 };
 

@@ -69,11 +69,21 @@ describe("a faucet exists on exactly one network", () => {
 });
 
 describe("which networks can be served", () => {
-  // The state this ships in: Mainnet is configured but not deployed to, so it
-  // is not a network anybody can be shown. When that changes, these two
-  // assertions are the ones that should fail first and loudest.
-  it("leaves out a network with no contracts deployed", () => {
-    expect(network("mainnet").contracts).toBeNull();
+  // **Mainnet is deployed as of 27.11.2026**, and this test caught the moment it
+  // happened — it was written to assert `contracts === null` precisely so that
+  // filling those addresses in could not be a silent change.
+  it("knows the Mainnet contracts now that they exist", () => {
+    expect(network("mainnet").contracts).not.toBeNull();
+    expect(network("mainnet").contracts?.factoryId).toMatch(/^C[A-Z2-7]{55}$/);
+  });
+
+  // Deployed is not the same as live, and the gap is the whole point: a network
+  // needs contracts **and** somewhere to ask about them. No RPC is configured
+  // here, so Mainnet stays dark — which is also exactly what a deployment with
+  // the addresses compiled in but the environment variables unset will do,
+  // rather than offering a network whose every read would fail.
+  it("still leaves out a deployed network with nowhere to ask", () => {
+    expect(network("mainnet").sorobanRpcUrl).toBe("");
     expect(liveNetworks().map((n) => n.id)).toEqual(["testnet"]);
     expect(isLive("mainnet")).toBe(false);
     expect(isLive("testnet")).toBe(true);
